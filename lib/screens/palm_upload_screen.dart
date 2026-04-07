@@ -17,9 +17,26 @@ class PalmUploadScreen extends ConsumerStatefulWidget {
   ConsumerState<PalmUploadScreen> createState() => _PalmUploadScreenState();
 }
 
-class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
+class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
+    with SingleTickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
   bool _isAnalyzing = false;
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     // Check free limit
@@ -45,7 +62,7 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
       final result = await AiService.analyzePalm(image.path);
       ref.read(palmResultProvider.notifier).state = result;
 
-      StorageService.incrementPalmReadings();
+      await StorageService.incrementPalmReadings();
       ref.read(palmReadingsUsedProvider.notifier).state =
           StorageService.palmReadingsUsed;
 
@@ -105,12 +122,16 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.surface,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Palm Reading'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: AppColors.divider),
+        ),
       ),
       body: _isAnalyzing ? _buildAnalyzing() : _buildUploadUI(),
     );
@@ -121,49 +142,78 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Animated scanning effect
+          // Animated scanning effect with multiple rings
           SizedBox(
-            width: 120,
-            height: 120,
+            width: 160,
+            height: 160,
             child: Stack(
               alignment: Alignment.center,
               children: [
+                // Outer ring
                 Container(
-                  width: 100,
-                  height: 100,
+                  width: 140,
+                  height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: AppColors.purpleAccent.withOpacity(0.3),
-                      width: 2,
+                      color: AppColors.purpleAccent.withOpacity(0.2),
+                      width: 1.5,
                     ),
                   ),
                 )
                     .animate(onPlay: (c) => c.repeat())
-                    .scaleXY(
-                      begin: 0.8,
-                      end: 1.2,
-                      duration: 1500.ms,
-                      curve: Curves.easeInOut,
-                    )
-                    .fadeOut(duration: 1500.ms),
-                const Icon(
-                  Icons.back_hand_outlined,
-                  size: 44,
-                  color: AppColors.purpleAccent,
-                ),
+                    .scaleXY(begin: 0.8, end: 1.3, duration: 2000.ms, curve: Curves.easeInOut)
+                    .fadeOut(duration: 2000.ms),
+
+                // Middle ring
+                Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.goldLight.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                )
+                    .animate(onPlay: (c) => c.repeat())
+                    .scaleXY(begin: 1.0, end: 1.4, duration: 1800.ms, curve: Curves.easeInOut)
+                    .fadeOut(duration: 1800.ms),
+
+                // Inner circle
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppColors.purpleAccent.withOpacity(0.15),
+                        AppColors.purpleAccent.withOpacity(0.05),
+                      ],
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.back_hand_outlined,
+                    size: 36,
+                    color: AppColors.purpleLight,
+                  ),
+                )
+                    .animate(onPlay: (c) => c.repeat(reverse: true))
+                    .scaleXY(begin: 0.95, end: 1.05, duration: 1000.ms),
               ],
             ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 36),
 
           const Text(
             'Analyzing your palm...',
             style: TextStyle(
               color: AppColors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
             ),
           )
               .animate(onPlay: (c) => c.repeat(reverse: true))
@@ -174,10 +224,56 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
           const SizedBox(height: 12),
 
           Text(
-            'Reading life lines, heart lines, and more',
+            'Reading life lines, heart lines,\nand career insights',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textMuted.withOpacity(0.7),
               fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Progress steps
+          _buildProgressSteps(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressSteps() {
+    return Column(
+      children: [
+        _progressStep('Detecting palm lines', true)
+            .animate()
+            .fadeIn(duration: 400.ms, delay: 500.ms),
+        _progressStep('Analyzing patterns', true)
+            .animate()
+            .fadeIn(duration: 400.ms, delay: 1500.ms),
+        _progressStep('Generating insights', false)
+            .animate()
+            .fadeIn(duration: 400.ms, delay: 2500.ms),
+      ],
+    );
+  }
+
+  Widget _progressStep(String text, bool done) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 40),
+      child: Row(
+        children: [
+          Icon(
+            done ? Icons.check_circle_outline : Icons.radio_button_unchecked,
+            color: done ? AppColors.success : AppColors.textMuted,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Text(
+            text,
+            style: TextStyle(
+              color: done ? AppColors.textSecondary : AppColors.textMuted,
+              fontSize: 13,
             ),
           ),
         ],
@@ -190,15 +286,45 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Column(
         children: [
+          const SizedBox(height: 16),
+
+          // Info banner
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.purpleAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.purpleAccent.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.auto_awesome, color: AppColors.purpleLight, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Based on Samudrik Shastra - ancient palm analysis',
+                    style: TextStyle(
+                      color: AppColors.purpleLight.withOpacity(0.9),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+              .animate()
+              .fadeIn(duration: 500.ms),
+
           const Spacer(flex: 1),
 
           // Palm guide
           const PalmGuideOverlay()
               .animate()
-              .fadeIn(duration: 600.ms)
-              .scaleXY(begin: 0.9, end: 1.0, duration: 600.ms),
+              .fadeIn(duration: 600.ms, delay: 100.ms)
+              .scaleXY(begin: 0.9, end: 1.0, duration: 600.ms, delay: 100.ms),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
           // Instructions
           Text(
@@ -211,7 +337,7 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
           const SizedBox(height: 8),
 
           Text(
-            'Keep palm open and clear\nGood lighting helps accuracy',
+            'Keep palm open and well-lit\nRight hand for males, Left for females',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textMuted,
@@ -223,19 +349,25 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
 
           const Spacer(flex: 1),
 
-          // Camera button
+          // Camera button (primary)
           SizedBox(
             width: double.infinity,
+            height: 56,
             child: ElevatedButton.icon(
               onPressed: () => _pickImage(ImageSource.camera),
-              icon: const Icon(Icons.camera_alt_outlined, size: 20),
-              label: const Text('Take Photo'),
+              icon: const Icon(Icons.camera_alt_rounded, size: 22),
+              label: const Text(
+                'Take Photo',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.purpleAccent,
-                padding: const EdgeInsets.symmetric(vertical: 18),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
+                elevation: 0,
               ),
             ),
           )
@@ -243,20 +375,24 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
               .fadeIn(duration: 500.ms, delay: 400.ms)
               .slideY(begin: 0.2, end: 0, duration: 500.ms, delay: 400.ms),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-          // Gallery button
+          // Gallery button (secondary)
           SizedBox(
             width: double.infinity,
+            height: 56,
             child: OutlinedButton.icon(
               onPressed: () => _pickImage(ImageSource.gallery),
               icon: const Icon(Icons.photo_library_outlined, size: 20),
-              label: const Text('Choose from Gallery'),
+              label: const Text(
+                'Choose from Gallery',
+                style: TextStyle(fontSize: 15),
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 18),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 side: BorderSide(
-                  color: AppColors.purpleAccent.withOpacity(0.5),
+                  color: AppColors.purpleAccent.withOpacity(0.4),
                   width: 1.5,
                 ),
                 shape: RoundedRectangleBorder(
@@ -269,7 +405,22 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen> {
               .fadeIn(duration: 500.ms, delay: 500.ms)
               .slideY(begin: 0.2, end: 0, duration: 500.ms, delay: 500.ms),
 
-          const SizedBox(height: 40),
+          const SizedBox(height: 16),
+
+          // Free readings counter
+          Text(
+            StorageService.isPremium
+                ? 'Unlimited palm readings'
+                : '${StorageService.freePalmLimit - StorageService.palmReadingsUsed} free readings left',
+            style: TextStyle(
+              color: AppColors.textMuted.withOpacity(0.6),
+              fontSize: 12,
+            ),
+          )
+              .animate()
+              .fadeIn(duration: 500.ms, delay: 600.ms),
+
+          const SizedBox(height: 32),
         ],
       ),
     );

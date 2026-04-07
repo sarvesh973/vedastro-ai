@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../models/chat_message.dart';
+import 'typewriter_text.dart';
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
   final bool animate;
+  final bool isLatestAiMessage;
+  final VoidCallback? onTypewriterComplete;
 
   const ChatBubble({
     super.key,
     required this.message,
     this.animate = true,
+    this.isLatestAiMessage = false,
+    this.onTypewriterComplete,
   });
 
   @override
@@ -87,7 +92,14 @@ class ChatBubble extends StatelessWidget {
           bottomRight: Radius.circular(20),
         ),
       ),
-      child: _buildFormattedAiText(message.text),
+      child: isLatestAiMessage
+          ? TypewriterText(
+              key: ValueKey('tw_${message.timestamp.millisecondsSinceEpoch}'),
+              text: message.text,
+              charDuration: const Duration(milliseconds: 15),
+              onComplete: onTypewriterComplete,
+            )
+          : _buildFormattedAiText(message.text),
     );
   }
 
@@ -101,13 +113,15 @@ class ChatBubble extends StatelessWidget {
         if (trimmed.isEmpty) return const SizedBox.shrink();
 
         // Check if section starts with an emoji header
-        if (trimmed.startsWith('🔮') ||
-            trimmed.startsWith('📖') ||
-            trimmed.startsWith('🧘') ||
-            trimmed.startsWith('🙏') ||
-            trimmed.startsWith('❤️') ||
-            trimmed.startsWith('📈') ||
-            trimmed.startsWith('🧬')) {
+        if (trimmed.startsWith('\u{1F52E}') ||
+            trimmed.startsWith('\u{1F4D6}') ||
+            trimmed.startsWith('\u{1F9D8}') ||
+            trimmed.startsWith('\u{1F64F}') ||
+            trimmed.startsWith('\u2764') ||
+            trimmed.startsWith('\u{1F4C8}') ||
+            trimmed.startsWith('\u{1F9EC}') ||
+            trimmed.startsWith('\u2728') ||
+            trimmed.startsWith('\u{1F31F}')) {
           final lines = trimmed.split('\n');
           final header = lines.first;
           final body = lines.length > 1 ? lines.sublist(1).join('\n') : '';

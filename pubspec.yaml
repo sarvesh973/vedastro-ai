@@ -21,6 +21,8 @@ dependencies:
   flutter_animate: ^4.3.0
   cupertino_icons: ^1.0.6
   google_generative_ai: ^0.4.6
+  smooth_page_indicator: ^1.1.0
+  cached_network_image: ^3.3.1
 
 dev_dependencies:
   flutter_test:

@@ -5,8 +5,10 @@ import '../models/palm_result.dart';
 import '../services/ai_service.dart';
 import '../services/storage_service.dart';
 
-// User profile provider
-final userProfileProvider = StateProvider<UserProfile?>((ref) => null);
+// User profile provider (loaded from persistent storage)
+final userProfileProvider = StateProvider<UserProfile?>((ref) {
+  return StorageService.currentProfile;
+});
 
 // Chat messages provider
 final chatMessagesProvider =
@@ -81,6 +83,6 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
     ));
 
     // Track usage
-    StorageService.incrementChatQuestions();
+    await StorageService.incrementChatQuestions();
   }
 }

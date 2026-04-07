@@ -21,6 +21,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   bool _hasInitialized = false;
+  bool _isTypewriterActive = false;
 
   @override
   void dispose() {
@@ -32,11 +33,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       Future.delayed(const Duration(milliseconds: 100), () {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
       });
     }
   }
@@ -80,17 +83,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     typingController.state = false;
 
+    // Add AI message and activate typewriter
+    setState(() => _isTypewriterActive = true);
+
     chatNotifier.addMessage(ChatMessage(
       text: response,
       role: MessageRole.ai,
       timestamp: DateTime.now(),
     ));
 
-    StorageService.incrementChatQuestions();
+    await StorageService.incrementChatQuestions();
     ref.read(chatQuestionsUsedProvider.notifier).state =
         StorageService.chatQuestionsUsed;
 
     _scrollToBottom();
+
+    // Keep scrolling during typewriter animation
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted || !_isTypewriterActive) return false;
+      _scrollToBottom();
+      return true;
+    });
   }
 
   void _showPaywall() {
@@ -121,12 +139,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Send welcome message on first build
     if (!_hasInitialized && profile != null && messages.isEmpty) {
       _hasInitialized = true;
+      setState(() => _isTypewriterActive = true);
       Future.microtask(() {
         ref.read(chatMessagesProvider.notifier).addMessage(ChatMessage(
           text: AiService.getWelcomeMessage(profile),
           role: MessageRole.ai,
           timestamp: DateTime.now(),
         ));
+        _startAutoScroll();
       });
     }
 
@@ -185,6 +205,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
+          // Quick suggestion chips (shown when few messages)
+          if (messages.length <= 2) _buildSuggestionChips(),
+
           // Messages
           Expanded(
             child: messages.isEmpty
@@ -197,9 +220,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       if (index == messages.length && isTyping) {
                         return const TypingIndicator();
                       }
+                      final msg = messages[index];
+                      final isLastAi = msg.isAi &&
+                          index == messages.length - 1 &&
+                          _isTypewriterActive;
+
                       return ChatBubble(
-                        message: messages[index],
+                        message: msg,
                         animate: index >= messages.length - 1,
+                        isLatestAiMessage: isLastAi,
+                        onTypewriterComplete: () {
+                          if (mounted) {
+                            setState(() => _isTypewriterActive = false);
+                          }
+                        },
                       );
                     },
                   ),
@@ -210,6 +244,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildSuggestionChips() {
+    final suggestions = [
+      'Mera career kaisa rahega?',
+      'Love life ke baare mein batao',
+      'Health prediction',
+      'Finance & wealth',
+    ];
+
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: suggestions.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          return GestureDetector(
+            onTap: () {
+              _messageController.text = suggestions[index];
+              _sendMessage();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.purpleAccent.withOpacity(0.3)),
+              ),
+              child: Text(
+                suggestions[index],
+                style: const TextStyle(
+                  color: AppColors.purpleLight,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    ).animate().fadeIn(duration: 500.ms, delay: 500.ms);
   }
 
   Widget _buildEmptyState() {

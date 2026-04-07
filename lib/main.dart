@@ -4,10 +4,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme/app_theme.dart';
+import 'services/storage_service.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/login_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize persistent storage
+  await StorageService.init();
 
   // Set system UI overlay style for premium dark look
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -42,7 +48,23 @@ class VedAstroApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const HomeScreen(),
+      home: _getStartScreen(),
     );
+  }
+
+  /// Determine the initial screen based on app state
+  Widget _getStartScreen() {
+    // First time user → Onboarding
+    if (!StorageService.isOnboardingComplete) {
+      return const OnboardingScreen();
+    }
+
+    // Not logged in → Login
+    if (!StorageService.isLoggedIn) {
+      return const LoginScreen();
+    }
+
+    // Returning user → Home
+    return const HomeScreen();
   }
 }

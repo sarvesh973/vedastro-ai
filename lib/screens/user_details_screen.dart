@@ -84,7 +84,7 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
     }
   }
 
-  void _continue() {
+  Future<void> _continue() async {
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -118,7 +118,8 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
       placeOfBirth: _placeController.text.trim(),
     );
 
-    StorageService.saveProfile(profile);
+    // Save profile persistently
+    await StorageService.saveProfile(profile);
     ref.read(userProfileProvider.notifier).state = profile;
 
     Navigator.of(context).pushReplacement(
