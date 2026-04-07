@@ -3,14 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'services/storage_service.dart';
+import 'services/auth_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Initialize persistent storage
   await StorageService.init();
@@ -54,17 +62,22 @@ class VedAstroApp extends StatelessWidget {
 
   /// Determine the initial screen based on app state
   Widget _getStartScreen() {
-    // First time user → Onboarding
+    // First time user -> Onboarding
     if (!StorageService.isOnboardingComplete) {
       return const OnboardingScreen();
     }
 
-    // Not logged in → Login
+    // Check Firebase auth state first, then fall back to local
+    if (AuthService.isLoggedIn) {
+      return const HomeScreen();
+    }
+
+    // Not logged in -> Login
     if (!StorageService.isLoggedIn) {
       return const LoginScreen();
     }
 
-    // Returning user → Home
+    // Local login exists but no Firebase (offline user)
     return const HomeScreen();
   }
 }
