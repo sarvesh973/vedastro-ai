@@ -471,6 +471,7 @@ class SettingsScreen extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              await AuthService.signOut();
               await StorageService.logout();
               ref.read(userProfileProvider.notifier).state = null;
               ref.read(chatMessagesProvider.notifier).clear();
