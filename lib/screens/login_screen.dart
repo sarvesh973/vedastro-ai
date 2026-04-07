@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/starfield_background.dart';
 import 'signup_screen.dart';
@@ -18,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _obscurePassword = true;
 
   @override
@@ -32,20 +34,75 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final success = await StorageService.login(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
+    final result = await AuthService.signInWithEmail(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
     );
 
     setState(() => _isLoading = false);
 
-    if (success && mounted) {
+    if (result.success && mounted) {
+      // Also save login state locally for offline access
+      await StorageService.signUp(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
       _navigateToHome();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid email or password'),
+        SnackBar(
+          content: Text(result.error ?? 'Login failed'),
           backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isGoogleLoading = true);
+
+    final result = await AuthService.signInWithGoogle();
+
+    setState(() => _isGoogleLoading = false);
+
+    if (result.success && mounted) {
+      await StorageService.signUp(
+        result.user?.email ?? '',
+        'google_auth',
+      );
+      _navigateToHome();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.error ?? 'Google sign-in failed'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter your email first, then tap Forgot Password'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final result = await AuthService.sendPasswordReset(email);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.success
+              ? 'Password reset email sent to $email'
+              : result.error ?? 'Failed'),
+          backgroundColor: result.success ? AppColors.success : AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -130,7 +187,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 20),
 
-                  // Title
                   const Text(
                     'Welcome Back',
                     style: TextStyle(
@@ -146,10 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const Text(
                     'Sign in to continue your cosmic journey',
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 14),
                   )
                       .animate()
                       .fadeIn(duration: 500.ms, delay: 300.ms),
@@ -230,20 +283,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Coming soon!'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
+                      onPressed: _handleForgotPassword,
                       child: const Text(
                         'Forgot Password?',
-                        style: TextStyle(
-                          color: AppColors.purpleLight,
-                          fontSize: 13,
-                        ),
+                        style: TextStyle(color: AppColors.purpleLight, fontSize: 13),
                       ),
                     ),
                   ),
@@ -264,20 +307,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: _isLoading
                           ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
+                              width: 24, height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                             )
                           : const Text(
                               'Login',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.white),
                             ),
                     ),
                   )
@@ -293,10 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Expanded(child: Container(height: 1, color: AppColors.divider)),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'OR',
-                          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                        ),
+                        child: Text('OR', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                       ),
                       Expanded(child: Container(height: 1, color: AppColors.divider)),
                     ],
@@ -306,29 +338,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Google sign-in button
+                  // Google sign-in button (REAL)
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Google Sign-in coming in Phase 2!'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      icon: const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
-                      label: const Text(
-                        'Continue with Google',
-                        style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                      onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
+                      icon: _isGoogleLoading
+                          ? const SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted),
+                            )
+                          : const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+                      label: Text(
+                        _isGoogleLoading ? 'Signing in...' : 'Continue with Google',
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: AppColors.divider, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                        side: const BorderSide(color: AppColors.divider, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
                   )
@@ -337,7 +365,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Phone OTP button
+                  // Phone OTP button (coming soon)
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -345,7 +373,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Phone OTP login coming in Phase 2!'),
+                            content: Text('Phone OTP login coming soon!'),
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
@@ -356,10 +384,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: AppColors.divider, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                        side: const BorderSide(color: AppColors.divider, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
                   )
