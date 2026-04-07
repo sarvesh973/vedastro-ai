@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/starfield_background.dart';
 import 'home_screen.dart';
