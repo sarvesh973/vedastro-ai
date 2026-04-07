@@ -1,0 +1,307 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../theme/app_theme.dart';
+import '../models/chat_message.dart';
+import '../providers/providers.dart';
+import '../services/ai_service.dart';
+import '../services/storage_service.dart';
+import '../widgets/chat_bubble.dart';
+import '../widgets/typing_indicator.dart';
+import 'paywall_screen.dart';
+
+class ChatScreen extends ConsumerStatefulWidget {
+  const ChatScreen({super.key});
+
+  @override
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends ConsumerState<ChatScreen> {
+  final _messageController = TextEditingController();
+  final _scrollController = ScrollController();
+  bool _hasInitialized = false;
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    final profile = ref.read(userProfileProvider);
+    if (profile == null) return;
+
+    // Check free limit
+    if (!StorageService.canAskChatQuestion) {
+      _showPaywall();
+      return;
+    }
+
+    _messageController.clear();
+
+    final chatNotifier = ref.read(chatMessagesProvider.notifier);
+    final typingController = ref.read(isAiTypingProvider.notifier);
+
+    // Add user message
+    chatNotifier.addMessage(ChatMessage(
+      text: text,
+      role: MessageRole.user,
+      timestamp: DateTime.now(),
+    ));
+    _scrollToBottom();
+
+    // Show typing
+    typingController.state = true;
+    _scrollToBottom();
+
+    // Get AI response
+    final response = await AiService.getAstrologyResponse(
+      profile: profile,
+      userMessage: text,
+      chatHistory: ref.read(chatMessagesProvider).map((m) => m.text).toList(),
+    );
+
+    typingController.state = false;
+
+    chatNotifier.addMessage(ChatMessage(
+      text: response,
+      role: MessageRole.ai,
+      timestamp: DateTime.now(),
+    ));
+
+    StorageService.incrementChatQuestions();
+    ref.read(chatQuestionsUsedProvider.notifier).state =
+        StorageService.chatQuestionsUsed;
+
+    _scrollToBottom();
+  }
+
+  void _showPaywall() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const PaywallScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messages = ref.watch(chatMessagesProvider);
+    final isTyping = ref.watch(isAiTypingProvider);
+    final profile = ref.watch(userProfileProvider);
+
+    // Send welcome message on first build
+    if (!_hasInitialized && profile != null && messages.isEmpty) {
+      _hasInitialized = true;
+      Future.microtask(() {
+        ref.read(chatMessagesProvider.notifier).addMessage(ChatMessage(
+          text: AiService.getWelcomeMessage(profile),
+          role: MessageRole.ai,
+          timestamp: DateTime.now(),
+        ));
+      });
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.purpleAccent.withOpacity(0.6),
+                    AppColors.purpleSoft.withOpacity(0.4),
+                  ],
+                ),
+              ),
+              child: const Icon(Icons.auto_awesome, size: 18, color: AppColors.goldLight),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'VedAstro AI',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  isTyping ? 'typing...' : 'Vedic Astrologer',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isTyping ? AppColors.purpleLight : AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: AppColors.divider),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Messages
+          Expanded(
+            child: messages.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    itemCount: messages.length + (isTyping ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == messages.length && isTyping) {
+                        return const TypingIndicator();
+                      }
+                      return ChatBubble(
+                        message: messages[index],
+                        animate: index >= messages.length - 1,
+                      );
+                    },
+                  ),
+          ),
+
+          // Input area
+          _buildInputArea(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.auto_awesome,
+            size: 48,
+            color: AppColors.purpleAccent.withOpacity(0.3),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Starting your session...',
+            style: TextStyle(
+              color: AppColors.textMuted.withOpacity(0.6),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        12 + MediaQuery.of(context).padding.bottom,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: TextField(
+                controller: _messageController,
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                maxLines: 4,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  hintText: 'Ask about career, love, health...',
+                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _sendMessage,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.purpleAccent, AppColors.purpleSoft],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.purpleAccent.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.send_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          )
+              .animate()
+              .fadeIn(duration: 300.ms),
+        ],
+      ),
+    );
+  }
+}
