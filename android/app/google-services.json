@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1030095774035",
+    "project_id": "vedastro-ai",
+    "storage_bucket": "vedastro-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030095774035:android:7751e07ddd10cef78201a6",
+        "android_client_info": {
+          "package_name": "com.vedastro.ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4G_BQSQIt3gRuy05H_qKhOevstpJGoC4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
