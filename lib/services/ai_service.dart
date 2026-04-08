@@ -187,15 +187,16 @@ class AiService {
   }
 
   /// Welcome message when chat starts
-  static String getWelcomeMessage(UserProfile profile) {
-    final name = profile.name.isNotEmpty ? profile.name : 'ji';
-    return '''🙏 Namaste $name!
+static String getWelcomeMessage(UserProfile profile) {
+    final name = profile.name.isNotEmpty ? profile.name : '';
+    final greeting = name.isNotEmpty ? 'Namaste $name!' : 'Namaste!';
+    return '🙏 $greeting
 
-Main aapka Vedic astrologer hoon. Aapki birth details dekh li hain maine.
+I am your personal Vedic astrologer. I have noted your birth details.
 
-Aap mujhse kuch bhi pooch sakte hain — career, love, health, finance, family ya koi bhi sawaal jo aapke mann mein ho.
+You can talk to me in English, Hindi, or Hinglish — I will reply in your language.
 
-Bataiye, aaj kya jaanna chahenge? ✨''';
+Ask me about career, love, health, finance, or any life question. ✨';
   }
 
   // ─────────────────────────────────────────────────────────────
