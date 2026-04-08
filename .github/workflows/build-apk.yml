@@ -37,17 +37,29 @@ jobs:
           echo "  static const String geminiApiKey = '$GEMINI_KEY';" >> lib/config/api_config.dart
           echo "  static bool get isConfigured => geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE';" >> lib/config/api_config.dart
           echo "}" >> lib/config/api_config.dart
-          cat lib/config/api_config.dart
+
+      - name: Set up release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/vedastro-release.jks
+          echo "storePassword=$KEYSTORE_PASSWORD" > android/key.properties
+          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
+          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+          echo "storeFile=vedastro-release.jks" >> android/key.properties
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build debug APK
-        run: flutter build apk --debug
+      - name: Build release APK
+        run: flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: VedAstro-AI-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: VedAstro-AI-release
+          path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
