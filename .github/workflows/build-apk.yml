@@ -1,10 +1,8 @@
 name: Build APK
 
-# Trigger: runs when you push code to main branch
 on:
   push:
     branches: [ main ]
-  # Also allows manual trigger from GitHub website
   workflow_dispatch:
 
 jobs:
@@ -12,27 +10,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Get the code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Java (needed for Android build)
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # Step 3: Set up Flutter
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.3'
           channel: 'stable'
           cache: true
 
-      # Step 4: Create API config from secret
-      - name: Create API config
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Create API config from secret
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -41,16 +37,14 @@ jobs:
           echo "  static const String geminiApiKey = '$GEMINI_KEY';" >> lib/config/api_config.dart
           echo "  static bool get isConfigured => geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE';" >> lib/config/api_config.dart
           echo "}" >> lib/config/api_config.dart
+          cat lib/config/api_config.dart
 
-      # Step 5: Install dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      # Step 6: Build debug APK
-      - name: Build APK
+      - name: Build debug APK
         run: flutter build apk --debug
 
-      # Step 7: Upload APK so you can download it
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
