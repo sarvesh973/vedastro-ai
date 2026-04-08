@@ -10,6 +10,7 @@ import 'chat_screen.dart';
 import 'palm_upload_screen.dart';
 import 'kundli_screen.dart';
 import 'settings_screen.dart';
+import 'paywall_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -245,10 +246,19 @@ class HomeScreen extends ConsumerWidget {
                         color: const Color(0xFFD4A574),
                         delay: 900,
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Premium coming soon with more features!'),
-                              behavior: SnackBarBehavior.floating,
+                          Navigator.of(context).push(
+                            PageRouteBuilder(
+                              pageBuilder: (_, __, ___) => const PaywallScreen(),
+                              transitionsBuilder: (_, animation, __, child) {
+                                return SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+                                  child: child,
+                                );
+                              },
+                              transitionDuration: const Duration(milliseconds: 400),
                             ),
                           );
                         },

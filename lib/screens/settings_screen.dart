@@ -74,7 +74,7 @@ class SettingsScreen extends ConsumerWidget {
             _buildInfoTile(
               icon: Icons.info_outline,
               title: 'App Version',
-              subtitle: 'v1.0.0 (MVP)',
+              subtitle: 'v1.1.0 (Phase 3)',
               onTap: null,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
 

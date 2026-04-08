@@ -6,6 +6,7 @@ import '../models/chat_message.dart';
 import '../providers/providers.dart';
 import '../services/ai_service.dart';
 import '../services/storage_service.dart';
+import '../services/firestore_service.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import 'paywall_screen.dart';
@@ -68,6 +69,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       role: MessageRole.user,
       timestamp: DateTime.now(),
     ));
+    // Sync to cloud
+    FirestoreService.syncChatMessage(text, 'user');
     _scrollToBottom();
 
     // Show typing
@@ -91,6 +94,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       role: MessageRole.ai,
       timestamp: DateTime.now(),
     ));
+    // Sync AI response to cloud
+    FirestoreService.syncChatMessage(response, 'ai');
 
     await StorageService.incrementChatQuestions();
     ref.read(chatQuestionsUsedProvider.notifier).state =

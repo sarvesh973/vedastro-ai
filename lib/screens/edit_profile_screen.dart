@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
 import '../services/storage_service.dart';
+import '../services/firestore_service.dart';
 import '../providers/providers.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -104,6 +105,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     await StorageService.saveProfile(updatedProfile);
     ref.read(userProfileProvider.notifier).state = updatedProfile;
+    // Sync to cloud
+    FirestoreService.syncProfile(updatedProfile);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

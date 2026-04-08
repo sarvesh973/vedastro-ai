@@ -1,7 +1,7 @@
 name: vedastro_ai
 description: VedAstro AI - Vedic Astrology & Palm Reading Platform
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -33,9 +33,34 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/
+    - assets/icon/
+
+# ─── App Icon Config ──────────────────────────
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 23
+  adaptive_icon_background: "#0A0A1A"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+
+# ─── Splash Screen Config ─────────────────────
+flutter_native_splash:
+  color: "#0A0A1A"
+  image: "assets/icon/app_icon.png"
+  image_dark: "assets/icon/app_icon.png"
+  color_dark: "#0A0A1A"
+  android: true
+  ios: true
+  android_12:
+    color: "#0A0A1A"
+    icon_background_color: "#0A0A1A"
+    image: "assets/icon/app_icon_foreground.png"

@@ -8,6 +8,7 @@ import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'services/storage_service.dart';
 import 'services/auth_service.dart';
+import 'services/firestore_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
@@ -22,6 +23,9 @@ void main() async {
 
   // Initialize persistent storage
   await StorageService.init();
+
+  // Sync cloud data if user is logged in
+  _syncCloudData();
 
   // Set system UI overlay style for premium dark look
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -38,6 +42,30 @@ void main() async {
   ]);
 
   runApp(const ProviderScope(child: VedAstroApp()));
+}
+
+/// Background cloud sync (non-blocking)
+void _syncCloudData() async {
+  try {
+    if (!AuthService.isLoggedIn) return;
+
+    // Try to restore profile from cloud if local is empty
+    if (!StorageService.hasProfile) {
+      final cloudProfile = await FirestoreService.loadCloudProfile();
+      if (cloudProfile != null) {
+        await StorageService.saveProfile(cloudProfile);
+      }
+    }
+
+    // Sync local usage stats to cloud
+    FirestoreService.syncUsage(
+      StorageService.chatQuestionsUsed,
+      StorageService.palmReadingsUsed,
+      StorageService.isPremium,
+    );
+  } catch (_) {
+    // Non-critical — app works offline
+  }
 }
 
 class VedAstroApp extends StatelessWidget {
@@ -57,6 +85,34 @@ class VedAstroApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: _getStartScreen(),
+      // Global error handling for UI
+      builder: (context, child) {
+        // Catch rendering errors gracefully
+        ErrorWidget.builder = (FlutterErrorDetails details) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 40),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Something went wrong',
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Try restarting the app',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          );
+        };
+        return child ?? const SizedBox();
+      },
     );
   }
 

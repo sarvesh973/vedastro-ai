@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
 import '../providers/providers.dart';
 import '../services/storage_service.dart';
+import '../services/firestore_service.dart';
 import 'chat_screen.dart';
 
 class UserDetailsScreen extends ConsumerStatefulWidget {
@@ -118,9 +119,10 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
       placeOfBirth: _placeController.text.trim(),
     );
 
-    // Save profile persistently
+    // Save profile locally + cloud
     await StorageService.saveProfile(profile);
     ref.read(userProfileProvider.notifier).state = profile;
+    FirestoreService.syncProfile(profile);
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
