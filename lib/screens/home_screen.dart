@@ -162,7 +162,7 @@ class HomeScreen extends ConsumerWidget {
                         const Icon(Icons.wb_sunny_outlined, color: AppColors.goldLight, size: 16),
                         const SizedBox(width: 6),
                         Text(
-                          profile.sunSign,
+                          '${profile.westernSign} (Vedic: ${profile.sunSign})',
                           style: const TextStyle(
                             color: AppColors.goldLight,
                             fontSize: 13,

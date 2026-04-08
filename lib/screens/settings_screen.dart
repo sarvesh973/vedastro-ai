@@ -237,7 +237,8 @@ class SettingsScreen extends ConsumerWidget {
                 if (profile.timeOfBirth != null && profile.timeOfBirth!.isNotEmpty)
                   _profileRow('Time of Birth', profile.timeOfBirth!),
                 _profileRow('Place of Birth', profile.placeOfBirth),
-                _profileRow('Sun Sign', profile.sunSign),
+                _profileRow('Western Sign', profile.westernSign),
+                _profileRow('Vedic Sign', profile.sunSign),
               ],
             ),
           ),

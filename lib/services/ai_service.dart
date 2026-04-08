@@ -30,7 +30,7 @@ class AiService {
         generationConfig: GenerationConfig(
           temperature: 0.7,
           topP: 0.9,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 4096,
         ),
       );
       _currentChat = _chatModel!.startChat();
@@ -47,7 +47,7 @@ class AiService {
       apiKey: ApiConfig.geminiApiKey,
       generationConfig: GenerationConfig(
         temperature: 0.7,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 3000,
       ),
     );
   }
@@ -128,6 +128,21 @@ class AiService {
 
       final text = response.text;
       if (text != null && text.isNotEmpty) {
+        // Check if AI detected non-palm image
+        if (text.contains("NOT_A_PALM")) {
+          try {
+            var cleaned = text.trim();
+            if (cleaned.startsWith('''''')) {
+              cleaned = cleaned.replaceAll(RegExp(r'''^w*n?''), ''''');
+              cleaned = cleaned.trim();
+            }
+            final errJson = jsonDecode(cleaned);
+            throw Exception(errJson['message'] ?? 'Please upload a clear palm photo');
+          } catch (e) {
+            if (e is Exception) rethrow;
+            throw Exception('Please upload a clear photo of your palm');
+          }
+        }
         return _parsePalmResponse(text);
       }
 
@@ -455,4 +470,11 @@ Thursday ko mandir jaayein aur peela prasad chadhayein. Roz subah 5 minute grati
       lifeLine: lifeLines[_random.nextInt(lifeLines.length)],
     );
   }
+}
+
+class PalmValidationException implements Exception {
+  final String message;
+  PalmValidationException(this.message);
+  @override
+  String toString() => message;
 }
