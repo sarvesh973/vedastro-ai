@@ -45,37 +45,53 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          echo "=== Debug: checking secrets ==="
           echo "KEYSTORE_BASE64 length: ${#KEYSTORE_BASE64}"
           echo "KEY_ALIAS: $KEY_ALIAS"
           echo "KEYSTORE_PASSWORD set: $([ -n "$KEYSTORE_PASSWORD" ] && echo YES || echo NO)"
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/vedastro-release.jks
-          ls -la android/app/vedastro-release.jks
-          echo "storePassword=$KEYSTORE_PASSWORD" > android/key.properties
-          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
-          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
-          echo "storeFile=vedastro-release.jks" >> android/key.properties
-          echo "--- key.properties ---"
-          cat android/key.properties | sed 's/Password=.*/Password=***/'
+          echo "KEY_PASSWORD set: $([ -n "$KEY_PASSWORD" ] && echo YES || echo NO)"
+
+          if [ -n "$KEYSTORE_BASE64" ] && [ ${#KEYSTORE_BASE64} -gt 100 ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/vedastro-release.jks
+            echo "Keystore file created:"
+            ls -la android/app/vedastro-release.jks
+
+            echo "storePassword=$KEYSTORE_PASSWORD" > android/key.properties
+            echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
+            echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+            echo "storeFile=vedastro-release.jks" >> android/key.properties
+
+            echo "=== key.properties ==="
+            cat android/key.properties | sed 's/Password=.*/Password=***/'
+            echo "RELEASE_BUILD=true" >> $GITHUB_ENV
+          else
+            echo "WARNING: Keystore secrets not configured, will build debug APK"
+            echo "RELEASE_BUILD=false" >> $GITHUB_ENV
+          fi
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build release APK
-        run: flutter build apk --release
+      - name: Build APK
+        run: |
+          if [ "$RELEASE_BUILD" = "true" ]; then
+            echo "Building RELEASE APK..."
+            flutter build apk --release
+          else
+            echo "Building DEBUG APK (no keystore)..."
+            flutter build apk --debug
+          fi
 
       - name: Upload Release APK
+        if: env.RELEASE_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: VedAstro-AI-release
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
-      - name: Upload debug APK as fallback
-        if: failure()
-        run: flutter build apk --debug
-
-      - name: Upload Debug APK (fallback)
-        if: failure()
+      - name: Upload Debug APK
+        if: env.RELEASE_BUILD != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: VedAstro-AI-debug
