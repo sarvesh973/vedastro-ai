@@ -229,7 +229,7 @@ Keep each section 2-4 sentences. Total response: 150-250 words.''';
 10. **PALM READING responses** should reference Samudrik Shastra (the Vedic science of body reading) alongside the three main texts for general life guidance.''';
 
   /// System prompt for palm reading analysis
-  static const String palmReadingPrompt = '
+  static const String palmReadingPrompt = '''
 
 You are a Vedic palm reading expert deeply versed in Samudrik Shastra.
 
@@ -281,5 +281,5 @@ Return ONLY valid JSON (no markdown, no code blocks):
 
 {"loveLine":{"title":"Heart Line","emoji":"❤️","insight":"...","meaning":"...","advice":"..."},"careerLine":{"title":"Head Line","emoji":"🧠","insight":"...","meaning":"...","advice":"..."},"lifeLine":{"title":"Life Line","emoji":"🧬","insight":"...","meaning":"...","advice":"..."}}
 
-';
+''';
 }

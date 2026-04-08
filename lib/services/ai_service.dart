@@ -132,8 +132,9 @@ class AiService {
         if (text.contains("NOT_A_PALM")) {
           try {
             var cleaned = text.trim();
-            if (cleaned.startsWith('''''')) {
-              cleaned = cleaned.replaceAll(RegExp(r'''^w*n?''), ''''');
+            if (cleaned.startsWith('```')) {
+              cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
+              cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
               cleaned = cleaned.trim();
             }
             final errJson = jsonDecode(cleaned);
@@ -190,13 +191,13 @@ class AiService {
 static String getWelcomeMessage(UserProfile profile) {
     final name = profile.name.isNotEmpty ? profile.name : '';
     final greeting = name.isNotEmpty ? 'Namaste $name!' : 'Namaste!';
-    return '🙏 $greeting
+    return '''🙏 $greeting
 
 I am your personal Vedic astrologer. I have noted your birth details.
 
 You can talk to me in English, Hindi, or Hinglish — I will reply in your language.
 
-Ask me about career, love, health, finance, or any life question. ✨';
+Ask me about career, love, health, finance, or any life question. ✨''';
   }
 
   // ─────────────────────────────────────────────────────────────
