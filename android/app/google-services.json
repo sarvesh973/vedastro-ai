@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "1030095774035-qluqpsrcm4qc6u5u9cu7n5e1oear7lt1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vedastro.ai",
+            "certificate_hash": "2f5a06832ba05dc521c336e778e11c95e3afac1d"
+          }
+        },
+        {
           "client_id": "1030095774035-kmbq68k28trd8nfcrmdst4h6k4gncu59.apps.googleusercontent.com",
           "client_type": 3
         }
