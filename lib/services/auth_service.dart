@@ -47,7 +47,7 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: _getErrorMessage(e.code));
     } catch (e) {
-      return AuthResult(success: false, error: 'Something went wrong. Please try again.');
+      return AuthResult(success: false, error: 'Sign up error: $e');
     }
   }
 
@@ -65,7 +65,7 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: _getErrorMessage(e.code));
     } catch (e) {
-      return AuthResult(success: false, error: 'Something went wrong. Please try again.');
+      return AuthResult(success: false, error: 'Login error: $e');
     }
   }
 
@@ -88,7 +88,7 @@ class AuthService {
       final userCredential = await _auth.signInWithCredential(credential);
       return AuthResult(success: true, user: userCredential.user);
     } catch (e) {
-      return AuthResult(success: false, error: 'Google sign-in failed. Please try again.');
+      return AuthResult(success: false, error: 'Google error: $e');
     }
   }
 
