@@ -97,13 +97,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   return false;
                 },
                 child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: MediaQuery.of(context).size.height -
-                          MediaQuery.of(context).padding.top -
-                          MediaQuery.of(context).padding.bottom,
-                    ),
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 28),
                       child: Column(
@@ -365,7 +361,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
-        ),
             ],
           ),
         ),
