@@ -21,6 +21,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  double _overscrollAmount = 0.0;
 
   @override
   Widget build(BuildContext context) {
@@ -39,18 +40,74 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       drawer: _buildDrawer(context),
       body: StarfieldBackground(
         child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
+          child: Stack(
+            children: [
+              // Hidden "Made in India" — revealed on overscroll
+              Positioned(
+                bottom: 16,
+                left: 0,
+                right: 0,
+                child: Opacity(
+                  opacity: (_overscrollAmount / 50.0).clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: 0.85 + 0.15 * (_overscrollAmount / 50.0).clamp(0.0, 1.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Made with ',
+                          style: TextStyle(
+                            color: AppColors.textMuted.withOpacity(0.6),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.favorite,
+                          color: Color(0xFFFF6B6B),
+                          size: 14,
+                        ),
+                        Text(
+                          ' in India ',
+                          style: TextStyle(
+                            color: AppColors.textMuted.withOpacity(0.6),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Text(
+                          '\uD83C\uDDEE\uD83C\uDDF3',
+                          style: TextStyle(fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  children: [
+
+              // Main scrollable content
+              NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  final overscroll = notification.metrics.pixels -
+                      notification.metrics.maxScrollExtent;
+                  final clamped = overscroll.clamp(0.0, 60.0);
+                  if (clamped != _overscrollAmount) {
+                    setState(() => _overscrollAmount = clamped);
+                  }
+                  return false;
+                },
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: MediaQuery.of(context).size.height -
+                          MediaQuery.of(context).padding.top -
+                          MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                        children: [
                     const SizedBox(height: 8),
 
                     // Top bar with greeting and menu
@@ -302,44 +359,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         .animate()
                         .fadeIn(duration: 600.ms, delay: 1000.ms),
 
-                    const SizedBox(height: 40),
-
-                    // Made in India footer (visible on scroll)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Made with ',
-                          style: TextStyle(
-                            color: AppColors.textMuted.withOpacity(0.4),
-                            fontSize: 12,
-                          ),
-                        ),
-                        Icon(
-                          Icons.favorite,
-                          color: AppColors.error.withOpacity(0.5),
-                          size: 14,
-                        ),
-                        Text(
-                          ' in India',
-                          style: TextStyle(
-                            color: AppColors.textMuted.withOpacity(0.4),
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '\uD83C\uDDEE\uD83C\uDDF3',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
             ),
+          ),
+        ),
+            ],
           ),
         ),
       ),
