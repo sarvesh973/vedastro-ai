@@ -10,283 +10,539 @@ import 'chat_screen.dart';
 import 'palm_upload_screen.dart';
 import 'kundli_screen.dart';
 import 'settings_screen.dart';
-import 'paywall_screen.dart';
+import 'horoscope_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
 
     // Load saved profile on first build
     if (profile == null && StorageService.currentProfile != null) {
       Future.microtask(() {
-        ref.read(userProfileProvider.notifier).state = StorageService.currentProfile;
+        ref.read(userProfileProvider.notifier).state =
+            StorageService.currentProfile;
       });
     }
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: _buildDrawer(context),
       body: StarfieldBackground(
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              children: [
-                const SizedBox(height: 8),
-
-                // Top bar with greeting and settings
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Column(
                   children: [
-                    // Greeting
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 8),
+
+                    // Top bar with greeting and menu
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          _getGreeting(),
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 13,
+                        // Menu button
+                        GestureDetector(
+                          onTap: () {
+                            _scaffoldKey.currentState?.openDrawer();
+                          },
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.surfaceLight,
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: const Icon(
+                              Icons.menu_rounded,
+                              color: AppColors.textSecondary,
+                              size: 22,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          profile?.name.isNotEmpty == true
-                              ? profile!.name
-                              : 'Explorer',
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        // Greeting
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              _getGreeting(),
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              profile?.name.isNotEmpty == true
+                                  ? profile!.name
+                                  : 'Explorer',
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                    // Settings button
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          _buildPageRoute(const SettingsScreen()),
-                        );
-                      },
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.surfaceLight,
-                          border: Border.all(color: AppColors.divider),
+                    )
+                        .animate()
+                        .fadeIn(duration: 500.ms),
+
+                    const SizedBox(height: 32),
+
+                    // Logo / Icon
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            AppColors.purpleAccent.withOpacity(0.3),
+                            AppColors.purpleAccent.withOpacity(0.05),
+                          ],
                         ),
-                        child: const Icon(
-                          Icons.settings_outlined,
-                          color: AppColors.textSecondary,
-                          size: 20,
+                        border: Border.all(
+                          color: AppColors.purpleAccent.withOpacity(0.3),
+                          width: 1.5,
                         ),
                       ),
-                    ),
-                  ],
-                )
-                    .animate()
-                    .fadeIn(duration: 500.ms),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: AppColors.goldLight,
+                        size: 44,
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 800.ms)
+                        .scaleXY(
+                          begin: 0.8,
+                          end: 1.0,
+                          duration: 800.ms,
+                          curve: Curves.easeOut,
+                        ),
 
-                const Spacer(flex: 1),
+                    const SizedBox(height: 24),
 
-                // Logo / Icon
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        AppColors.purpleAccent.withOpacity(0.3),
-                        AppColors.purpleAccent.withOpacity(0.05),
+                    // Title
+                    Text(
+                      'VedAstro AI',
+                      style:
+                          Theme.of(context).textTheme.displayLarge?.copyWith(
+                                letterSpacing: 1,
+                                color: AppColors.textPrimary,
+                              ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 200.ms)
+                        .slideY(
+                          begin: 0.2,
+                          end: 0,
+                          duration: 600.ms,
+                          delay: 200.ms,
+                        ),
+
+                    const SizedBox(height: 8),
+
+                    Text(
+                      'Your personal Vedic astrologer',
+                      style:
+                          Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AppColors.textMuted,
+                                fontSize: 15,
+                                letterSpacing: 0.3,
+                              ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 400.ms),
+
+                    // Sun sign badge (if profile exists)
+                    if (profile != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.goldLight.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: AppColors.goldLight.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wb_sunny_outlined,
+                                color: AppColors.goldLight, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${profile.westernSign} (Vedic: ${profile.sunSign})',
+                              style: const TextStyle(
+                                color: AppColors.goldLight,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                          .animate()
+                          .fadeIn(duration: 500.ms, delay: 500.ms),
+                    ],
+
+                    const SizedBox(height: 32),
+
+                    // Feature buttons grid
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildFeatureCard(
+                            context: context,
+                            icon: Icons.chat_bubble_outline_rounded,
+                            label: 'Astrology\nChat',
+                            color: AppColors.purpleAccent,
+                            delay: 600,
+                            onTap: () {
+                              if (profile != null) {
+                                Navigator.of(context).push(
+                                  _buildPageRoute(const ChatScreen()),
+                                );
+                              } else {
+                                Navigator.of(context).push(
+                                  _buildPageRoute(const UserDetailsScreen()),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildFeatureCard(
+                            context: context,
+                            icon: Icons.back_hand_outlined,
+                            label: 'Palm\nReading',
+                            color: AppColors.purpleSoft,
+                            delay: 700,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                _buildPageRoute(const PalmUploadScreen()),
+                              );
+                            },
+                          ),
+                        ),
                       ],
                     ),
-                    border: Border.all(
-                      color: AppColors.purpleAccent.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome,
-                    color: AppColors.goldLight,
-                    size: 44,
-                  ),
-                )
-                    .animate()
-                    .fadeIn(duration: 800.ms)
-                    .scaleXY(begin: 0.8, end: 1.0, duration: 800.ms, curve: Curves.easeOut),
 
-                const SizedBox(height: 24),
+                    const SizedBox(height: 12),
 
-                // Title
-                Text(
-                  'VedAstro AI',
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    letterSpacing: 1,
-                    color: AppColors.textPrimary,
-                  ),
-                )
-                    .animate()
-                    .fadeIn(duration: 600.ms, delay: 200.ms)
-                    .slideY(begin: 0.2, end: 0, duration: 600.ms, delay: 200.ms),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  'Your personal Vedic astrologer',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 15,
-                    letterSpacing: 0.3,
-                  ),
-                )
-                    .animate()
-                    .fadeIn(duration: 600.ms, delay: 400.ms),
-
-                // Sun sign badge (if profile exists)
-                if (profile != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.goldLight.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.goldLight.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    Row(
                       children: [
-                        const Icon(Icons.wb_sunny_outlined, color: AppColors.goldLight, size: 16),
+                        Expanded(
+                          child: _buildFeatureCard(
+                            context: context,
+                            icon: Icons.auto_awesome_mosaic_outlined,
+                            label: 'Kundli\nChart',
+                            color: AppColors.gold,
+                            delay: 800,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                _buildPageRoute(const KundliScreen()),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildFeatureCard(
+                            context: context,
+                            icon: Icons.stars_outlined,
+                            label: 'Daily\nHoroscope',
+                            color: const Color(0xFFD4A574),
+                            delay: 900,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                _buildPageRoute(const HoroscopeScreen()),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // Bottom text
+                    Text(
+                      'Based on Brihat Parashara Hora Shastra\n& Phaladeepika',
+                      textAlign: TextAlign.center,
+                      style:
+                          Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textMuted.withOpacity(0.6),
+                                fontSize: 11,
+                                height: 1.5,
+                              ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 1000.ms),
+
+                    const SizedBox(height: 40),
+
+                    // Made in India footer (visible on scroll)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Made with ',
+                          style: TextStyle(
+                            color: AppColors.textMuted.withOpacity(0.4),
+                            fontSize: 12,
+                          ),
+                        ),
+                        Icon(
+                          Icons.favorite,
+                          color: AppColors.error.withOpacity(0.5),
+                          size: 14,
+                        ),
+                        Text(
+                          ' in India',
+                          style: TextStyle(
+                            color: AppColors.textMuted.withOpacity(0.4),
+                            fontSize: 12,
+                          ),
+                        ),
                         const SizedBox(width: 6),
                         Text(
-                          '${profile.westernSign} (Vedic: ${profile.sunSign})',
-                          style: const TextStyle(
-                            color: AppColors.goldLight,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          '\uD83C\uDDEE\uD83C\uDDF3',
+                          style: const TextStyle(fontSize: 14),
                         ),
                       ],
                     ),
-                  )
-                      .animate()
-                      .fadeIn(duration: 500.ms, delay: 500.ms),
-                ],
 
-                const Spacer(flex: 1),
-
-                // Feature buttons grid
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildFeatureCard(
-                        context: context,
-                        icon: Icons.chat_bubble_outline_rounded,
-                        label: 'Astrology\nChat',
-                        color: AppColors.purpleAccent,
-                        delay: 600,
-                        onTap: () {
-                          if (profile != null) {
-                            Navigator.of(context).push(
-                              _buildPageRoute(const ChatScreen()),
-                            );
-                          } else {
-                            Navigator.of(context).push(
-                              _buildPageRoute(const UserDetailsScreen()),
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildFeatureCard(
-                        context: context,
-                        icon: Icons.back_hand_outlined,
-                        label: 'Palm\nReading',
-                        color: AppColors.purpleSoft,
-                        delay: 700,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            _buildPageRoute(const PalmUploadScreen()),
-                          );
-                        },
-                      ),
-                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
-
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildFeatureCard(
-                        context: context,
-                        icon: Icons.auto_awesome_mosaic_outlined,
-                        label: 'Kundli\nChart',
-                        color: AppColors.gold,
-                        delay: 800,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            _buildPageRoute(const KundliScreen()),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildFeatureCard(
-                        context: context,
-                        icon: Icons.workspace_premium_outlined,
-                        label: 'Go\nPremium',
-                        color: const Color(0xFFD4A574),
-                        delay: 900,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            PageRouteBuilder(
-                              pageBuilder: (_, __, ___) => const PaywallScreen(),
-                              transitionsBuilder: (_, animation, __, child) {
-                                return SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0, 1),
-                                    end: Offset.zero,
-                                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
-                                  child: child,
-                                );
-                              },
-                              transitionDuration: const Duration(milliseconds: 400),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                const Spacer(flex: 2),
-
-                // Bottom text
-                Text(
-                  'Based on Brihat Parashara Hora Shastra\n& Phaladeepika',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textMuted.withOpacity(0.6),
-                    fontSize: 11,
-                    height: 1.5,
-                  ),
-                )
-                    .animate()
-                    .fadeIn(duration: 600.ms, delay: 1000.ms),
-
-                const SizedBox(height: 20),
-              ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    return Drawer(
+      backgroundColor: AppColors.background,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Drawer header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.purpleAccent.withOpacity(0.15),
+                    AppColors.background,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.purpleAccent.withOpacity(0.3),
+                          AppColors.purpleAccent.withOpacity(0.05),
+                        ],
+                      ),
+                      border: Border.all(
+                        color: AppColors.purpleAccent.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.auto_awesome,
+                      color: AppColors.goldLight,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'VedAstro AI',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Vedic Astrology & AI',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Container(height: 1, color: AppColors.divider),
+
+            const SizedBox(height: 8),
+
+            // Menu items
+            _buildDrawerItem(
+              icon: Icons.feedback_outlined,
+              label: 'Feedback',
+              onTap: () {
+                Navigator.pop(context);
+                _showFeedbackDialog(context);
+              },
+            ),
+
+            _buildDrawerItem(
+              icon: Icons.settings_outlined,
+              label: 'Settings',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  _buildPageRoute(const SettingsScreen()),
+                );
+              },
+            ),
+
+            const Spacer(),
+
+            // App version at bottom
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'v1.1.0',
+                style: TextStyle(
+                  color: AppColors.textMuted.withOpacity(0.4),
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: AppColors.textSecondary, size: 22),
+      title: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+
+  void _showFeedbackDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Send Feedback',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Tell us what you think or report a bug',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              maxLines: 4,
+              style: const TextStyle(
+                  color: AppColors.textPrimary, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Your feedback...',
+                filled: true,
+                fillColor: AppColors.surfaceLight,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                      color: AppColors.purpleAccent, width: 1.5),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textMuted)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              controller.dispose();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content:
+                      const Text('Thanks for your feedback!'),
+                  backgroundColor: AppColors.success,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            },
+            child: const Text('Send',
+                style: TextStyle(color: AppColors.purpleLight)),
+          ),
+        ],
       ),
     );
   }
@@ -350,8 +606,13 @@ class HomeScreen extends ConsumerWidget {
       ),
     )
         .animate()
-        .fadeIn(duration: 500.ms, delay: Duration(milliseconds: delay))
-        .slideY(begin: 0.2, end: 0, duration: 500.ms, delay: Duration(milliseconds: delay));
+        .fadeIn(
+            duration: 500.ms, delay: Duration(milliseconds: delay))
+        .slideY(
+            begin: 0.2,
+            end: 0,
+            duration: 500.ms,
+            delay: Duration(milliseconds: delay));
   }
 
   PageRouteBuilder _buildPageRoute(Widget page) {
@@ -359,12 +620,14 @@ class HomeScreen extends ConsumerWidget {
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+          opacity:
+              CurvedAnimation(parent: animation, curve: Curves.easeInOut),
           child: SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(0.05, 0),
               end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+            ).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOut)),
             child: child,
           ),
         );

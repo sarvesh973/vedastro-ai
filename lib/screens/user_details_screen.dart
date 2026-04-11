@@ -8,9 +8,11 @@ import '../providers/providers.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import 'chat_screen.dart';
+import 'login_screen.dart';
 
 class UserDetailsScreen extends ConsumerStatefulWidget {
-  const UserDetailsScreen({super.key});
+  final bool fromOnboarding;
+  const UserDetailsScreen({super.key, this.fromOnboarding = false});
 
   @override
   ConsumerState<UserDetailsScreen> createState() => _UserDetailsScreenState();
@@ -124,19 +126,37 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
     ref.read(userProfileProvider.notifier).state = profile;
     FirestoreService.syncProfile(profile);
 
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const ChatScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 400),
-      ),
-    );
+    if (widget.fromOnboarding) {
+      // From onboarding -> go to login/signup
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const LoginScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
+    } else {
+      // From home -> go to chat
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const ChatScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
+    }
   }
 
   @override
@@ -145,10 +165,12 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: widget.fromOnboarding
+            ? const SizedBox()
+            : IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                onPressed: () => Navigator.pop(context),
+              ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 28),
