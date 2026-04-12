@@ -58,3 +58,10 @@ android/key.properties
 **/*.jks
 **/*.keystore
 lib/config/api_config.dart
+
+# Environment files
+.env
+scripts/.env
+
+# Knowledge base (too large for git, stored in Firestore)
+knowledge_base/*.json
