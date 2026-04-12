@@ -2,10 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../config/vedic_system_prompt.dart';
 import '../models/user_profile.dart';
 import '../models/palm_result.dart';
+import '../models/chat_message.dart';
+
+/// Response from AI service, including text and optional Vedic sources
+class AiResponse {
+  final String text;
+  final List<VedicSource> sources;
+
+  const AiResponse({required this.text, this.sources = const []});
+}
 
 class AiService {
   static GenerativeModel? _chatModel;
@@ -14,7 +24,80 @@ class AiService {
   static UserProfile? _currentProfile;
   static final _random = Random();
 
-  /// Initialize the Gemini chat model with Vedic astrology system prompt
+  // ─────────────────────────────────────────────────────────────
+  // CLOUD FUNCTIONS (RAG-powered, primary)
+  // ─────────────────────────────────────────────────────────────
+
+  /// Try Cloud Functions RAG endpoint first
+  static Future<AiResponse?> _tryCloudFunction({
+    required UserProfile profile,
+    required String userMessage,
+    required List<String> chatHistory,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/chat');
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'question': userMessage,
+              'userProfile': profile.profileSummary,
+              'chatHistory': chatHistory.length > 10
+                  ? chatHistory.sublist(chatHistory.length - 10)
+                  : chatHistory,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final answer = data['answer'] as String? ?? '';
+        if (answer.isEmpty) return null;
+
+        final sourcesJson = data['sources'] as List<dynamic>? ?? [];
+        final sources = sourcesJson
+            .map((s) => VedicSource.fromJson(s as Map<String, dynamic>))
+            .toList();
+
+        return AiResponse(text: answer, sources: sources);
+      }
+    } catch (_) {
+      // Cloud Function unavailable -- fall through to direct Gemini
+    }
+    return null;
+  }
+
+  /// Try Cloud Functions horoscope endpoint
+  static Future<Map<String, dynamic>?> _tryCloudHoroscope({
+    required UserProfile profile,
+    required String period,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/horoscope');
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'userProfile': profile.profileSummary,
+              'sign': profile.sunSign,
+              'period': period,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // DIRECT GEMINI (fallback)
+  // ─────────────────────────────────────────────────────────────
+
   static void _initChatModel(UserProfile profile) {
     if (!ApiConfig.isConfigured) return;
 
@@ -52,56 +135,109 @@ class AiService {
     );
   }
 
-  /// Get real AI astrology response via Gemini
-  static Future<String> getAstrologyResponse({
+  /// Get AI astrology response. Tries: Cloud Function -> Direct Gemini -> Fallback
+  static Future<AiResponse> getAstrologyResponse({
     required UserProfile profile,
     required String userMessage,
     required List<String> chatHistory,
   }) async {
-    // If API key not configured, use fallback
-    if (!ApiConfig.isConfigured) {
-      return _getFallbackResponse(profile, userMessage);
-    }
+    // 1. Try Cloud Function (RAG-powered with real Vedic sources)
+    final cloudResponse = await _tryCloudFunction(
+      profile: profile,
+      userMessage: userMessage,
+      chatHistory: chatHistory,
+    );
+    if (cloudResponse != null) return cloudResponse;
 
-    try {
-      _initChatModel(profile);
-
-      final response = await _currentChat!.sendMessage(
-        Content.text(userMessage),
-      );
-
-      final text = response.text;
-      if (text != null && text.isNotEmpty) {
-        return text;
-      }
-
-      return _getFallbackResponse(profile, userMessage);
-    } catch (e) {
-      // If Gemini fails, try once more with a fresh chat session
+    // 2. Try direct Gemini
+    if (ApiConfig.isConfigured) {
       try {
-        _chatModel = null;
-        _currentChat = null;
         _initChatModel(profile);
-
-        // Include user context in the message itself as backup
-        final contextMessage =
-            'User birth details: ${profile.profileSummary}\n\nUser question: $userMessage';
-
         final response = await _currentChat!.sendMessage(
-          Content.text(contextMessage),
+          Content.text(userMessage),
         );
-
         final text = response.text;
         if (text != null && text.isNotEmpty) {
-          return text;
+          return AiResponse(text: text);
         }
-      } catch (_) {
-        // Both attempts failed
+      } catch (e) {
+        try {
+          _chatModel = null;
+          _currentChat = null;
+          _initChatModel(profile);
+          final contextMessage =
+              'User birth details: ${profile.profileSummary}\n\nUser question: $userMessage';
+          final response = await _currentChat!.sendMessage(
+            Content.text(contextMessage),
+          );
+          final text = response.text;
+          if (text != null && text.isNotEmpty) {
+            return AiResponse(text: text);
+          }
+        } catch (_) {}
       }
-
-      // Show fallback without scary error message
-      return _getFallbackResponse(profile, userMessage);
     }
+
+    // 3. Hardcoded fallback
+    return AiResponse(text: _getFallbackResponse(profile, userMessage));
+  }
+
+  /// Get horoscope data. Tries Cloud Function -> Direct Gemini -> Static fallback.
+  static Future<Map<String, dynamic>?> getHoroscope({
+    required UserProfile profile,
+    required String period,
+  }) async {
+    // 1. Try Cloud Function
+    final cloudResult = await _tryCloudHoroscope(profile: profile, period: period);
+    if (cloudResult != null) return cloudResult;
+
+    // 2. Try direct Gemini
+    if (ApiConfig.isConfigured) {
+      try {
+        _initChatModel(profile);
+        final prompt = '''Generate a $period horoscope for someone with these details:
+${profile.profileSummary}
+Vedic Sun Sign: ${profile.sunSign}
+
+Return ONLY valid JSON (no markdown) with this structure:
+{
+  "overall": "2-3 sentence overall prediction",
+  "love": "1-2 sentence love prediction",
+  "career": "1-2 sentence career prediction",
+  "health": "1-2 sentence health prediction",
+  "luckyNumber": 7,
+  "luckyColor": "Yellow",
+  "luckyDay": "Thursday",
+  "rating": 4
+}
+
+Keep it warm, Hinglish, reference Vedic concepts. Rating is 1-5 stars.''';
+
+        final response = await _currentChat!.sendMessage(Content.text(prompt));
+        final text = response.text;
+        if (text != null && text.isNotEmpty) {
+          var cleaned = text.trim();
+          if (cleaned.startsWith('```')) {
+            cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
+            cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
+            cleaned = cleaned.trim();
+          }
+          return jsonDecode(cleaned) as Map<String, dynamic>;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback static horoscope
+    return {
+      'overall': 'Aaj ka din aapke liye mixed rahega. Subah thoda slow start hoga but dopahar ke baad positive energy badhegi. Stars aapke saath hain!',
+      'love': 'Relationships mein harmony ka time hai. Partner ke saath quality time spend karein.',
+      'career': 'Kaam mein naye opportunities aa sakte hain. Apni skills par focus rakhein aur networking badhayein.',
+      'health': 'Health achhi rahegi. Bas hydration ka dhyan rakhein aur thoda walk zaroor karein.',
+      'luckyNumber': 7,
+      'luckyColor': 'Yellow',
+      'luckyDay': 'Thursday',
+      'rating': 4,
+    };
   }
 
   /// Palm reading using Gemini Vision

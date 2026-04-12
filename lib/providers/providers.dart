@@ -65,8 +65,8 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
     // Show typing indicator
     typingController.state = true;
 
-    // Get AI response
-    final response = await AiService.getAstrologyResponse(
+    // Get AI response (Cloud Function RAG -> Direct Gemini -> Fallback)
+    final aiResponse = await AiService.getAstrologyResponse(
       profile: profile,
       userMessage: text,
       chatHistory: state.map((m) => m.text).toList(),
@@ -75,11 +75,12 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
     // Hide typing indicator
     typingController.state = false;
 
-    // Add AI message
+    // Add AI message with sources
     addMessage(ChatMessage(
-      text: response,
+      text: aiResponse.text,
       role: MessageRole.ai,
       timestamp: DateTime.now(),
+      sources: aiResponse.sources,
     ));
 
     // Track usage

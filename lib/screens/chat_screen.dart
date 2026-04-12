@@ -77,8 +77,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     typingController.state = true;
     _scrollToBottom();
 
-    // Get AI response
-    final response = await AiService.getAstrologyResponse(
+    // Get AI response (tries Cloud Function RAG -> Direct Gemini -> Fallback)
+    final aiResponse = await AiService.getAstrologyResponse(
       profile: profile,
       userMessage: text,
       chatHistory: ref.read(chatMessagesProvider).map((m) => m.text).toList(),
@@ -90,12 +90,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     setState(() => _isTypewriterActive = true);
 
     chatNotifier.addMessage(ChatMessage(
-      text: response,
+      text: aiResponse.text,
       role: MessageRole.ai,
       timestamp: DateTime.now(),
+      sources: aiResponse.sources,
     ));
     // Sync AI response to cloud
-    FirestoreService.syncChatMessage(response, 'ai');
+    FirestoreService.syncChatMessage(aiResponse.text, 'ai');
 
     await StorageService.incrementChatQuestions();
     ref.read(chatQuestionsUsedProvider.notifier).state =
