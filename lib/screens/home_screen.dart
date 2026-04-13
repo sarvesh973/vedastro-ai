@@ -93,16 +93,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         children: [
                     const SizedBox(height: 8),
 
-                    // Profile switcher bar
-                    _buildProfileSwitcher(context, ref),
-
-                    const SizedBox(height: 16),
-
-                    // Top bar with greeting and menu
+                    // Top bar: hamburger + profiles + greeting
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Menu button
+                        // Hamburger menu
                         GestureDetector(
                           onTap: () {
                             _scaffoldKey.currentState?.openDrawer();
@@ -122,29 +117,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                           ),
                         ),
-                        // Greeting
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              _getGreeting(),
-                              style: const TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              profile?.name.isNotEmpty == true
-                                  ? profile!.name
-                                  : 'Explorer',
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 12),
+                        // Profile switcher (takes remaining space)
+                        Expanded(
+                          child: _buildProfileSwitcher(context, ref),
                         ),
                       ],
                     )
@@ -382,15 +358,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final activeIndex = ref.watch(activeProfileIndexProvider);
 
     return SizedBox(
-      height: 72,
-      child: Row(
-        children: [
-          // Profile chips (scrollable)
-          Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: profiles.length + 1, // +1 for "Add" button
-              itemBuilder: (context, index) {
+      height: 68,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: profiles.length + 1, // +1 for "Add" button
+        itemBuilder: (context, index) {
                 if (index == profiles.length) {
                   // Add profile button
                   return Padding(
@@ -516,11 +488,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 );
               },
-            ),
-          ),
-        ],
       ),
-    ).animate().fadeIn(duration: 400.ms);
+    );
   }
 
   void _showDeleteProfileDialog(
