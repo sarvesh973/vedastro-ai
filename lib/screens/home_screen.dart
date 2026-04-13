@@ -51,35 +51,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   opacity: (_overscrollAmount / 50.0).clamp(0.0, 1.0),
                   child: Transform.scale(
                     scale: 0.85 + 0.15 * (_overscrollAmount / 50.0).clamp(0.0, 1.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Made with ',
-                          style: TextStyle(
-                            color: AppColors.textMuted.withOpacity(0.6),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Icon(
-                          Icons.favorite,
-                          color: Color(0xFFFF6B6B),
-                          size: 14,
-                        ),
-                        Text(
-                          ' in India ',
-                          style: TextStyle(
-                            color: AppColors.textMuted.withOpacity(0.6),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Text(
-                          '\uD83C\uDDEE\uD83C\uDDF3',
-                          style: TextStyle(fontSize: 15),
-                        ),
-                      ],
+                    child: Text(
+                      'Made in India',
+                      style: TextStyle(
+                        color: AppColors.textMuted.withOpacity(0.6),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
@@ -341,7 +319,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                     const SizedBox(height: 32),
 
-                    // Bottom text
+                    // Indian Vedic Wisdom tagline
+                    Text(
+                      'Indian Vedic Wisdom',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.goldLight.withOpacity(0.7),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                        height: 1.4,
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 800.ms, delay: 1000.ms),
+
+                    const SizedBox(height: 8),
+
+                    // Sub-text
                     Text(
                       'Based on Brihat Parashara Hora Shastra\n& Phaladeepika',
                       textAlign: TextAlign.center,
@@ -353,7 +348,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                     )
                         .animate()
-                        .fadeIn(duration: 600.ms, delay: 1000.ms),
+                        .fadeIn(duration: 600.ms, delay: 1100.ms),
 
                     const SizedBox(height: 20),
                   ],
