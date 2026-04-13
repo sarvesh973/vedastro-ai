@@ -8,6 +8,7 @@ import '../providers/providers.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import 'chat_screen.dart';
+import 'home_screen.dart';
 import 'login_screen.dart';
 
 class UserDetailsScreen extends ConsumerStatefulWidget {
@@ -124,6 +125,12 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
     // Save profile locally + cloud
     await StorageService.saveProfile(profile);
     ref.read(userProfileProvider.notifier).state = profile;
+    ref.read(familyProfilesProvider.notifier).state =
+        List.from(StorageService.familyProfiles);
+    ref.read(activeProfileIndexProvider.notifier).state =
+        StorageService.activeProfileIndex;
+    // Clear chat for new profile
+    ref.read(chatMessagesProvider.notifier).clear();
     FirestoreService.syncProfile(profile);
 
     if (widget.fromOnboarding) {
@@ -142,20 +149,8 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
         ),
       );
     } else {
-      // From home -> go to chat
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const ChatScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 400),
-        ),
-      );
+      // From home -> go back to home
+      Navigator.of(context).pop();
     }
   }
 

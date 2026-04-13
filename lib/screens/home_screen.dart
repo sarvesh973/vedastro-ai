@@ -51,13 +51,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   opacity: (_overscrollAmount / 50.0).clamp(0.0, 1.0),
                   child: Transform.scale(
                     scale: 0.85 + 0.15 * (_overscrollAmount / 50.0).clamp(0.0, 1.0),
-                    child: Text(
-                      'Made in India',
-                      style: TextStyle(
-                        color: AppColors.textMuted.withOpacity(0.6),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Made in India ',
+                          style: TextStyle(
+                            color: AppColors.textMuted.withOpacity(0.6),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Text(
+                          '\uD83C\uDDEE\uD83C\uDDF3',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -83,6 +92,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Column(
                         children: [
                     const SizedBox(height: 8),
+
+                    // Profile switcher bar
+                    _buildProfileSwitcher(context, ref),
+
+                    const SizedBox(height: 16),
 
                     // Top bar with greeting and menu
                     Row(
@@ -359,6 +373,193 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileSwitcher(BuildContext context, WidgetRef ref) {
+    final profiles = ref.watch(familyProfilesProvider);
+    final activeIndex = ref.watch(activeProfileIndexProvider);
+
+    return SizedBox(
+      height: 72,
+      child: Row(
+        children: [
+          // Profile chips (scrollable)
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: profiles.length + 1, // +1 for "Add" button
+              itemBuilder: (context, index) {
+                if (index == profiles.length) {
+                  // Add profile button
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          _buildPageRoute(const UserDetailsScreen()),
+                        );
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.surfaceLight,
+                              border: Border.all(
+                                color: AppColors.divider,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              color: AppColors.textMuted,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Add',
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final p = profiles[index];
+                final isActive = index == activeIndex;
+                final initials = p.name.isNotEmpty
+                    ? p.name.substring(0, p.name.length >= 2 ? 2 : 1).toUpperCase()
+                    : '?';
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: GestureDetector(
+                    onTap: () async {
+                      await StorageService.switchToProfile(index);
+                      ref.read(userProfileProvider.notifier).state =
+                          StorageService.currentProfile;
+                      ref.read(activeProfileIndexProvider.notifier).state = index;
+                      // Clear chat when switching profiles
+                      ref.read(chatMessagesProvider.notifier).clear();
+                    },
+                    onLongPress: () {
+                      if (profiles.length > 1) {
+                        _showDeleteProfileDialog(context, ref, index, p.name);
+                      }
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: isActive
+                                ? const LinearGradient(
+                                    colors: [AppColors.purpleAccent, AppColors.purpleSoft],
+                                  )
+                                : null,
+                            color: isActive ? null : AppColors.surfaceLight,
+                            border: Border.all(
+                              color: isActive
+                                  ? AppColors.purpleAccent
+                                  : AppColors.divider,
+                              width: isActive ? 2 : 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              initials,
+                              style: TextStyle(
+                                color: isActive
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: 56,
+                          child: Text(
+                            p.name.isNotEmpty
+                                ? p.name.split(' ').first
+                                : 'Profile',
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isActive
+                                  ? AppColors.textPrimary
+                                  : AppColors.textMuted,
+                              fontSize: 10,
+                              fontWeight:
+                                  isActive ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms);
+  }
+
+  void _showDeleteProfileDialog(
+      BuildContext context, WidgetRef ref, int index, String name) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Remove Profile',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Remove $name from your family profiles?',
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child:
+                const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await StorageService.removeFamilyProfile(index);
+              ref.read(familyProfilesProvider.notifier).state =
+                  List.from(StorageService.familyProfiles);
+              ref.read(activeProfileIndexProvider.notifier).state =
+                  StorageService.activeProfileIndex;
+              ref.read(userProfileProvider.notifier).state =
+                  StorageService.currentProfile;
+              ref.read(chatMessagesProvider.notifier).clear();
+            },
+            child: const Text('Remove',
+                style: TextStyle(color: Color(0xFFFF6B6B))),
+          ),
+        ],
       ),
     );
   }

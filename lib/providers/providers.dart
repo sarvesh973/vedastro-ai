@@ -10,6 +10,16 @@ final userProfileProvider = StateProvider<UserProfile?>((ref) {
   return StorageService.currentProfile;
 });
 
+// Family profiles list provider
+final familyProfilesProvider = StateProvider<List<UserProfile>>((ref) {
+  return StorageService.familyProfiles;
+});
+
+// Active profile index
+final activeProfileIndexProvider = StateProvider<int>((ref) {
+  return StorageService.activeProfileIndex;
+});
+
 // Chat messages provider
 final chatMessagesProvider =
     StateNotifierProvider<ChatMessagesNotifier, List<ChatMessage>>(

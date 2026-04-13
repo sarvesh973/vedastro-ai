@@ -9,12 +9,16 @@ class StorageService {
   static const int freeChatLimit = 5;
   static const int freePalmLimit = 2;
 
+  static List<UserProfile> _familyProfiles = [];
+
   // Keys
   static const String _keyOnboardingComplete = 'onboarding_complete';
   static const String _keyIsLoggedIn = 'is_logged_in';
   static const String _keyUserEmail = 'user_email';
   static const String _keyUserPassword = 'user_password';
   static const String _keyProfile = 'user_profile';
+  static const String _keyFamilyProfiles = 'family_profiles';
+  static const String _keyActiveProfileIndex = 'active_profile_index';
   static const String _keyChatUsed = 'chat_questions_used';
   static const String _keyPalmUsed = 'palm_readings_used';
   static const String _keyIsPremium = 'is_premium';
@@ -22,9 +26,55 @@ class StorageService {
   /// Initialize SharedPreferences (call once at app start)
   static Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
-    // Load profile from storage
+    // Load family profiles
+    _loadFamilyProfiles();
+    // Load active profile from storage
     final profileJson = _prefs?.getString(_keyProfile);
     _currentProfile = UserProfile.fromJsonString(profileJson);
+  }
+
+  // ─── Family Profiles ───────────────────────────
+  static List<UserProfile> get familyProfiles => _familyProfiles;
+  static int get activeProfileIndex => _prefs?.getInt(_keyActiveProfileIndex) ?? 0;
+
+  static void _loadFamilyProfiles() {
+    final jsonList = _prefs?.getStringList(_keyFamilyProfiles) ?? [];
+    _familyProfiles = jsonList
+        .map((json) => UserProfile.fromJsonString(json))
+        .where((p) => p != null)
+        .cast<UserProfile>()
+        .toList();
+  }
+
+  static Future<void> _saveFamilyProfiles() async {
+    final jsonList = _familyProfiles.map((p) => p.toJsonString()).toList();
+    await _prefs?.setStringList(_keyFamilyProfiles, jsonList);
+  }
+
+  static Future<void> addFamilyProfile(UserProfile profile) async {
+    _familyProfiles.add(profile);
+    await _saveFamilyProfiles();
+    // Auto-switch to new profile
+    await switchToProfile(_familyProfiles.length - 1);
+  }
+
+  static Future<void> removeFamilyProfile(int index) async {
+    if (index < 0 || index >= _familyProfiles.length) return;
+    _familyProfiles.removeAt(index);
+    await _saveFamilyProfiles();
+    // Switch to first profile or clear
+    if (_familyProfiles.isNotEmpty) {
+      await switchToProfile(0);
+    } else {
+      await clearProfile();
+    }
+  }
+
+  static Future<void> switchToProfile(int index) async {
+    if (index < 0 || index >= _familyProfiles.length) return;
+    _currentProfile = _familyProfiles[index];
+    await _prefs?.setInt(_keyActiveProfileIndex, index);
+    await _prefs?.setString(_keyProfile, _currentProfile!.toJsonString());
   }
 
   // ─── Onboarding ─────────────────────────────────
@@ -70,6 +120,16 @@ class StorageService {
   static Future<void> saveProfile(UserProfile profile) async {
     _currentProfile = profile;
     await _prefs?.setString(_keyProfile, profile.toJsonString());
+    // Also add to family profiles if not already there
+    final exists = _familyProfiles.any((p) =>
+        p.name == profile.name &&
+        p.dateOfBirth == profile.dateOfBirth &&
+        p.placeOfBirth == profile.placeOfBirth);
+    if (!exists) {
+      _familyProfiles.add(profile);
+      await _saveFamilyProfiles();
+      await _prefs?.setInt(_keyActiveProfileIndex, _familyProfiles.length - 1);
+    }
   }
 
   static Future<void> clearProfile() async {
