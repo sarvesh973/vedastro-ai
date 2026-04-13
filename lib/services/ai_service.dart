@@ -43,6 +43,9 @@ class AiService {
             body: jsonEncode({
               'question': userMessage,
               'userProfile': profile.profileSummary,
+              'birthDate': profile.dobFormatted,
+              'birthTime': profile.timeOfBirth ?? '',
+              'place': profile.placeOfBirth,
               'chatHistory': chatHistory.length > 10
                   ? chatHistory.sublist(chatHistory.length - 10)
                   : chatHistory,
@@ -83,6 +86,9 @@ class AiService {
               'userProfile': profile.profileSummary,
               'sign': profile.sunSign,
               'period': period,
+              'birthDate': profile.dobFormatted,
+              'birthTime': profile.timeOfBirth ?? '',
+              'place': profile.placeOfBirth,
             }),
           )
           .timeout(const Duration(seconds: 90));
