@@ -33,14 +33,11 @@ jobs:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           mkdir -p lib/config
-          cat > lib/config/api_config.dart << 'DART'
-          class ApiConfig {
-            static const String geminiApiKey = 'PLACEHOLDER';
-            static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
-            static bool get isConfigured => geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE';
-          }
-          DART
-          sed -i "s|static const String geminiApiKey = 'PLACEHOLDER'|static const String geminiApiKey = '$GEMINI_KEY'|" lib/config/api_config.dart
+          echo "class ApiConfig {" > lib/config/api_config.dart
+          echo "  static const String geminiApiKey = '$GEMINI_KEY';" >> lib/config/api_config.dart
+          echo "  static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';" >> lib/config/api_config.dart
+          echo "  static bool get isConfigured => geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE';" >> lib/config/api_config.dart
+          echo "}" >> lib/config/api_config.dart
 
       - name: Set up release keystore
         env:
