@@ -194,14 +194,7 @@ class ChatBubble extends StatelessWidget {
                 ),
                 if (body.isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  Text(
-                    body.trim(),
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14.5,
-                      height: 1.55,
-                    ),
-                  ),
+                  _buildRichText(body.trim()),
                 ],
               ],
             ),
@@ -210,16 +203,55 @@ class ChatBubble extends StatelessWidget {
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            trimmed,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14.5,
-              height: 1.55,
-            ),
-          ),
+          child: _buildRichText(trimmed),
         );
       }).toList(),
+    );
+  }
+
+  /// Parse markdown-style **bold** and *italic* into styled RichText
+  Widget _buildRichText(String text) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.+?)\*\*|\*(.+?)\*');
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      // Add text before this match
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+
+      if (match.group(1) != null) {
+        // **bold**
+        spans.add(TextSpan(
+          text: match.group(1),
+          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.goldLight),
+        ));
+      } else if (match.group(2) != null) {
+        // *italic*
+        spans.add(TextSpan(
+          text: match.group(2),
+          style: const TextStyle(fontStyle: FontStyle.italic),
+        ));
+      }
+
+      lastEnd = match.end;
+    }
+
+    // Add remaining text
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 14.5,
+          height: 1.55,
+        ),
+        children: spans.isEmpty ? [TextSpan(text: text)] : spans,
+      ),
     );
   }
 }
