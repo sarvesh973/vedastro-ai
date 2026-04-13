@@ -220,6 +220,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? _buildEmptyState()
                 : ListView.builder(
                     controller: _scrollController,
+                    physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     itemCount: messages.length + (isTyping ? 1 : 0),
                     itemBuilder: (context, index) {
@@ -233,7 +234,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
                       return ChatBubble(
                         message: msg,
-                        animate: index >= messages.length - 1,
+                        animate: index >= messages.length - 2,
                         isLatestAiMessage: isLastAi,
                         onTypewriterComplete: () {
                           if (mounted) {
