@@ -205,10 +205,7 @@ class AiService {
 
     // 3. Hardcoded fallback
     print('[FALLBACK] Using hardcoded response. Last error: $_lastError');
-    final debugInfo = _lastError.isNotEmpty
-        ? '\n\n[DEBUG: $_lastError | URL: ${ApiConfig.cloudFunctionBaseUrl}]'
-        : '';
-    return AiResponse(text: _getFallbackResponse(profile, userMessage) + debugInfo);
+    return AiResponse(text: _getFallbackResponse(profile, userMessage));
   }
 
   /// Get horoscope data. Tries Cloud Function -> Direct Gemini -> Static fallback.

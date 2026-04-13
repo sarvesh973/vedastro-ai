@@ -15,9 +15,9 @@ class VedicSource {
 
   factory VedicSource.fromJson(Map<String, dynamic> json) {
     return VedicSource(
-      book: json['book'] as String? ?? '',
-      chapter: json['chapter'] as String? ?? '',
-      chapterName: json['chapter_name'] as String? ?? '',
+      book: json['book']?.toString() ?? '',
+      chapter: json['chapter']?.toString() ?? '',
+      chapterName: json['chapter_name']?.toString() ?? '',
       similarity: (json['similarity'] as num?)?.toDouble() ?? 0.0,
     );
   }
