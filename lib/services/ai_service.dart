@@ -28,6 +28,8 @@ class AiService {
   // CLOUD FUNCTIONS (RAG-powered, primary)
   // ─────────────────────────────────────────────────────────────
 
+  static String _lastError = '';
+
   /// Try Cloud Functions RAG endpoint first
   static Future<AiResponse?> _tryCloudFunction({
     required UserProfile profile,
@@ -36,6 +38,7 @@ class AiService {
   }) async {
     try {
       final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/chat');
+      print('[RAG] Calling: $url');
       final response = await http
           .post(
             url,
@@ -53,20 +56,29 @@ class AiService {
           )
           .timeout(const Duration(seconds: 90));
 
+      print('[RAG] Status: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final answer = data['answer'] as String? ?? '';
-        if (answer.isEmpty) return null;
+        if (answer.isEmpty) {
+          _lastError = 'RAG returned empty answer';
+          return null;
+        }
 
         final sourcesJson = data['sources'] as List<dynamic>? ?? [];
         final sources = sourcesJson
             .map((s) => VedicSource.fromJson(s as Map<String, dynamic>))
             .toList();
 
+        print('[RAG] Success! chartUsed=${data['chartUsed']}, sources=${sources.length}');
         return AiResponse(text: answer, sources: sources);
+      } else {
+        _lastError = 'RAG error ${response.statusCode}: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}';
+        print('[RAG] $_lastError');
       }
-    } catch (_) {
-      // Cloud Function unavailable -- fall through to direct Gemini
+    } catch (e) {
+      _lastError = 'RAG exception: $e';
+      print('[RAG] $_lastError');
     }
     return null;
   }
@@ -156,6 +168,7 @@ class AiService {
     if (cloudResponse != null) return cloudResponse;
 
     // 2. Try direct Gemini
+    print('[GEMINI] RAG failed ($_lastError), trying direct Gemini. isConfigured=${ApiConfig.isConfigured}');
     if (ApiConfig.isConfigured) {
       try {
         _initChatModel(profile);
@@ -164,9 +177,11 @@ class AiService {
         );
         final text = response.text;
         if (text != null && text.isNotEmpty) {
+          print('[GEMINI] Direct Gemini success');
           return AiResponse(text: text);
         }
       } catch (e) {
+        print('[GEMINI] First attempt failed: $e');
         try {
           _chatModel = null;
           _currentChat = null;
@@ -180,12 +195,20 @@ class AiService {
           if (text != null && text.isNotEmpty) {
             return AiResponse(text: text);
           }
-        } catch (_) {}
+        } catch (e2) {
+          print('[GEMINI] Second attempt also failed: $e2');
+        }
       }
+    } else {
+      print('[GEMINI] Not configured, skipping');
     }
 
     // 3. Hardcoded fallback
-    return AiResponse(text: _getFallbackResponse(profile, userMessage));
+    print('[FALLBACK] Using hardcoded response. Last error: $_lastError');
+    final debugInfo = _lastError.isNotEmpty
+        ? '\n\n[DEBUG: $_lastError | URL: ${ApiConfig.cloudFunctionBaseUrl}]'
+        : '';
+    return AiResponse(text: _getFallbackResponse(profile, userMessage) + debugInfo);
   }
 
   /// Get horoscope data. Tries Cloud Function -> Direct Gemini -> Static fallback.
