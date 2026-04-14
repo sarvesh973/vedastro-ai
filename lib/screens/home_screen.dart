@@ -122,6 +122,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Expanded(
                           child: _buildProfileSwitcher(context, ref),
                         ),
+                        // Greeting on right
+                        if (profile != null) ...[
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _getGreeting(),
+                                style: const TextStyle(
+                                  color: AppColors.goldLight,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                profile.name.split(' ').first,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     )
                         .animate()

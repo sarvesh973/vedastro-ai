@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../providers/providers.dart';
 import '../services/ai_service.dart';
@@ -22,10 +23,10 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
-        final periods = ['daily', 'weekly', 'monthly'];
+        final periods = ['daily', 'tomorrow', 'weekly', 'monthly'];
         _currentPeriod = periods[_tabController.index];
         _loadHoroscope();
       }
@@ -58,6 +59,25 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
     }
   }
 
+  String _getDateLabel() {
+    final now = DateTime.now();
+    switch (_currentPeriod) {
+      case 'daily':
+        return DateFormat('EEEE, d MMMM yyyy').format(now);
+      case 'tomorrow':
+        final tomorrow = now.add(const Duration(days: 1));
+        return DateFormat('EEEE, d MMMM yyyy').format(tomorrow);
+      case 'weekly':
+        final weekStart = now.subtract(Duration(days: now.weekday % 7));
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        return '${DateFormat('d MMM').format(weekStart)} - ${DateFormat('d MMM yyyy').format(weekEnd)}';
+      case 'monthly':
+        return DateFormat('MMMM yyyy').format(now);
+      default:
+        return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
@@ -84,11 +104,12 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
                 labelColor: AppColors.purpleLight,
                 unselectedLabelColor: AppColors.textMuted,
                 labelStyle: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
                 tabs: const [
-                  Tab(text: 'Daily'),
+                  Tab(text: 'Today'),
+                  Tab(text: 'Tomorrow'),
                   Tab(text: 'Weekly'),
                   Tab(text: 'Monthly'),
                 ],
@@ -149,7 +170,7 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
         children: [
           const SizedBox(height: 8),
 
-          // Sign header with star rating
+          // Sign header with date and star rating
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -175,6 +196,16 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
                     color: AppColors.textPrimary,
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Date label
+                Text(
+                  _getDateLabel(),
+                  style: TextStyle(
+                    color: AppColors.textMuted.withOpacity(0.8),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 12),
