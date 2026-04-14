@@ -174,6 +174,31 @@ class FirestoreService {
     } catch (_) {}
   }
 
+  // ─── Payment Records ────────────────────────
+
+  /// Save Razorpay payment record
+  static Future<void> savePaymentRecord({
+    required String uid,
+    required String paymentId,
+    required String plan,
+    required int amount,
+  }) async {
+    try {
+      await _db
+          .collection('users')
+          .doc(uid)
+          .collection('payments')
+          .doc(paymentId)
+          .set({
+        'paymentId': paymentId,
+        'plan': plan,
+        'amountPaise': amount,
+        'status': 'success',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
   // ─── Palm Reading History ───────────────────────
 
   /// Save palm reading result

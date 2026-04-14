@@ -2,16 +2,137 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
+import '../config/api_config.dart';
 import '../providers/providers.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
+import '../services/payment_service.dart';
 
-class PaywallScreen extends ConsumerWidget {
+class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
+}
+
+class _PaywallScreenState extends ConsumerState<PaywallScreen> {
+  String _selectedPlan = 'yearly';
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    PaymentService.init();
+  }
+
+  @override
+  void dispose() {
+    PaymentService.dispose();
+    super.dispose();
+  }
+
+  void _handlePurchase(String plan) {
+    if (_isProcessing) return;
+
+    // Check if Razorpay key is configured
+    if (!ApiConfig.isRazorpayConfigured) {
+      // Fallback: simulate payment for development
+      _simulatePurchase(plan);
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    PaymentService.openCheckout(
+      plan: plan,
+      onSuccess: (paymentId, plan) {
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+
+        // Update providers
+        ref.read(isPremiumProvider.notifier).state = true;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.workspace_premium, color: AppColors.goldLight, size: 20),
+                SizedBox(width: 10),
+                Expanded(child: Text('Premium activated! Enjoy unlimited access.')),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+
+        Navigator.pop(context);
+      },
+      onFailure: (message) {
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Fallback for when Razorpay key isn't set (dev/testing)
+  void _simulatePurchase(String plan) {
+    StorageService.upgradeToPremium();
+    ref.read(isPremiumProvider.notifier).state = true;
+
+    final uid = AuthService.currentUser?.uid;
+    if (uid != null) {
+      FirestoreService.setPremium(uid, true);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.workspace_premium, color: AppColors.goldLight, size: 20),
+            SizedBox(width: 10),
+            Expanded(child: Text('Premium activated! (Test mode)')),
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+
+    Navigator.pop(context);
+  }
+
+  String get _displayPrice {
+    final paise = _selectedPlan == 'yearly'
+        ? ApiConfig.premiumPriceYearlyPaise
+        : ApiConfig.premiumPriceMonthlyPaise;
+    final rupees = paise / 100;
+    if (rupees == rupees.toInt()) {
+      return '\u20B9${rupees.toInt()}';
+    }
+    return '\u20B9${rupees.toStringAsFixed(2)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -39,7 +160,7 @@ class PaywallScreen extends ConsumerWidget {
 
               const Spacer(flex: 1),
 
-              // Crown / Premium icon
+              // Crown icon
               Container(
                 width: 90,
                 height: 90,
@@ -123,23 +244,23 @@ class PaywallScreen extends ConsumerWidget {
                     child: _buildPriceCard(
                       context: context,
                       title: 'Monthly',
-                      price: '₹149',
+                      price: '\u20B9${(ApiConfig.premiumPriceMonthlyPaise / 100).toInt()}',
                       period: '/month',
-                      isPopular: false,
-                      onTap: () => _handlePurchase(context, ref, 'monthly'),
+                      isSelected: _selectedPlan == 'monthly',
+                      onTap: () => setState(() => _selectedPlan = 'monthly'),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Yearly (popular)
+                  // Yearly
                   Expanded(
                     child: _buildPriceCard(
                       context: context,
                       title: 'Yearly',
-                      price: '₹999',
+                      price: '\u20B9${(ApiConfig.premiumPriceYearlyPaise / 100).toInt()}',
                       period: '/year',
-                      isPopular: true,
-                      savings: 'Save 44%',
-                      onTap: () => _handlePurchase(context, ref, 'yearly'),
+                      isSelected: _selectedPlan == 'yearly',
+                      badge: 'BEST VALUE',
+                      onTap: () => setState(() => _selectedPlan = 'yearly'),
                     ),
                   ),
                 ],
@@ -149,46 +270,84 @@ class PaywallScreen extends ConsumerWidget {
 
               const SizedBox(height: 20),
 
-              // Subscribe button
+              // Pay button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => _handlePurchase(context, ref, 'yearly'),
+                  onPressed: _isProcessing ? null : () => _handlePurchase(_selectedPlan),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.gold,
                     foregroundColor: AppColors.background,
+                    disabledBackgroundColor: AppColors.gold.withValues(alpha: 0.5),
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                     elevation: 4,
                   ),
-                  child: const Text(
-                    'Start Premium — ₹999/year',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  child: _isProcessing
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: AppColors.background,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.lock_open_rounded, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Pay $_displayPrice & Unlock',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
               )
                   .animate()
                   .fadeIn(duration: 500.ms, delay: 900.ms),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+
+              // Secure payment badge
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shield_outlined, size: 14, color: AppColors.textMuted.withValues(alpha: 0.5)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Secured by Razorpay',
+                    style: TextStyle(
+                      color: AppColors.textMuted.withValues(alpha: 0.5),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
 
               // Restore + Terms
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      // Restore: check Firestore for premium status
+                      _restorePurchase();
+                    },
                     child: const Text(
                       'Restore Purchase',
                       style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                     ),
                   ),
-                  const Text('•', style: TextStyle(color: AppColors.textMuted)),
+                  const Text('\u2022', style: TextStyle(color: AppColors.textMuted)),
                   TextButton(
                     onPressed: () {},
                     child: const Text(
@@ -207,36 +366,54 @@ class PaywallScreen extends ConsumerWidget {
     );
   }
 
-  void _handlePurchase(BuildContext context, WidgetRef ref, String plan) {
-    // TODO: Integrate Razorpay here for real payments
-    // For now, activate premium (simulated)
-    StorageService.upgradeToPremium();
-    ref.read(isPremiumProvider.notifier).state = true;
-
-    // Sync to cloud
+  Future<void> _restorePurchase() async {
     final uid = AuthService.currentUser?.uid;
-    if (uid != null) {
-      FirestoreService.setPremium(uid, true);
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please sign in to restore purchases.'),
+          backgroundColor: AppColors.surfaceLight,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: const [
-            Icon(Icons.workspace_premium, color: AppColors.goldLight, size: 20),
-            SizedBox(width: 10),
-            Text('Premium activated! Enjoy unlimited access.'),
-          ],
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
+    final usage = await FirestoreService.getUsageStats(uid);
+    if (usage['isPremium'] == true) {
+      await StorageService.upgradeToPremium();
+      ref.read(isPremiumProvider.notifier).state = true;
 
-    Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.workspace_premium, color: AppColors.goldLight, size: 20),
+                SizedBox(width: 10),
+                Text('Premium restored successfully!'),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No previous purchase found.'),
+            backgroundColor: AppColors.surfaceLight,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildPriceCard({
@@ -244,16 +421,17 @@ class PaywallScreen extends ConsumerWidget {
     required String title,
     required String price,
     required String period,
-    required bool isPopular,
-    String? savings,
+    required bool isSelected,
+    String? badge,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          gradient: isPopular
+          gradient: isSelected
               ? LinearGradient(
                   colors: [
                     AppColors.purpleAccent.withValues(alpha: 0.25),
@@ -263,18 +441,18 @@ class PaywallScreen extends ConsumerWidget {
                   end: Alignment.bottomRight,
                 )
               : null,
-          color: isPopular ? null : AppColors.surface,
+          color: isSelected ? null : AppColors.surface,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isPopular
-                ? AppColors.gold.withValues(alpha: 0.5)
+            color: isSelected
+                ? AppColors.gold.withValues(alpha: 0.6)
                 : AppColors.divider,
-            width: isPopular ? 1.5 : 1,
+            width: isSelected ? 1.5 : 1,
           ),
         ),
         child: Column(
           children: [
-            if (isPopular && savings != null)
+            if (badge != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 margin: const EdgeInsets.only(bottom: 8),
@@ -283,7 +461,7 @@ class PaywallScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  savings,
+                  badge,
                   style: const TextStyle(
                     color: AppColors.goldLight,
                     fontSize: 10,
@@ -294,7 +472,7 @@ class PaywallScreen extends ConsumerWidget {
             Text(
               title,
               style: TextStyle(
-                color: isPopular ? AppColors.goldLight : AppColors.textMuted,
+                color: isSelected ? AppColors.goldLight : AppColors.textMuted,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -306,7 +484,7 @@ class PaywallScreen extends ConsumerWidget {
                   TextSpan(
                     text: price,
                     style: TextStyle(
-                      color: isPopular ? AppColors.textPrimary : AppColors.textSecondary,
+                      color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
                     ),
@@ -321,6 +499,10 @@ class PaywallScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            if (isSelected) ...[
+              const SizedBox(height: 6),
+              Icon(Icons.check_circle, color: AppColors.gold, size: 18),
+            ],
           ],
         ),
       ),

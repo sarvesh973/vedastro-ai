@@ -56,6 +56,11 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // Razorpay proguard rules
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
