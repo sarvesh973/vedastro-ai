@@ -269,7 +269,9 @@ Keep it warm, Hinglish, reference Vedic concepts. Rating is 1-5 stars.''';
   /// Palm reading using Gemini Vision
   static Future<PalmReadingResult> analyzePalm(String imagePath) async {
     if (!ApiConfig.isConfigured) {
-      return _getFallbackPalmReading();
+      throw PalmValidationException(
+        'AI service is not configured. Please try again later.',
+      );
     }
 
     try {
@@ -289,29 +291,42 @@ Keep it warm, Hinglish, reference Vedic concepts. Rating is 1-5 stars.''';
       ]);
 
       final text = response.text;
-      if (text != null && text.isNotEmpty) {
-        // Check if AI detected non-palm image
-        if (text.contains("NOT_A_PALM")) {
-          try {
-            var cleaned = text.trim();
-            if (cleaned.startsWith('```')) {
-              cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
-              cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
-              cleaned = cleaned.trim();
-            }
-            final errJson = jsonDecode(cleaned);
-            throw Exception(errJson['message'] ?? 'Please upload a clear palm photo');
-          } catch (e) {
-            if (e is Exception) rethrow;
-            throw Exception('Please upload a clear photo of your palm');
-          }
-        }
-        return _parsePalmResponse(text);
+      if (text == null || text.isEmpty) {
+        throw PalmValidationException(
+          'Could not analyze the image. Please try with a clearer palm photo.',
+        );
       }
 
-      return _getFallbackPalmReading();
+      // Check if AI detected non-palm image — STRICT rejection
+      if (text.contains('NOT_A_PALM')) {
+        var cleaned = text.trim();
+        if (cleaned.startsWith('```')) {
+          cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
+          cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
+          cleaned = cleaned.trim();
+        }
+        try {
+          final errJson = jsonDecode(cleaned) as Map<String, dynamic>;
+          throw PalmValidationException(
+            errJson['message'] as String? ??
+                'Yeh ek palm ki photo nahi hai. Please apni hatheli ki saaf photo upload karein.',
+          );
+        } catch (e) {
+          if (e is PalmValidationException) rethrow;
+          throw PalmValidationException(
+            'Yeh ek palm ki photo nahi hai. Please apni hatheli ki saaf photo upload karein.',
+          );
+        }
+      }
+
+      return _parsePalmResponse(text);
+    } on PalmValidationException {
+      rethrow; // ALWAYS let validation errors reach the UI
     } catch (e) {
-      return _getFallbackPalmReading();
+      print('[PALM] Analysis error: $e');
+      throw PalmValidationException(
+        'Palm analysis mein error aaya. Please ek clear, well-lit palm photo try karein.',
+      );
     }
   }
 
