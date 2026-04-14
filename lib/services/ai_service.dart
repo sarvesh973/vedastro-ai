@@ -269,9 +269,7 @@ Keep it warm, Hinglish, reference Vedic concepts. Rating is 1-5 stars.''';
   /// Palm reading using Gemini Vision
   static Future<PalmReadingResult> analyzePalm(String imagePath) async {
     if (!ApiConfig.isConfigured) {
-      throw PalmValidationException(
-        'AI service is not configured. Please try again later.',
-      );
+      return _getFallbackPalmReading();
     }
 
     try {
@@ -291,13 +289,15 @@ Keep it warm, Hinglish, reference Vedic concepts. Rating is 1-5 stars.''';
       ]);
 
       final text = response.text;
+      print('[PALM] Response length: ${text?.length ?? 0}');
+
       if (text == null || text.isEmpty) {
-        throw PalmValidationException(
-          'Could not analyze the image. Please try with a clearer palm photo.',
-        );
+        // API returned nothing — use fallback, don't block user
+        print('[PALM] Empty response, using fallback');
+        return _getFallbackPalmReading();
       }
 
-      // Check if AI detected non-palm image — STRICT rejection
+      // ONLY reject if AI explicitly says NOT_A_PALM
       if (text.contains('NOT_A_PALM')) {
         var cleaned = text.trim();
         if (cleaned.startsWith('```')) {
@@ -305,28 +305,51 @@ Keep it warm, Hinglish, reference Vedic concepts. Rating is 1-5 stars.''';
           cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
           cleaned = cleaned.trim();
         }
+        String errorMsg = 'Yeh ek palm ki photo nahi lag rahi. Please apni hatheli ki clear photo upload karein.';
         try {
           final errJson = jsonDecode(cleaned) as Map<String, dynamic>;
-          throw PalmValidationException(
-            errJson['message'] as String? ??
-                'Yeh ek palm ki photo nahi hai. Please apni hatheli ki saaf photo upload karein.',
-          );
-        } catch (e) {
-          if (e is PalmValidationException) rethrow;
-          throw PalmValidationException(
-            'Yeh ek palm ki photo nahi hai. Please apni hatheli ki saaf photo upload karein.',
-          );
-        }
+          errorMsg = errJson['message'] as String? ?? errorMsg;
+        } catch (_) {}
+        throw PalmValidationException(errorMsg);
       }
 
-      return _parsePalmResponse(text);
+      // Try to parse the real AI response
+      final parsed = _tryParsePalmResponse(text);
+      if (parsed != null) {
+        print('[PALM] Successfully parsed AI analysis');
+        return parsed;
+      }
+
+      // Parse failed — use fallback silently
+      print('[PALM] Parse failed, using fallback');
+      return _getFallbackPalmReading();
     } on PalmValidationException {
-      rethrow; // ALWAYS let validation errors reach the UI
+      rethrow; // Only NOT_A_PALM errors reach the UI
     } catch (e) {
-      print('[PALM] Analysis error: $e');
-      throw PalmValidationException(
-        'Palm analysis mein error aaya. Please ek clear, well-lit palm photo try karein.',
+      // Network error, timeout, API error — use fallback, don't block user
+      print('[PALM] Error: $e — using fallback');
+      return _getFallbackPalmReading();
+    }
+  }
+
+  /// Try to parse palm response, returns null if parsing fails
+  static PalmReadingResult? _tryParsePalmResponse(String responseText) {
+    try {
+      var cleaned = responseText.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
+        cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
+        cleaned = cleaned.trim();
+      }
+      final json = jsonDecode(cleaned) as Map<String, dynamic>;
+      return PalmReadingResult(
+        loveLine: _parsePalmLine(json['loveLine']),
+        careerLine: _parsePalmLine(json['careerLine']),
+        lifeLine: _parsePalmLine(json['lifeLine']),
       );
+    } catch (e) {
+      print('[PALM] Parse error: $e');
+      return null;
     }
   }
 
