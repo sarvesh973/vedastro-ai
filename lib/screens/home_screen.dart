@@ -11,6 +11,7 @@ import 'palm_upload_screen.dart';
 import 'kundli_screen.dart';
 import 'settings_screen.dart';
 import 'horoscope_screen.dart';
+import 'paywall_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -334,7 +335,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 16),
+
+                    // Premium banner
+                    _buildPremiumBanner(context, ref)
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 950.ms)
+                        .slideY(begin: 0.15, end: 0, duration: 600.ms, delay: 950.ms),
+
+                    const SizedBox(height: 24),
 
                     // Indian Vedic Wisdom tagline
                     Text(
@@ -632,6 +641,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             // Menu items
             _buildDrawerItem(
+              icon: Icons.workspace_premium,
+              label: StorageService.isPremium ? 'Premium (Active)' : 'Upgrade to Premium',
+              color: AppColors.goldLight,
+              onTap: () {
+                Navigator.pop(context);
+                if (!StorageService.isPremium) {
+                  Navigator.of(context).push(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const PaywallScreen(),
+                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                        return SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 1),
+                            end: Offset.zero,
+                          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+                          child: child,
+                        );
+                      },
+                      transitionDuration: const Duration(milliseconds: 400),
+                    ),
+                  );
+                }
+              },
+            ),
+
+            _buildDrawerItem(
               icon: Icons.feedback_outlined,
               label: 'Feedback',
               onTap: () {
@@ -674,13 +710,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Color? color,
   }) {
     return ListTile(
-      leading: Icon(icon, color: AppColors.textSecondary, size: 22),
+      leading: Icon(icon, color: color ?? AppColors.textSecondary, size: 22),
       title: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
+        style: TextStyle(
+          color: color ?? AppColors.textPrimary,
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),
@@ -758,6 +795,229 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPremiumBanner(BuildContext context, WidgetRef ref) {
+    final isPremium = ref.watch(isPremiumProvider);
+    final chatsUsed = ref.watch(chatQuestionsUsedProvider);
+    final palmsUsed = ref.watch(palmReadingsUsedProvider);
+
+    if (isPremium) {
+      // Premium active badge
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.gold.withOpacity(0.15),
+              AppColors.gold.withOpacity(0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.gold.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.gold.withOpacity(0.2),
+              ),
+              child: const Icon(Icons.workspace_premium, color: AppColors.goldLight, size: 22),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Premium Active',
+                    style: TextStyle(
+                      color: AppColors.goldLight,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Unlimited access to all features',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.check_circle, color: AppColors.success, size: 22),
+          ],
+        ),
+      );
+    }
+
+    // Free tier — show upgrade banner with usage
+    final chatsLeft = StorageService.freeChatLimit - chatsUsed;
+    final palmsLeft = StorageService.freePalmLimit - palmsUsed;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const PaywallScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.purpleAccent.withOpacity(0.15),
+              AppColors.gold.withOpacity(0.08),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.gold.withOpacity(0.25)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.gold.withOpacity(0.3),
+                        AppColors.purpleAccent.withOpacity(0.2),
+                      ],
+                    ),
+                  ),
+                  child: const Icon(Icons.workspace_premium, color: AppColors.goldLight, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Upgrade to Premium',
+                        style: TextStyle(
+                          color: AppColors.goldLight,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Unlimited chats, palm readings & more',
+                        style: TextStyle(color: AppColors.textMuted.withOpacity(0.8), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.gold, AppColors.goldLight],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'PRO',
+                    style: TextStyle(
+                      color: AppColors.background,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Usage indicators
+            Row(
+              children: [
+                Expanded(
+                  child: _usageIndicator(
+                    'Chats',
+                    chatsUsed,
+                    StorageService.freeChatLimit,
+                    chatsLeft <= 1,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _usageIndicator(
+                    'Palm Reads',
+                    palmsUsed,
+                    StorageService.freePalmLimit,
+                    palmsLeft <= 0,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _usageIndicator(String label, int used, int total, bool isLow) {
+    final progress = (used / total).clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+            ),
+            Text(
+              '$used/$total used',
+              style: TextStyle(
+                color: isLow ? AppColors.error : AppColors.textMuted,
+                fontSize: 11,
+                fontWeight: isLow ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 4,
+            backgroundColor: AppColors.surfaceLight,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isLow ? AppColors.error : AppColors.purpleAccent,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
