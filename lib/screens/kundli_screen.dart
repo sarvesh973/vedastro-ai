@@ -24,6 +24,10 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
   bool _isLoading = true;
   String? _error;
 
+  // Personalized insights
+  Map<String, String> _insights = {};
+  bool _insightsLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +69,8 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
             _chartData = data;
             _isLoading = false;
           });
+          // Auto-fetch personalized insights
+          _loadInsights();
         }
       } else {
         if (mounted) {
@@ -140,6 +146,83 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     final ascSign = divData['Ascendant']?.toString() ?? '';
     if (ascSign.isEmpty) return 0;
     return KundliChart.signToIndex(ascSign);
+  }
+
+  Future<void> _loadInsights() async {
+    final profile = ref.read(userProfileProvider);
+    if (profile == null || _chartData == null) return;
+
+    setState(() => _insightsLoading = true);
+
+    try {
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/chat');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'question': 'Based on my complete birth chart, give me a brief personalized reading. '
+              'Cover these 5 areas in 2-3 lines each: '
+              '1. PERSONALITY: What kind of person am I based on my lagna and planets? '
+              '2. CAREER: What career paths suit me based on 10th house and D10? '
+              '3. RELATIONSHIPS: What is my love/marriage life like based on 7th house and D9? '
+              '4. STRENGTHS: What are my biggest strengths from this chart? '
+              '5. CHALLENGES: What should I be careful about? '
+              'Format each section starting with the label like "PERSONALITY:" etc. Keep it warm, Hinglish, and specific to MY chart positions.',
+          'userProfile': profile.profileSummary,
+          'birthDate': profile.dobFormatted,
+          'birthTime': profile.timeOfBirth ?? '',
+          'place': profile.placeOfBirth,
+          'chatHistory': <String>[],
+        }),
+      ).timeout(const Duration(seconds: 90));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final answer = data['answer']?.toString() ?? '';
+        if (answer.isNotEmpty && mounted) {
+          setState(() {
+            _insights = _parseInsights(answer);
+            _insightsLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _insightsLoading = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _insightsLoading = false);
+    }
+  }
+
+  Map<String, String> _parseInsights(String text) {
+    final Map<String, String> result = {};
+    final sections = ['PERSONALITY', 'CAREER', 'RELATIONSHIPS', 'STRENGTHS', 'CHALLENGES'];
+
+    for (int i = 0; i < sections.length; i++) {
+      final key = sections[i];
+      final pattern = RegExp('${key}[:\\s]*', caseSensitive: false);
+      final match = pattern.firstMatch(text);
+      if (match != null) {
+        final startPos = match.end;
+        // Find the next section or end of text
+        int endPos = text.length;
+        for (int j = i + 1; j < sections.length; j++) {
+          final nextPattern = RegExp('${sections[j]}[:\\s]*', caseSensitive: false);
+          final nextMatch = nextPattern.firstMatch(text.substring(startPos));
+          if (nextMatch != null) {
+            endPos = startPos + nextMatch.start;
+            break;
+          }
+        }
+        result[key] = text.substring(startPos, endPos).trim();
+      }
+    }
+
+    // If parsing failed, just put the whole response as personality
+    if (result.isEmpty && text.isNotEmpty) {
+      result['PERSONALITY'] = text;
+    }
+
+    return result;
   }
 
   @override
@@ -286,8 +369,14 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
 
           const SizedBox(height: 20),
 
-          // Show dasha and planet details only for D1
+          // Show insights and details only for D1
           if (chartType == 'D1') ...[
+            // Personalized Insights (the main value for users)
+            _buildInsightsSection()
+                .animate().fadeIn(duration: 500.ms, delay: 350.ms),
+
+            const SizedBox(height: 16),
+
             // Dasha info
             _buildDashaCard()
                 .animate().fadeIn(duration: 500.ms, delay: 400.ms),
@@ -313,6 +402,35 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
               'A strong Navamsha can elevate a weak Rashi chart, and vice versa.',
               Icons.favorite_outline,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
+            const SizedBox(height: 12),
+            // Show relationship insight from parsed data
+            if (_insights.containsKey('RELATIONSHIPS'))
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE91E63).withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_awesome, color: Color(0xFFE91E63), size: 16),
+                        SizedBox(width: 8),
+                        Text('Your Relationship Reading', style: TextStyle(color: Color(0xFFE91E63), fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _insights['RELATIONSHIPS']!,
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.6),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
             const SizedBox(height: 32),
           ],
 
@@ -322,6 +440,35 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
               'The 10th house lord placement here is crucial for career success.',
               Icons.work_outline,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
+            const SizedBox(height: 12),
+            // Show career insight from parsed data
+            if (_insights.containsKey('CAREER'))
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.goldLight.withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_awesome, color: AppColors.goldLight, size: 16),
+                        SizedBox(width: 8),
+                        Text('Your Career Reading', style: TextStyle(color: AppColors.goldLight, fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _insights['CAREER']!,
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.6),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
             const SizedBox(height: 32),
           ],
         ],
@@ -384,6 +531,174 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildInsightsSection() {
+    if (_insightsLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.purpleAccent.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(
+              width: 24, height: 24,
+              child: CircularProgressIndicator(
+                color: AppColors.purpleAccent,
+                strokeWidth: 2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Analyzing your chart...',
+              style: TextStyle(color: AppColors.textMuted.withOpacity(0.8), fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_insights.isEmpty) return const SizedBox.shrink();
+
+    const insightConfig = {
+      'PERSONALITY': {
+        'icon': Icons.person_outline,
+        'title': 'Your Personality',
+        'color': 'purple',
+      },
+      'CAREER': {
+        'icon': Icons.work_outline,
+        'title': 'Career & Profession',
+        'color': 'gold',
+      },
+      'RELATIONSHIPS': {
+        'icon': Icons.favorite_outline,
+        'title': 'Love & Relationships',
+        'color': 'pink',
+      },
+      'STRENGTHS': {
+        'icon': Icons.star_outline,
+        'title': 'Your Strengths',
+        'color': 'green',
+      },
+      'CHALLENGES': {
+        'icon': Icons.shield_outlined,
+        'title': 'Challenges & Remedies',
+        'color': 'orange',
+      },
+    };
+
+    Color _getColor(String colorName) {
+      switch (colorName) {
+        case 'purple': return AppColors.purpleLight;
+        case 'gold': return AppColors.goldLight;
+        case 'pink': return const Color(0xFFE91E63);
+        case 'green': return AppColors.success;
+        case 'orange': return const Color(0xFFF59E0B);
+        default: return AppColors.purpleLight;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.purpleAccent.withOpacity(0.15),
+              ),
+              child: const Icon(Icons.auto_awesome, color: AppColors.purpleLight, size: 18),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Your Chart Reading',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 48),
+          child: Text(
+            'Personalized insights from your birth chart',
+            style: TextStyle(color: AppColors.textMuted.withOpacity(0.7), fontSize: 12),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Insight cards
+        ..._insights.entries.map((entry) {
+          final config = insightConfig[entry.key];
+          if (config == null) return const SizedBox.shrink();
+
+          final iconData = config['icon'] as IconData;
+          final title = config['title'] as String;
+          final color = _getColor(config['color'] as String);
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: color.withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color.withOpacity(0.15),
+                        ),
+                        child: Icon(iconData, color: color, size: 16),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    entry.value,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
     );
   }
 
