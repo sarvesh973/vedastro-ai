@@ -57,7 +57,14 @@ class PaymentService {
           : 'VedAstro Premium — Monthly',
       'prefill': {
         'email': userEmail,
-        'contact': '',
+        'contact': '9999999999',
+      },
+      'method': {
+        'upi': true,
+        'card': true,
+        'netbanking': true,
+        'wallet': true,
+        'paylater': true,
       },
       'notes': {
         'plan': plan,
