@@ -11,7 +11,7 @@ class ApiConfig {
 
   /// Razorpay API Key (Test mode — switch to live key before Play Store launch)
   /// Get your keys from: https://dashboard.razorpay.com/app/keys
-  static const String razorpayKeyId = 'rzp_test_YOUR_KEY_HERE';
+  static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
 
   /// Company/App name shown on Razorpay checkout
   static const String razorpayCompanyName = 'VedAstro AI';
