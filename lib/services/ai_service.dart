@@ -18,10 +18,7 @@ class AiResponse {
 }
 
 class AiService {
-  static GenerativeModel? _chatModel;
-  static GenerativeModel? _visionModel;
-  static ChatSession? _currentChat;
-  static UserProfile? _currentProfile;
+  static GenerativeModel? _visionModel; // Only used for palm reading
   static final _random = Random();
 
   // ─────────────────────────────────────────────────────────────
@@ -83,11 +80,31 @@ class AiService {
     return null;
   }
 
-  /// Try Cloud Functions horoscope endpoint
+  /// Try CACHED horoscope first (pre-generated, zero AI cost), then fallback to live
   static Future<Map<String, dynamic>?> _tryCloudHoroscope({
     required UserProfile profile,
     required String period,
   }) async {
+    // 1. Try cached endpoint first (FREE — no Gemini API calls)
+    try {
+      final cachedUrl = Uri.parse(
+        '${ApiConfig.cloudFunctionBaseUrl}/horoscope/cached?sign=${Uri.encodeComponent(profile.sunSign)}&period=${Uri.encodeComponent(period)}',
+      );
+      print('[HOROSCOPE] Trying cached: $cachedUrl');
+      final cachedResponse = await http.get(cachedUrl).timeout(const Duration(seconds: 10));
+
+      if (cachedResponse.statusCode == 200) {
+        final data = jsonDecode(cachedResponse.body) as Map<String, dynamic>;
+        if (data['_cached'] == true) {
+          print('[HOROSCOPE] Cache HIT for ${profile.sunSign} $period');
+          return data;
+        }
+      }
+    } catch (e) {
+      print('[HOROSCOPE] Cache miss/error: $e');
+    }
+
+    // 2. Fallback: live generation (costs Gemini API call)
     try {
       final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/horoscope');
       final response = await http
@@ -106,6 +123,7 @@ class AiService {
           .timeout(const Duration(seconds: 90));
 
       if (response.statusCode == 200) {
+        print('[HOROSCOPE] Live generation for ${profile.sunSign} $period');
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (_) {}
@@ -113,31 +131,8 @@ class AiService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // DIRECT GEMINI (fallback)
+  // GEMINI VISION (palm reading only — stays client-side due to image size)
   // ─────────────────────────────────────────────────────────────
-
-  static void _initChatModel(UserProfile profile) {
-    if (!ApiConfig.isConfigured) return;
-
-    // Reinitialize if profile changed
-    if (_currentProfile?.profileSummary != profile.profileSummary ||
-        _chatModel == null) {
-      _chatModel = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: ApiConfig.geminiApiKey,
-        systemInstruction: Content.text(
-          VedicSystemPrompt.build(userProfileSummary: profile.profileSummary),
-        ),
-        generationConfig: GenerationConfig(
-          temperature: 0.7,
-          topP: 0.9,
-          maxOutputTokens: 4096,
-        ),
-      );
-      _currentChat = _chatModel!.startChat();
-      _currentProfile = profile;
-    }
-  }
 
   /// Initialize the Gemini vision model for palm reading
   static void _initVisionModel() {
@@ -153,7 +148,8 @@ class AiService {
     );
   }
 
-  /// Get AI astrology response. Tries: Cloud Function -> Direct Gemini -> Fallback
+  /// Get AI astrology response. Server-first, then fallback templates.
+  /// Direct Gemini calls removed to protect API key from APK decompilation.
   static Future<AiResponse> getAstrologyResponse({
     required UserProfile profile,
     required String userMessage,
@@ -167,93 +163,23 @@ class AiService {
     );
     if (cloudResponse != null) return cloudResponse;
 
-    // 2. Try direct Gemini
-    print('[GEMINI] RAG failed ($_lastError), trying direct Gemini. isConfigured=${ApiConfig.isConfigured}');
-    if (ApiConfig.isConfigured) {
-      try {
-        _initChatModel(profile);
-        final response = await _currentChat!.sendMessage(
-          Content.text(userMessage),
-        );
-        final text = response.text;
-        if (text != null && text.isNotEmpty) {
-          print('[GEMINI] Direct Gemini success');
-          return AiResponse(text: text);
-        }
-      } catch (e) {
-        print('[GEMINI] First attempt failed: $e');
-        try {
-          _chatModel = null;
-          _currentChat = null;
-          _initChatModel(profile);
-          final contextMessage =
-              'User birth details: ${profile.profileSummary}\n\nUser question: $userMessage';
-          final response = await _currentChat!.sendMessage(
-            Content.text(contextMessage),
-          );
-          final text = response.text;
-          if (text != null && text.isNotEmpty) {
-            return AiResponse(text: text);
-          }
-        } catch (e2) {
-          print('[GEMINI] Second attempt also failed: $e2');
-        }
-      }
-    } else {
-      print('[GEMINI] Not configured, skipping');
-    }
-
-    // 3. Hardcoded fallback
-    print('[FALLBACK] Using hardcoded response. Last error: $_lastError');
+    // 2. Server failed — use smart template fallback (FREE, no API cost)
+    // This keeps the app working even if server is down
+    print('[FALLBACK] Server unavailable ($_lastError), using template response');
     return AiResponse(text: _getFallbackResponse(profile, userMessage));
   }
 
-  /// Get horoscope data. Tries Cloud Function -> Direct Gemini -> Static fallback.
+  /// Get horoscope data. Tries cached endpoint -> live server -> static fallback.
+  /// No direct Gemini calls — all AI goes through server.
   static Future<Map<String, dynamic>?> getHoroscope({
     required UserProfile profile,
     required String period,
   }) async {
-    // 1. Try Cloud Function
+    // 1. Try Cloud Function (cached first, then live)
     final cloudResult = await _tryCloudHoroscope(profile: profile, period: period);
     if (cloudResult != null) return cloudResult;
 
-    // 2. Try direct Gemini
-    if (ApiConfig.isConfigured) {
-      try {
-        _initChatModel(profile);
-        final prompt = '''Generate a $period horoscope for someone with these details:
-${profile.profileSummary}
-Vedic Sun Sign: ${profile.sunSign}
-
-Return ONLY valid JSON (no markdown) with this structure:
-{
-  "overall": "2-3 sentence overall prediction",
-  "love": "1-2 sentence love prediction",
-  "career": "1-2 sentence career prediction",
-  "health": "1-2 sentence health prediction",
-  "luckyNumber": 7,
-  "luckyColor": "Yellow",
-  "luckyDay": "Thursday",
-  "rating": 4
-}
-
-Keep it warm, Hinglish, reference Vedic concepts. Rating is 1-5 stars.''';
-
-        final response = await _currentChat!.sendMessage(Content.text(prompt));
-        final text = response.text;
-        if (text != null && text.isNotEmpty) {
-          var cleaned = text.trim();
-          if (cleaned.startsWith('```')) {
-            cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
-            cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
-            cleaned = cleaned.trim();
-          }
-          return jsonDecode(cleaned) as Map<String, dynamic>;
-        }
-      } catch (_) {}
-    }
-
-    // 3. Fallback static horoscope
+    // 2. Server unavailable — static fallback (FREE)
     return {
       'overall': 'Aaj ka din aapke liye mixed rahega. Subah thoda slow start hoga but dopahar ke baad positive energy badhegi. Stars aapke saath hain!',
       'love': 'Relationships mein harmony ka time hai. Partner ke saath quality time spend karein.',

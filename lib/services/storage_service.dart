@@ -6,8 +6,8 @@ class StorageService {
   static SharedPreferences? _prefs;
   static UserProfile? _currentProfile;
 
-  static const int freeChatLimit = 5;
-  static const int freePalmLimit = 2;
+  static const int freeChatLimit = 2;
+  static const int freePalmLimit = 1;
 
   static List<UserProfile> _familyProfiles = [];
 
