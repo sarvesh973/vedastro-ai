@@ -19,7 +19,32 @@ class AiResponse {
 
 class AiService {
   static GenerativeModel? _visionModel; // Only used for palm reading
+  static GenerativeModel? _chatModel;   // Gemini fallback for chat
+  static ChatSession? _currentChat;
+  static UserProfile? _currentProfile;
   static final _random = Random();
+
+  /// Initialize/reset the Gemini chat model (fallback when server is down)
+  static void _initChatModel(UserProfile profile) {
+    if (!ApiConfig.isConfigured) return;
+
+    // Re-init if profile changed or model not created yet
+    if (_chatModel == null || _currentProfile != profile) {
+      _chatModel = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: ApiConfig.geminiApiKey,
+        systemInstruction: Content.text(
+          VedicSystemPrompt.build(userProfileSummary: profile.profileSummary),
+        ),
+        generationConfig: GenerationConfig(
+          temperature: 0.9,
+          maxOutputTokens: 1500,
+        ),
+      );
+      _currentChat = _chatModel!.startChat();
+      _currentProfile = profile;
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────
   // CLOUD FUNCTIONS (RAG-powered, primary)
@@ -148,8 +173,7 @@ class AiService {
     );
   }
 
-  /// Get AI astrology response. Server-first, then fallback templates.
-  /// Direct Gemini calls removed to protect API key from APK decompilation.
+  /// Get AI astrology response. Server-first, direct Gemini backup, then templates.
   static Future<AiResponse> getAstrologyResponse({
     required UserProfile profile,
     required String userMessage,
@@ -163,14 +187,30 @@ class AiService {
     );
     if (cloudResponse != null) return cloudResponse;
 
-    // 2. Server failed — use smart template fallback (FREE, no API cost)
-    // This keeps the app working even if server is down
-    print('[FALLBACK] Server unavailable ($_lastError), using template response');
+    // 2. Server down (free tier sleeping?) — try direct Gemini as backup
+    print('[FALLBACK] Server unavailable ($_lastError), trying direct Gemini...');
+    try {
+      _initChatModel(profile);
+      if (_currentChat != null) {
+        final geminiResponse = await _currentChat!
+            .sendMessage(Content.text(userMessage))
+            .timeout(const Duration(seconds: 45));
+        final text = geminiResponse.text;
+        if (text != null && text.isNotEmpty) {
+          print('[GEMINI-DIRECT] Success! ${text.length} chars');
+          return AiResponse(text: text);
+        }
+      }
+    } catch (e) {
+      print('[GEMINI-DIRECT] Also failed: $e');
+    }
+
+    // 3. Everything failed — use smart template fallback (FREE, no API cost)
+    print('[FALLBACK] All AI failed, using template response');
     return AiResponse(text: _getFallbackResponse(profile, userMessage));
   }
 
-  /// Get horoscope data. Tries cached endpoint -> live server -> static fallback.
-  /// No direct Gemini calls — all AI goes through server.
+  /// Get horoscope data. Tries cached endpoint -> live server -> direct Gemini -> static fallback.
   static Future<Map<String, dynamic>?> getHoroscope({
     required UserProfile profile,
     required String period,
@@ -179,7 +219,65 @@ class AiService {
     final cloudResult = await _tryCloudHoroscope(profile: profile, period: period);
     if (cloudResult != null) return cloudResult;
 
-    // 2. Server unavailable — static fallback (FREE)
+    // 2. Server down — try direct Gemini for unique horoscope
+    print('[HOROSCOPE] Server unavailable, trying direct Gemini...');
+    try {
+      if (!ApiConfig.isConfigured) throw Exception('API key not configured');
+
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: ApiConfig.geminiApiKey,
+        generationConfig: GenerationConfig(
+          temperature: 0.9,
+          maxOutputTokens: 1000,
+        ),
+      );
+
+      final periodLabel = period == 'daily'
+          ? 'today'
+          : period == 'tomorrow'
+              ? 'tomorrow'
+              : period == 'weekly'
+                  ? 'this week'
+                  : 'this month';
+
+      final prompt = '''You are VedAstro Guruji, a Vedic astrologer. Generate a ${period} horoscope for ${profile.sunSign} sign for $periodLabel.
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "overall": "3-4 line Hinglish overview with Vedic reference",
+  "love": "2-3 lines about relationships",
+  "career": "2-3 lines about work/career",
+  "health": "2-3 lines about health/wellness",
+  "luckyNumber": <number 1-9>,
+  "luckyColor": "<color>",
+  "luckyDay": "<day of week>",
+  "rating": <1-5>
+}
+
+Be specific to ${profile.sunSign}. Reference BPHS or Phaladeepika. Speak in warm Hinglish.''';
+
+      final response = await model
+          .generateContent([Content.text(prompt)])
+          .timeout(const Duration(seconds: 30));
+
+      final text = response.text;
+      if (text != null && text.isNotEmpty) {
+        var cleaned = text.trim();
+        if (cleaned.startsWith('```')) {
+          cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
+          cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
+          cleaned = cleaned.trim();
+        }
+        final data = jsonDecode(cleaned) as Map<String, dynamic>;
+        print('[GEMINI-DIRECT] Horoscope success for ${profile.sunSign} $period');
+        return data;
+      }
+    } catch (e) {
+      print('[GEMINI-DIRECT] Horoscope also failed: $e');
+    }
+
+    // 3. Everything failed — static fallback (same for all, but app doesn't crash)
     return {
       'overall': 'Aaj ka din aapke liye mixed rahega. Subah thoda slow start hoga but dopahar ke baad positive energy badhegi. Stars aapke saath hain!',
       'love': 'Relationships mein harmony ka time hai. Partner ke saath quality time spend karein.',
