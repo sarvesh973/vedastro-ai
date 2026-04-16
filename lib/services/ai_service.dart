@@ -225,19 +225,15 @@ class AiService {
 
       final prompt = '''You are VedAstro Guruji, a Vedic astrologer. Generate a ${period} horoscope for ${profile.sunSign} sign for $periodLabel.
 
-Return ONLY valid JSON (no markdown, no code blocks):
-{
-  "overall": "3-4 line Hinglish overview with Vedic reference",
-  "love": "2-3 lines about relationships",
-  "career": "2-3 lines about work/career",
-  "health": "2-3 lines about health/wellness",
-  "luckyNumber": <number 1-9>,
-  "luckyColor": "<color>",
-  "luckyDay": "<day of week>",
-  "rating": <1-5>
-}
+CRITICAL: Return ONLY valid compact JSON on a single line. No markdown, no code blocks, no newlines inside string values, no unescaped quotes.
 
-Be specific to ${profile.sunSign}. Reference BPHS or Phaladeepika. Speak in warm Hinglish.''';
+{"overall":"3-4 sentence Hinglish overview with Vedic reference","love":"2-3 sentences about relationships","career":"2-3 sentences about work","health":"2-3 sentences about health","luckyNumber":7,"luckyColor":"Yellow","luckyDay":"Thursday","rating":4}
+
+Rules:
+- All string values must be single-line (no \\n inside)
+- Do not use quotes " inside string values — use single quotes ' instead
+- Be specific to ${profile.sunSign}. Reference BPHS or Phaladeepika.
+- Speak in warm Hinglish.''';
 
       final response = await model
           .generateContent([Content.text(prompt)])
@@ -251,9 +247,23 @@ Be specific to ${profile.sunSign}. Reference BPHS or Phaladeepika. Speak in warm
           cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
           cleaned = cleaned.trim();
         }
-        final data = jsonDecode(cleaned) as Map<String, dynamic>;
-        print('[GEMINI-DIRECT] Horoscope success for ${profile.sunSign} $period');
-        return data;
+
+        // Try strict JSON parse first
+        try {
+          final data = jsonDecode(cleaned) as Map<String, dynamic>;
+          print('[GEMINI-DIRECT] Horoscope success for ${profile.sunSign} $period');
+          return data;
+        } catch (_) {
+          // Fallback: extract fields with regex when Gemini returns malformed JSON
+          // (common: unescaped newlines/quotes inside string values)
+          print('[GEMINI-DIRECT] Strict JSON failed, trying regex extraction');
+          final extracted = _extractHoroscopeFields(cleaned);
+          if (extracted != null) {
+            print('[GEMINI-DIRECT] Regex extraction succeeded for ${profile.sunSign} $period');
+            return extracted;
+          }
+          rethrow;
+        }
       }
     } catch (e) {
       final errStr = e.toString();
@@ -275,6 +285,60 @@ Be specific to ${profile.sunSign}. Reference BPHS or Phaladeepika. Speak in warm
       'luckyDay': 'Thursday',
       'rating': 4,
     };
+  }
+
+  /// Regex-based fallback when Gemini returns malformed JSON
+  /// (unescaped newlines/quotes inside string values)
+  static Map<String, dynamic>? _extractHoroscopeFields(String raw) {
+    try {
+      String extractString(String key) {
+        // Match "key": "value" where value may span lines and contain escaped quotes
+        final pattern = RegExp(
+          '"' + key + r'"\s*:\s*"((?:\\.|[^"\\])*)"',
+          dotAll: true,
+        );
+        final m = pattern.firstMatch(raw);
+        if (m == null) return '';
+        return m.group(1)!
+            .replaceAll(r'\n', ' ')
+            .replaceAll(r'\"', '"')
+            .replaceAll(r'\\', r'\')
+            .trim();
+      }
+
+      int extractInt(String key, int fallback) {
+        final pattern = RegExp('"' + key + r'"\s*:\s*(\d+)');
+        final m = pattern.firstMatch(raw);
+        if (m == null) return fallback;
+        return int.tryParse(m.group(1)!) ?? fallback;
+      }
+
+      final overall = extractString('overall');
+      final love = extractString('love');
+      final career = extractString('career');
+      final health = extractString('health');
+
+      // If at least overall was found, consider it a success
+      if (overall.isEmpty) return null;
+
+      return {
+        'overall': overall,
+        'love': love.isNotEmpty ? love : 'Relationships mein harmony ka time hai.',
+        'career': career.isNotEmpty ? career : 'Kaam mein positive progress ke aasaar hain.',
+        'health': health.isNotEmpty ? health : 'Health achhi rahegi.',
+        'luckyNumber': extractInt('luckyNumber', 7),
+        'luckyColor': extractString('luckyColor').isNotEmpty
+            ? extractString('luckyColor')
+            : 'Yellow',
+        'luckyDay': extractString('luckyDay').isNotEmpty
+            ? extractString('luckyDay')
+            : 'Thursday',
+        'rating': extractInt('rating', 4),
+      };
+    } catch (e) {
+      print('[EXTRACT] Regex extraction failed: $e');
+      return null;
+    }
   }
 
   /// Palm reading using Gemini Vision
