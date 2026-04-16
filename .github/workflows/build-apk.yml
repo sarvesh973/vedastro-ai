@@ -33,7 +33,7 @@ jobs:
           mkdir -p lib/config
           cat > lib/config/api_config.dart << 'DART'
           class ApiConfig {
-            static const String geminiApiKey = 'AIzaSyAJKjn07DckCBI9JGlD6egIuHuLxfK5VLE';
+            static const String geminiApiKey = 'AIzaSyDJRHJFDpGVRx54zxv40udXUuz62k-XsPY';
             static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
             static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
             static const String razorpayCompanyName = 'VedAstro AI';

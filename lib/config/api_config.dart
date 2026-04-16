@@ -3,7 +3,7 @@
 /// Render RAG server URL for RAG-powered responses (primary)
 /// Direct Gemini API key as fallback
 class ApiConfig {
-  static const String geminiApiKey = 'AIzaSyAJKjn07DckCBI9JGlD6egIuHuLxfK5VLE';
+  static const String geminiApiKey = 'AIzaSyDJRHJFDpGVRx54zxv40udXUuz62k-XsPY';
 
   /// RAG server base URL (deployed on Render)
   static const String cloudFunctionBaseUrl =
