@@ -40,6 +40,7 @@ jobs:
             exit 1
           fi
           echo "Gemini key length: ${#GEMINI_KEY}"
+          echo "Gemini key prefix: ${GEMINI_KEY:0:4}"
           mkdir -p lib/config
           cat > lib/config/api_config.dart << DART
           class ApiConfig {
@@ -49,7 +50,7 @@ jobs:
             static const String razorpayCompanyName = 'VedAstro AI';
             static const int premiumPriceMonthlyPaise = 200;
             static const int premiumPriceYearlyPaise = 200;
-            static bool get isConfigured => geminiApiKey.isNotEmpty && geminiApiKey.startsWith('AIza');
+            static bool get isConfigured => geminiApiKey.isNotEmpty && geminiApiKey != 'INJECTED_BY_CI_AT_BUILD_TIME' && geminiApiKey.length > 30;
             static bool get isRazorpayConfigured => razorpayKeyId.isNotEmpty && !razorpayKeyId.contains('YOUR_KEY');
           }
           DART
