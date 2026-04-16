@@ -28,29 +28,21 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
-      - name: Create API config from secret
-        env:
-          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
-          RAZORPAY_KEY: ${{ secrets.RAZORPAY_KEY_ID }}
+      - name: Create API config
         run: |
           mkdir -p lib/config
           cat > lib/config/api_config.dart << 'DART'
-          class ApiConfig {
-            static const String geminiApiKey = 'PLACEHOLDER_GEMINI';
-            static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
-            static const String razorpayKeyId = 'PLACEHOLDER_RAZORPAY';
-            static const String razorpayCompanyName = 'VedAstro AI';
-            static const int premiumPriceMonthlyPaise = 200;
-            static const int premiumPriceYearlyPaise = 200;
-            static bool get isConfigured => geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE';
-            static bool get isRazorpayConfigured => razorpayKeyId != 'rzp_test_YOUR_KEY_HERE';
-          }
-          DART
-          # Inject actual secrets (fallback to known keys if secrets not set)
-          GEMINI_ACTUAL="${GEMINI_KEY:-AIzaSyAJKjn07DckCBI9JGlD6egIuHuLxfK5VLE}"
-          sed -i "s/PLACEHOLDER_GEMINI/$GEMINI_ACTUAL/g" lib/config/api_config.dart
-          RAZORPAY_ACTUAL="${RAZORPAY_KEY:-rzp_test_Sdmo8azvABuanX}"
-          sed -i "s/PLACEHOLDER_RAZORPAY/$RAZORPAY_ACTUAL/g" lib/config/api_config.dart
+class ApiConfig {
+  static const String geminiApiKey = 'AIzaSyAJKjn07DckCBI9JGlD6egIuHuLxfK5VLE';
+  static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
+  static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
+  static const String razorpayCompanyName = 'VedAstro AI';
+  static const int premiumPriceMonthlyPaise = 200;
+  static const int premiumPriceYearlyPaise = 200;
+  static bool get isConfigured => geminiApiKey.isNotEmpty && geminiApiKey.startsWith('AIza');
+  static bool get isRazorpayConfigured => razorpayKeyId.isNotEmpty && !razorpayKeyId.contains('YOUR_KEY');
+}
+DART
 
       - name: Set up release keystore
         env:
