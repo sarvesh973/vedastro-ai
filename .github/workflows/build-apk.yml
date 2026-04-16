@@ -46,8 +46,9 @@ jobs:
             static bool get isRazorpayConfigured => razorpayKeyId != 'rzp_test_YOUR_KEY_HERE';
           }
           DART
-          # Inject actual secrets
-          sed -i "s/PLACEHOLDER_GEMINI/$GEMINI_KEY/g" lib/config/api_config.dart
+          # Inject actual secrets (fallback to known keys if secrets not set)
+          GEMINI_ACTUAL="${GEMINI_KEY:-AIzaSyAJKjn07DckCBI9JGlD6egIuHuLxfK5VLE}"
+          sed -i "s/PLACEHOLDER_GEMINI/$GEMINI_ACTUAL/g" lib/config/api_config.dart
           RAZORPAY_ACTUAL="${RAZORPAY_KEY:-rzp_test_Sdmo8azvABuanX}"
           sed -i "s/PLACEHOLDER_RAZORPAY/$RAZORPAY_ACTUAL/g" lib/config/api_config.dart
 

@@ -20,6 +20,9 @@ class ApiConfig {
   static const int premiumPriceMonthlyPaise = 200; // ₹2
   static const int premiumPriceYearlyPaise = 200;  // ₹2 (same for testing)
 
-  static bool get isConfigured => geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE';
+  static bool get isConfigured =>
+      geminiApiKey.isNotEmpty &&
+      geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE' &&
+      geminiApiKey != 'PLACEHOLDER_GEMINI';
   static bool get isRazorpayConfigured => razorpayKeyId != 'rzp_test_YOUR_KEY_HERE';
 }
