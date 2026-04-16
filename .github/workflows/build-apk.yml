@@ -32,17 +32,17 @@ jobs:
         run: |
           mkdir -p lib/config
           cat > lib/config/api_config.dart << 'DART'
-class ApiConfig {
-  static const String geminiApiKey = 'AIzaSyAJKjn07DckCBI9JGlD6egIuHuLxfK5VLE';
-  static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
-  static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
-  static const String razorpayCompanyName = 'VedAstro AI';
-  static const int premiumPriceMonthlyPaise = 200;
-  static const int premiumPriceYearlyPaise = 200;
-  static bool get isConfigured => geminiApiKey.isNotEmpty && geminiApiKey.startsWith('AIza');
-  static bool get isRazorpayConfigured => razorpayKeyId.isNotEmpty && !razorpayKeyId.contains('YOUR_KEY');
-}
-DART
+          class ApiConfig {
+            static const String geminiApiKey = 'AIzaSyAJKjn07DckCBI9JGlD6egIuHuLxfK5VLE';
+            static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
+            static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
+            static const String razorpayCompanyName = 'VedAstro AI';
+            static const int premiumPriceMonthlyPaise = 200;
+            static const int premiumPriceYearlyPaise = 200;
+            static bool get isConfigured => geminiApiKey.isNotEmpty && geminiApiKey.startsWith('AIza');
+            static bool get isRazorpayConfigured => razorpayKeyId.isNotEmpty && !razorpayKeyId.contains('YOUR_KEY');
+          }
+          DART
 
       - name: Set up release keystore
         env:
