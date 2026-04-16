@@ -31,7 +31,7 @@ class AiService {
     // Re-init if profile changed or model not created yet
     if (_chatModel == null || _currentProfile != profile) {
       _chatModel = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         apiKey: ApiConfig.geminiApiKey,
         systemInstruction: Content.text(
           VedicSystemPrompt.build(userProfileSummary: profile.profileSummary),
@@ -140,7 +140,7 @@ class AiService {
     if (!ApiConfig.isConfigured) return;
 
     _visionModel ??= GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       apiKey: ApiConfig.geminiApiKey,
       generationConfig: GenerationConfig(
         temperature: 0.7,
@@ -201,7 +201,7 @@ class AiService {
       if (!ApiConfig.isConfigured) throw Exception('API key not configured');
 
       final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         apiKey: ApiConfig.geminiApiKey,
         generationConfig: GenerationConfig(
           temperature: 0.9,

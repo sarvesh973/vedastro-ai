@@ -28,12 +28,22 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
-      - name: Create API config
+      - name: Create API config from GitHub Secret
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
+          if [ -z "$GEMINI_KEY" ]; then
+            echo "ERROR: GEMINI_API_KEY secret is not set in GitHub repo settings!"
+            echo "Go to: Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "Name: GEMINI_API_KEY"
+            echo "Value: (your Gemini API key from aistudio.google.com)"
+            exit 1
+          fi
+          echo "Gemini key length: ${#GEMINI_KEY}"
           mkdir -p lib/config
-          cat > lib/config/api_config.dart << 'DART'
+          cat > lib/config/api_config.dart << DART
           class ApiConfig {
-            static const String geminiApiKey = 'AIzaSyDJRHJFDpGVRx54zxv40udXUuz62k-XsPY';
+            static const String geminiApiKey = '$GEMINI_KEY';
             static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
             static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
             static const String razorpayCompanyName = 'VedAstro AI';
