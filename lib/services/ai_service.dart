@@ -31,7 +31,7 @@ class AiService {
     // Re-init if profile changed or model not created yet
     if (_chatModel == null || _currentProfile != profile) {
       _chatModel = GenerativeModel(
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         apiKey: ApiConfig.geminiApiKey,
         systemInstruction: Content.text(
           VedicSystemPrompt.build(userProfileSummary: profile.profileSummary),
@@ -76,7 +76,7 @@ class AiService {
                   : chatHistory,
             }),
           )
-          .timeout(const Duration(seconds: 90));
+          .timeout(const Duration(seconds: 20));
 
       print('[RAG] Status: ${response.statusCode}');
       if (response.statusCode == 200) {
@@ -105,18 +105,18 @@ class AiService {
     return null;
   }
 
-  /// Try CACHED horoscope first (pre-generated, zero AI cost), then fallback to live
+  /// Try CACHED horoscope (pre-generated on server), quick timeout only
   static Future<Map<String, dynamic>?> _tryCloudHoroscope({
     required UserProfile profile,
     required String period,
   }) async {
-    // 1. Try cached endpoint first (FREE — no Gemini API calls)
+    // Only try cached endpoint — short timeout so we fail fast to Gemini
     try {
       final cachedUrl = Uri.parse(
         '${ApiConfig.cloudFunctionBaseUrl}/horoscope/cached?sign=${Uri.encodeComponent(profile.sunSign)}&period=${Uri.encodeComponent(period)}',
       );
       print('[HOROSCOPE] Trying cached: $cachedUrl');
-      final cachedResponse = await http.get(cachedUrl).timeout(const Duration(seconds: 10));
+      final cachedResponse = await http.get(cachedUrl).timeout(const Duration(seconds: 5));
 
       if (cachedResponse.statusCode == 200) {
         final data = jsonDecode(cachedResponse.body) as Map<String, dynamic>;
@@ -128,30 +128,6 @@ class AiService {
     } catch (e) {
       print('[HOROSCOPE] Cache miss/error: $e');
     }
-
-    // 2. Fallback: live generation (costs Gemini API call)
-    try {
-      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/horoscope');
-      final response = await http
-          .post(
-            url,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'userProfile': profile.profileSummary,
-              'sign': profile.sunSign,
-              'period': period,
-              'birthDate': profile.dobFormatted,
-              'birthTime': profile.timeOfBirth ?? '',
-              'place': profile.placeOfBirth,
-            }),
-          )
-          .timeout(const Duration(seconds: 90));
-
-      if (response.statusCode == 200) {
-        print('[HOROSCOPE] Live generation for ${profile.sunSign} $period');
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-    } catch (_) {}
     return null;
   }
 
@@ -164,7 +140,7 @@ class AiService {
     if (!ApiConfig.isConfigured) return;
 
     _visionModel ??= GenerativeModel(
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       apiKey: ApiConfig.geminiApiKey,
       generationConfig: GenerationConfig(
         temperature: 0.7,
@@ -225,7 +201,7 @@ class AiService {
       if (!ApiConfig.isConfigured) throw Exception('API key not configured');
 
       final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         apiKey: ApiConfig.geminiApiKey,
         generationConfig: GenerationConfig(
           temperature: 0.9,
