@@ -24,6 +24,9 @@ class AiService {
   static UserProfile? _currentProfile;
   static final _random = Random();
 
+  /// Last error from Gemini/server calls (for UI diagnostics)
+  static String lastDiagnosticError = '';
+
   /// Initialize/reset the Gemini chat model (fallback when server is down)
   static void _initChatModel(UserProfile profile) {
     if (!ApiConfig.isConfigured) return;
@@ -198,7 +201,10 @@ class AiService {
     // 2. Server down — try direct Gemini for unique horoscope
     print('[HOROSCOPE] Server unavailable, trying direct Gemini...');
     try {
-      if (!ApiConfig.isConfigured) throw Exception('API key not configured');
+      if (!ApiConfig.isConfigured) {
+        lastDiagnosticError = 'API key not configured (key=${ApiConfig.geminiApiKey.length} chars, starts with ${ApiConfig.geminiApiKey.length > 4 ? ApiConfig.geminiApiKey.substring(0, 4) : "??"})';
+        throw Exception(lastDiagnosticError);
+      }
 
       final model = GenerativeModel(
         model: 'gemini-2.5-flash',
@@ -250,12 +256,17 @@ Be specific to ${profile.sunSign}. Reference BPHS or Phaladeepika. Speak in warm
         return data;
       }
     } catch (e) {
+      final errStr = e.toString();
+      lastDiagnosticError = errStr.length > 300 ? errStr.substring(0, 300) : errStr;
       print('[GEMINI-DIRECT] Horoscope also failed: $e');
     }
 
-    // 3. Everything failed — static fallback (same for all, but app doesn't crash)
+    // 3. Everything failed — static fallback with diagnostic info embedded
+    final debugInfo = lastDiagnosticError.isNotEmpty
+        ? '\n\n[DEBUG: $lastDiagnosticError]'
+        : '';
     return {
-      'overall': 'Aaj ka din aapke liye mixed rahega. Subah thoda slow start hoga but dopahar ke baad positive energy badhegi. Stars aapke saath hain!',
+      'overall': '[$period] Aaj ka din aapke liye mixed rahega. Subah thoda slow start hoga but dopahar ke baad positive energy badhegi. Stars aapke saath hain!$debugInfo',
       'love': 'Relationships mein harmony ka time hai. Partner ke saath quality time spend karein.',
       'career': 'Kaam mein naye opportunities aa sakte hain. Apni skills par focus rakhein aur networking badhayein.',
       'health': 'Health achhi rahegi. Bas hydration ka dhyan rakhein aur thoda walk zaroor karein.',
