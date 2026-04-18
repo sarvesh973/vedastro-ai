@@ -109,12 +109,12 @@ class AiService {
     return null;
   }
 
-  /// Try CACHED horoscope (pre-generated on server), quick timeout only
+  /// Try server horoscope: cached first (fast), then live POST (real-time Gemini)
   static Future<Map<String, dynamic>?> _tryCloudHoroscope({
     required UserProfile profile,
     required String period,
   }) async {
-    // Only try cached endpoint — short timeout so we fail fast to Gemini
+    // 1) Try pre-generated cache — fail fast (5s) if not ready
     try {
       final cachedUrl = Uri.parse(
         '${ApiConfig.cloudFunctionBaseUrl}/horoscope/cached?sign=${Uri.encodeComponent(profile.sunSign)}&period=${Uri.encodeComponent(period)}',
@@ -130,8 +130,39 @@ class AiService {
         }
       }
     } catch (e) {
-      print('[HOROSCOPE] Cache miss/error: $e');
+      print('[HOROSCOPE] Cached endpoint miss/error: $e');
     }
+
+    // 2) Cache empty — ask server for a live Gemini response
+    // Server's key is paid/fresh, avoids burning app-side free quota
+    try {
+      final liveUrl = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/horoscope');
+      print('[HOROSCOPE] Trying live server: $liveUrl');
+      final liveResponse = await http
+          .post(
+            liveUrl,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'sign': profile.sunSign,
+              'period': period,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      if (liveResponse.statusCode == 200) {
+        final data = jsonDecode(liveResponse.body) as Map<String, dynamic>;
+        // Server returns full horoscope JSON
+        if (data.containsKey('overall') &&
+            (data['overall'] as String).isNotEmpty) {
+          print('[HOROSCOPE] Live server HIT for ${profile.sunSign} $period');
+          return data;
+        }
+      }
+      print('[HOROSCOPE] Live server returned ${liveResponse.statusCode}');
+    } catch (e) {
+      print('[HOROSCOPE] Live server error: $e');
+    }
+
     return null;
   }
 
