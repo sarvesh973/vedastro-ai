@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../config/vedic_system_prompt.dart';
 import '../models/user_profile.dart';
@@ -190,13 +191,57 @@ class AiService {
   }
 
   /// Get horoscope data. Tries cached endpoint -> live server -> direct Gemini -> static fallback.
+  /// Build cache key for horoscope. Different key per sign/period/date-bucket
+  /// so Today refreshes daily, Tomorrow daily, Weekly weekly, Monthly monthly.
+  static String _horoscopeCacheKey(String sign, String period) {
+    final now = DateTime.now();
+    String bucket;
+    switch (period) {
+      case 'daily':
+        bucket = '${now.year}-${now.month}-${now.day}';
+        break;
+      case 'tomorrow':
+        final t = now.add(const Duration(days: 1));
+        bucket = '${t.year}-${t.month}-${t.day}';
+        break;
+      case 'weekly':
+        final weekStart = now.subtract(Duration(days: now.weekday % 7));
+        bucket = 'w-${weekStart.year}-${weekStart.month}-${weekStart.day}';
+        break;
+      case 'monthly':
+        bucket = 'm-${now.year}-${now.month}';
+        break;
+      default:
+        bucket = '${now.year}-${now.month}-${now.day}';
+    }
+    return 'horoscope_${sign.toLowerCase()}_${period}_$bucket';
+  }
+
   static Future<Map<String, dynamic>?> getHoroscope({
     required UserProfile profile,
     required String period,
   }) async {
+    final cacheKey = _horoscopeCacheKey(profile.sunSign, period);
+
+    // 0. Check local cache FIRST (avoid API calls on every tab switch)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(cacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        final data = jsonDecode(cached) as Map<String, dynamic>;
+        print('[HOROSCOPE-CACHE] Hit: $cacheKey');
+        return data;
+      }
+    } catch (e) {
+      print('[HOROSCOPE-CACHE] Read error: $e');
+    }
+
     // 1. Try Cloud Function (cached first, then live)
     final cloudResult = await _tryCloudHoroscope(profile: profile, period: period);
-    if (cloudResult != null) return cloudResult;
+    if (cloudResult != null) {
+      _saveHoroscopeToCache(cacheKey, cloudResult);
+      return cloudResult;
+    }
 
     // 2. Server down — try direct Gemini for unique horoscope
     print('[HOROSCOPE] Server unavailable, trying direct Gemini...');
@@ -249,34 +294,44 @@ Rules:
         }
 
         // Try strict JSON parse first
+        Map<String, dynamic>? data;
         try {
-          final data = jsonDecode(cleaned) as Map<String, dynamic>;
+          data = jsonDecode(cleaned) as Map<String, dynamic>;
           print('[GEMINI-DIRECT] Horoscope success for ${profile.sunSign} $period');
-          return data;
         } catch (_) {
           // Fallback: extract fields with regex when Gemini returns malformed JSON
-          // (common: unescaped newlines/quotes inside string values)
           print('[GEMINI-DIRECT] Strict JSON failed, trying regex extraction');
-          final extracted = _extractHoroscopeFields(cleaned);
-          if (extracted != null) {
-            print('[GEMINI-DIRECT] Regex extraction succeeded for ${profile.sunSign} $period');
-            return extracted;
+          data = _extractHoroscopeFields(cleaned);
+          if (data != null) {
+            print('[GEMINI-DIRECT] Regex extraction succeeded');
           }
-          rethrow;
+        }
+
+        if (data != null) {
+          _saveHoroscopeToCache(cacheKey, data);
+          return data;
         }
       }
     } catch (e) {
       final errStr = e.toString();
-      lastDiagnosticError = errStr.length > 300 ? errStr.substring(0, 300) : errStr;
+      // Detect quota/rate-limit errors for user-friendly message
+      if (errStr.contains('quota') || errStr.contains('429') ||
+          errStr.contains('RESOURCE_EXHAUSTED')) {
+        lastDiagnosticError = 'Daily AI quota reached. Tomorrow fresh horoscope milega!';
+      } else {
+        lastDiagnosticError = errStr.length > 200 ? errStr.substring(0, 200) : errStr;
+      }
       print('[GEMINI-DIRECT] Horoscope also failed: $e');
     }
 
-    // 3. Everything failed — static fallback with diagnostic info embedded
-    final debugInfo = lastDiagnosticError.isNotEmpty
-        ? '\n\n[DEBUG: $lastDiagnosticError]'
+    // 3. Everything failed — clean fallback (no DEBUG text in production)
+    // Quota message only shown if it was a rate-limit error
+    final isQuotaError = lastDiagnosticError.contains('Daily AI quota');
+    final noticeLine = isQuotaError
+        ? '\n\n(Aaj ka quota pura ho gaya — kal fresh reading milegi.)'
         : '';
     return {
-      'overall': '[$period] Aaj ka din aapke liye mixed rahega. Subah thoda slow start hoga but dopahar ke baad positive energy badhegi. Stars aapke saath hain!$debugInfo',
+      'overall': 'Aaj ka din aapke liye mixed rahega. Subah thoda slow start hoga but dopahar ke baad positive energy badhegi. Stars aapke saath hain!$noticeLine',
       'love': 'Relationships mein harmony ka time hai. Partner ke saath quality time spend karein.',
       'career': 'Kaam mein naye opportunities aa sakte hain. Apni skills par focus rakhein aur networking badhayein.',
       'health': 'Health achhi rahegi. Bas hydration ka dhyan rakhein aur thoda walk zaroor karein.',
@@ -285,6 +340,18 @@ Rules:
       'luckyDay': 'Thursday',
       'rating': 4,
     };
+  }
+
+  /// Save horoscope to local SharedPreferences cache
+  static Future<void> _saveHoroscopeToCache(
+      String key, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, jsonEncode(data));
+      print('[HOROSCOPE-CACHE] Saved: $key');
+    } catch (e) {
+      print('[HOROSCOPE-CACHE] Save error: $e');
+    }
   }
 
   /// Regex-based fallback when Gemini returns malformed JSON
