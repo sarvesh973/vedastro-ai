@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import '../providers/providers.dart';
 import '../widgets/result_card.dart';
@@ -44,16 +45,23 @@ class PalmResultScreen extends ConsumerWidget {
               IconButton(
                 icon: const Icon(Icons.share_outlined, size: 22),
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Share feature coming soon!'),
-                      backgroundColor: AppColors.purpleSoft,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  );
+                  // Build shareable summary of the palm reading
+                  final buf = StringBuffer();
+                  buf.writeln('My VedAstro AI Palm Reading');
+                  buf.writeln('');
+                  for (final line in result.allLines) {
+                    buf.writeln('${line.emoji} ${line.title}');
+                    if (line.insight.isNotEmpty) buf.writeln(line.insight);
+                    if (line.meaning.isNotEmpty) buf.writeln(line.meaning);
+                    if (line.advice.isNotEmpty) {
+                      buf.writeln('Advice: ${line.advice}');
+                    }
+                    buf.writeln('');
+                  }
+                  buf.writeln('Get yours at VedAstro AI:');
+                  buf.writeln('https://github.com/sarvesh973/vedastro-ai');
+                  Share.share(buf.toString(),
+                      subject: 'My Palm Reading — VedAstro AI');
                 },
               ),
               const SizedBox(width: 8),

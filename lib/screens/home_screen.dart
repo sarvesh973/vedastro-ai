@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../widgets/starfield_background.dart';
 import '../services/storage_service.dart';
+import '../services/firestore_service.dart';
 import '../providers/providers.dart';
 import 'user_details_screen.dart';
 import 'chat_screen.dart';
@@ -776,14 +777,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 style: TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
+              final text = controller.text.trim();
+              if (text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please write something first'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
               Navigator.pop(ctx);
+              // Save to Firestore 'feedback' collection
+              // Viewable at Firebase Console -> Firestore -> feedback
+              final ok = await FirestoreService.saveFeedback(text: text);
               controller.dispose();
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content:
-                      const Text('Thanks for your feedback!'),
-                  backgroundColor: AppColors.success,
+                  content: Text(ok
+                      ? 'Thanks! Your feedback has been sent.'
+                      : 'Could not send. Please check your internet.'),
+                  backgroundColor:
+                      ok ? AppColors.success : AppColors.error,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),

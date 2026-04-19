@@ -242,6 +242,33 @@ class FirestoreService {
     } catch (_) {}
   }
 
+  // ─── Feedback ───────────────────────────────────
+
+  /// Save user feedback to Firestore.
+  /// View in Firebase Console -> Firestore Database -> `feedback` collection.
+  /// Works even for anonymous / logged-out users.
+  static Future<bool> saveFeedback({
+    required String text,
+    String? category,
+  }) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      await _db.collection('feedback').add({
+        'text': text,
+        'category': category ?? 'general',
+        'uid': user?.uid,
+        'email': user?.email,
+        'phoneNumber': user?.phoneNumber,
+        'displayName': user?.displayName,
+        'isAnonymous': user == null,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ─── Palm Reading History ───────────────────────
 
   /// Save palm reading result

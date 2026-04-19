@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
@@ -104,12 +105,10 @@ class SettingsScreen extends ConsumerWidget {
               title: 'Share App',
               subtitle: 'Tell your friends about VedAstro AI',
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Share feature coming soon!'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                // Once on Play Store, replace this URL with the store link.
+                const message =
+                    'Check out VedAstro AI — a personalized Vedic astrology app with daily horoscope, palm reading, and AI guru chat.\n\nhttps://github.com/sarvesh973/vedastro-ai';
+                Share.share(message, subject: 'VedAstro AI');
               },
             ).animate().fadeIn(duration: 500.ms, delay: 550.ms),
 
