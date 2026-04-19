@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_profile.dart';
 import 'auth_service.dart';
 
@@ -14,9 +15,13 @@ class FirestoreService {
   /// Save user profile to Firestore (auto-uses current UID)
   static Future<void> saveProfile(String uid, UserProfile profile) async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
       await _db.collection('users').doc(uid).set({
         ...profile.toJson(),
-        'email': AuthService.userEmail,
+        'email': user?.email,
+        'phoneNumber': user?.phoneNumber,
+        'displayName': user?.displayName,
+        'authProvider': _resolveAuthProvider(user),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (_) {
@@ -24,10 +29,48 @@ class FirestoreService {
     }
   }
 
+  /// Identify which auth method the user signed in with
+  static String _resolveAuthProvider(User? user) {
+    if (user == null) return 'anonymous';
+    if (user.phoneNumber != null && user.phoneNumber!.isNotEmpty) return 'phone';
+    final providers = user.providerData.map((p) => p.providerId).toList();
+    if (providers.contains('google.com')) return 'google';
+    if (providers.contains('password')) return 'email';
+    if (providers.contains('phone')) return 'phone';
+    return providers.isNotEmpty ? providers.first : 'unknown';
+  }
+
   /// Sync profile: save to both local and cloud
   static Future<void> syncProfile(UserProfile profile) async {
     if (_uid != null) {
       await saveProfile(_uid!, profile);
+    }
+  }
+
+  /// Save all family profiles as an array under the user document
+  static Future<void> syncFamilyProfiles(List<UserProfile> profiles) async {
+    if (_uid == null) return;
+    try {
+      await _db.collection('users').doc(_uid!).set({
+        'familyProfiles': profiles.map((p) => p.toJson()).toList(),
+        'familyUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  /// Load family profiles from cloud
+  static Future<List<UserProfile>> loadFamilyProfiles() async {
+    if (_uid == null) return [];
+    try {
+      final doc = await _db.collection('users').doc(_uid!).get();
+      final data = doc.data();
+      if (data == null || data['familyProfiles'] == null) return [];
+      final list = data['familyProfiles'] as List;
+      return list
+          .map((e) => UserProfile.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (_) {
+      return [];
     }
   }
 

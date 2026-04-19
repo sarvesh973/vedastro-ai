@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
+import 'firestore_service.dart';
 
 /// Persistent storage service using SharedPreferences
 class StorageService {
@@ -129,6 +130,48 @@ class StorageService {
       _familyProfiles.add(profile);
       await _saveFamilyProfiles();
       await _prefs?.setInt(_keyActiveProfileIndex, _familyProfiles.length - 1);
+    }
+    // Sync to cloud (Firestore) — tied to current Firebase UID (Google/phone/email)
+    // Fire-and-forget; local save is authoritative, cloud is backup.
+    FirestoreService.syncProfile(profile);
+    _saveFamilyToCloud();
+  }
+
+  /// Sync all family profiles to cloud (as array)
+  static Future<void> _saveFamilyToCloud() async {
+    try {
+      await FirestoreService.syncFamilyProfiles(_familyProfiles);
+    } catch (_) {}
+  }
+
+  /// Load profile + family profiles from cloud for the currently signed-in
+  /// Firebase user. Call this right after login to restore data on a new
+  /// device or fresh install. Non-destructive — cloud wins for main profile,
+  /// but local family profiles get merged (deduplicated).
+  static Future<bool> loadFromCloudForCurrentUser() async {
+    try {
+      // Main profile
+      final cloudProfile = await FirestoreService.loadCloudProfile();
+      if (cloudProfile != null) {
+        _currentProfile = cloudProfile;
+        await _prefs?.setString(_keyProfile, cloudProfile.toJsonString());
+      }
+
+      // Family profiles — merge with local (dedup by name+dob+place)
+      final cloudFamily = await FirestoreService.loadFamilyProfiles();
+      if (cloudFamily.isNotEmpty) {
+        for (final p in cloudFamily) {
+          final exists = _familyProfiles.any((lp) =>
+              lp.name == p.name &&
+              lp.dateOfBirth == p.dateOfBirth &&
+              lp.placeOfBirth == p.placeOfBirth);
+          if (!exists) _familyProfiles.add(p);
+        }
+        await _saveFamilyProfiles();
+      }
+      return cloudProfile != null || cloudFamily.isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 

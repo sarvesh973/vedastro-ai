@@ -92,6 +92,66 @@ class AuthService {
     }
   }
 
+  // ─── Phone OTP Sign-In ──────────────────────────
+  // Firebase Phone Auth requires SHA-1/SHA-256 configured in Firebase Console.
+  // Flow: (1) sendOtp() -> Firebase sends SMS -> (2) verifyOtp(code) -> signs in.
+
+  /// Send OTP to a phone number. onCodeSent receives the verificationId
+  /// which must be passed back to verifyOtp() along with the code the user enters.
+  /// phoneNumber MUST include country code, e.g. '+919876543210'.
+  static Future<void> sendOtp({
+    required String phoneNumber,
+    required void Function(String verificationId, int? forceResendToken) onCodeSent,
+    required void Function(String error) onFailed,
+    void Function(PhoneAuthCredential)? onAutoVerified,
+  }) async {
+    try {
+      await _auth.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (credential) async {
+          // Android auto-retrieval: Firebase already has the code
+          try {
+            await _auth.signInWithCredential(credential);
+            if (onAutoVerified != null) onAutoVerified(credential);
+          } catch (e) {
+            onFailed('Auto sign-in failed: $e');
+          }
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          onFailed(_getErrorMessage(e.code));
+        },
+        codeSent: (verificationId, forceResendToken) {
+          onCodeSent(verificationId, forceResendToken);
+        },
+        codeAutoRetrievalTimeout: (_) {
+          // No action — user will enter code manually
+        },
+      );
+    } catch (e) {
+      onFailed('Failed to send OTP: $e');
+    }
+  }
+
+  /// Verify OTP and sign in
+  static Future<AuthResult> verifyOtp({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+      final userCredential = await _auth.signInWithCredential(credential);
+      return AuthResult(success: true, user: userCredential.user);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _getErrorMessage(e.code));
+    } catch (e) {
+      return AuthResult(success: false, error: 'OTP verification error: $e');
+    }
+  }
+
   // ─── Password Reset ──────────────────────────────
 
   /// Send password reset email
@@ -134,6 +194,16 @@ class AuthService {
         return 'Too many attempts. Please try later.';
       case 'invalid-credential':
         return 'Invalid email or password.';
+      case 'invalid-phone-number':
+        return 'Invalid phone number format. Use +91XXXXXXXXXX.';
+      case 'invalid-verification-code':
+        return 'Wrong OTP. Please check and try again.';
+      case 'invalid-verification-id':
+        return 'OTP expired. Please request a new one.';
+      case 'session-expired':
+        return 'OTP session expired. Request a new code.';
+      case 'quota-exceeded':
+        return 'Too many OTP requests. Try again later.';
       default:
         return 'Authentication failed. Please try again.';
     }

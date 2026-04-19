@@ -43,16 +43,18 @@ class _SignupScreenState extends State<SignupScreen> {
       displayName: _nameController.text.trim(),
     );
 
-    setState(() => _isLoading = false);
-
     if (result.success && mounted) {
       // Also save locally for offline access
       await StorageService.signUp(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+      // In case this email was used before (e.g. reinstall) — restore cloud
+      await StorageService.loadFromCloudForCurrentUser();
+      setState(() => _isLoading = false);
       _navigateToHome();
     } else if (mounted) {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result.error ?? 'Sign up failed'),

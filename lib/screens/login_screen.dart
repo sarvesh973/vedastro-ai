@@ -6,6 +6,7 @@ import '../services/storage_service.dart';
 import '../widgets/starfield_background.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
+import 'phone_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -39,16 +40,18 @@ class _LoginScreenState extends State<LoginScreen> {
       password: _passwordController.text.trim(),
     );
 
-    setState(() => _isLoading = false);
-
     if (result.success && mounted) {
       // Also save login state locally for offline access
       await StorageService.signUp(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+      // Restore this email account's profile from cloud
+      await StorageService.loadFromCloudForCurrentUser();
+      setState(() => _isLoading = false);
       _navigateToHome();
     } else if (mounted) {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result.error ?? 'Login failed'),
@@ -64,15 +67,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final result = await AuthService.signInWithGoogle();
 
-    setState(() => _isGoogleLoading = false);
-
     if (result.success && mounted) {
       await StorageService.signUp(
         result.user?.email ?? '',
         'google_auth',
       );
+      // Restore this account's profile + family profiles from Firestore.
+      // If the user previously used this Google account on another device
+      // or a fresh install, their profile reappears here.
+      await StorageService.loadFromCloudForCurrentUser();
+      setState(() => _isGoogleLoading = false);
       _navigateToHome();
     } else if (mounted) {
+      setState(() => _isGoogleLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result.error ?? 'Google sign-in failed'),
@@ -365,16 +372,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Phone OTP button (coming soon)
+                  // Phone OTP login
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Phone OTP login coming soon!'),
-                            behavior: SnackBarBehavior.floating,
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PhoneLoginScreen(),
                           ),
                         );
                       },
