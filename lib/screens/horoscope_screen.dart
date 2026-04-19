@@ -304,6 +304,45 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
             ),
           ).animate().fadeIn(duration: 500.ms, delay: 650.ms),
 
+          // References footer — subtle list of cited Vedic texts.
+          // Shown only when the AI response included a 'sources' field.
+          if ((_horoscopeData?['sources'] as String?)?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: AppColors.divider.withOpacity(0.5)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'References',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    (_horoscopeData?['sources'] as String).trim(),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(duration: 500.ms, delay: 700.ms),
+          ],
+
           const SizedBox(height: 20),
         ],
       ),

@@ -20,9 +20,19 @@ class UserProfile {
     return '$day/$month/$year';
   }
 
+  /// First name only (e.g. "Sarvesh Kumar Singh" -> "Sarvesh").
+  /// Used by the AI so it addresses the user by first name only.
+  String get firstName {
+    if (name.trim().isEmpty) return '';
+    return name.trim().split(RegExp(r'\s+')).first;
+  }
+
   String get profileSummary {
     final buffer = StringBuffer();
-    if (name.isNotEmpty) buffer.writeln('Name: $name');
+    if (name.isNotEmpty) {
+      buffer.writeln('Full Name: $name');
+      buffer.writeln('First Name (ALWAYS address the user by this): $firstName');
+    }
     buffer.writeln('Date of Birth: $dobFormatted');
     if (timeOfBirth != null && timeOfBirth!.isNotEmpty) {
       buffer.writeln('Time of Birth: $timeOfBirth');

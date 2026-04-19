@@ -299,17 +299,25 @@ class AiService {
                   ? 'this week'
                   : 'this month';
 
+      final firstName = profile.firstName;
       final prompt = '''You are VedAstro Guruji, a Vedic astrologer. Generate a ${period} horoscope for ${profile.sunSign} sign for $periodLabel.
+${firstName.isNotEmpty ? 'User\'s first name: $firstName (use it at most once per section, never with "beta"/"ji"/"dear" suffix).' : ''}
 
 CRITICAL: Return ONLY valid compact JSON on a single line. No markdown, no code blocks, no newlines inside string values, no unescaped quotes.
 
-{"overall":"3-4 sentence Hinglish overview with Vedic reference","love":"2-3 sentences about relationships","career":"2-3 sentences about work","health":"2-3 sentences about health","luckyNumber":7,"luckyColor":"Yellow","luckyDay":"Thursday","rating":4}
+{"overall":"3-4 sentence Hinglish overview","love":"2-3 sentences about relationships","career":"2-3 sentences about work","health":"2-3 sentences about health","luckyNumber":7,"luckyColor":"Yellow","luckyDay":"Thursday","rating":4,"sources":"BPHS Ch.X; Phaladeepika Ch.Y"}
 
-Rules:
-- All string values must be single-line (no \\n inside)
-- Do not use quotes " inside string values — use single quotes ' instead
-- Be specific to ${profile.sunSign}. Reference BPHS or Phaladeepika.
-- Speak in warm Hinglish.''';
+Tone & language rules:
+- Warm Hinglish, formal "aap" form — never "tum" / "tu".
+- NO "beta", NO "bachcha", NO "Jai Shree Ram", NO religious salutations, NO "ji" after the name.
+- Address user by FIRST NAME only if you mention them.
+- Body sections (overall/love/career/health) should be readable prose. Do NOT stuff multiple "(BPHS Ch.X)" inline in the body — only ONE inline reference max across the whole body.
+- Any extra references must go in the "sources" field as a short semicolon-separated list (e.g. "BPHS Ch.7; Phaladeepika Ch.26 Sloka 18"). If only one source was used, put it there alone.
+
+Formatting rules:
+- All string values single-line (no \\n).
+- Use single quotes ' inside string values, not ".
+- Be specific to ${profile.sunSign}.''';
 
       final response = await model
           .generateContent([Content.text(prompt)])
@@ -561,16 +569,16 @@ Rules:
   }
 
   /// Welcome message when chat starts
-static String getWelcomeMessage(UserProfile profile) {
-    final name = profile.name.isNotEmpty ? profile.name : '';
-    final greeting = name.isNotEmpty ? 'Namaste $name!' : 'Namaste!';
-    return '''🙏 $greeting
+  static String getWelcomeMessage(UserProfile profile) {
+    final first = profile.firstName;
+    final opener = first.isNotEmpty ? 'Hello $first' : 'Hello';
+    return '''$opener
 
-I am your personal Vedic astrologer. I have noted your birth details.
+I am your Vedic astrologer. Your birth details are saved with me.
 
-You can talk to me in English, Hindi, or Hinglish — I will reply in your language.
+Aap English, Hindi ya Hinglish mein baat kar sakte hain — I will reply in the same language.
 
-Ask me about career, love, health, finance, or any life question. ✨''';
+Career, love, health, finance — jo bhi poochhna ho, puchiye.''';
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -729,7 +737,7 @@ Phaladeepika ke anusaar, 4th house sukh aur maatri bhav hai. Jab Chandra (Moon) 
 Monday ko doodh ka daan karein. Ghar mein Gangajal rakhein aur entrance par chhidkein. Maa ke saath zyada time spend karein — unki blessings aapke liye bahut powerful hain.''';
 
   static String _fallbackAboutSelf(UserProfile profile) {
-    final name = profile.name.isNotEmpty ? profile.name : 'Aap';
+    final name = profile.firstName.isNotEmpty ? profile.firstName : 'Aap';
     return '''🔮 Insight
 $name, aapki kundali bahut interesting hai. Aapki personality mein depth hai — aap bahar se shant lagte hain lekin andar se bahut passionate hain. Aap mein leadership qualities hain aur aap logon ko naturally attract karte hain.
 
