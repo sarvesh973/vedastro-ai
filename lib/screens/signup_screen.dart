@@ -44,6 +44,9 @@ class _SignupScreenState extends State<SignupScreen> {
     );
 
     if (result.success && mounted) {
+      // Clear any data from a previously-signed-in account before loading
+      // cloud data for this new email (guarantees profile isolation).
+      await StorageService.clearAllLocalData();
       // Also save locally for offline access
       await StorageService.signUp(
         _emailController.text.trim(),

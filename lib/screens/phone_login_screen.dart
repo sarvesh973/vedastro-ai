@@ -61,7 +61,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
       },
       onAutoVerified: (_) async {
         if (!mounted) return;
-        // Android auto-retrieved SMS — already signed in
+        // Android auto-retrieved SMS — already signed in.
+        // Clear any stale profile from a previous login before loading the
+        // cloud data tied to THIS phone number's Firebase UID.
+        await StorageService.clearAllLocalData();
         await StorageService.signUp(fullNumber, 'phone_auth');
         await StorageService.loadFromCloudForCurrentUser();
         if (mounted) _navigateToHome();
@@ -86,6 +89,9 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
     if (result.success) {
       final phoneFull = '$_countryCode${_phoneController.text.trim()}';
+      // Wipe cached data from any previous account so we only show THIS
+      // phone number's profile after we load it from the cloud.
+      await StorageService.clearAllLocalData();
       await StorageService.signUp(phoneFull, 'phone_auth');
       // Restore this phone number's profile from cloud (works across devices)
       await StorageService.loadFromCloudForCurrentUser();

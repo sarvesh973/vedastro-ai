@@ -104,12 +104,7 @@ class SettingsScreen extends ConsumerWidget {
               icon: Icons.share_outlined,
               title: 'Share App',
               subtitle: 'Tell your friends about VedAstro AI',
-              onTap: () {
-                // Once on Play Store, replace this URL with the store link.
-                const message =
-                    'Check out VedAstro AI — a personalized Vedic astrology app with daily horoscope, palm reading, and AI guru chat.\n\nhttps://github.com/sarvesh973/vedastro-ai';
-                Share.share(message, subject: 'VedAstro AI');
-              },
+              onTap: () => _handleShare(context),
             ).animate().fadeIn(duration: 500.ms, delay: 550.ms),
 
             const SizedBox(height: 24),
@@ -452,6 +447,39 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  /// Share the app via the system share sheet (WhatsApp, Gmail, SMS, etc).
+  /// Uses share_plus 10.x API. Key changes from the original broken version:
+  ///  1. Actually awaits Share.share() so errors surface instead of silently failing
+  ///  2. Provides sharePositionOrigin (no-op on Android, required on iPad)
+  ///  3. Catches exceptions and shows a snackbar if the share sheet can't open
+  ///  4. AndroidManifest now has ACTION_SEND intent queries so Android 11+ can
+  ///     actually enumerate apps like WhatsApp/Gmail in the share chooser.
+  Future<void> _handleShare(BuildContext context) async {
+    // Once on Play Store, replace this URL with the actual Play Store link.
+    const message =
+        'Check out VedAstro AI — a personalized Vedic astrology app with daily horoscope, palm reading, and AI guru chat.\n\nhttps://github.com/sarvesh973/vedastro-ai';
+
+    try {
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.share(
+        message,
+        subject: 'VedAstro AI',
+        sharePositionOrigin: box != null
+            ? box.localToGlobal(Offset.zero) & box.size
+            : null,
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open share sheet: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   void _handleLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
@@ -460,7 +488,7 @@ class SettingsScreen extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Logout', style: TextStyle(color: AppColors.textPrimary)),
         content: const Text(
-          'Are you sure you want to logout?',
+          'Are you sure you want to logout? You can sign back in anytime with the same email to get your profile back.',
           style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
@@ -471,8 +499,11 @@ class SettingsScreen extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              // Firebase + Google sign out (revokes token, forces picker next time)
               await AuthService.signOut();
-              await StorageService.logout();
+              // Nuke local cache so the next user (different email) starts clean
+              await StorageService.clearAllLocalData();
+              // Clear Riverpod state so UI doesn't briefly flash old profile
               ref.read(userProfileProvider.notifier).state = null;
               ref.read(chatMessagesProvider.notifier).clear();
               if (context.mounted) {

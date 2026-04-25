@@ -71,9 +71,20 @@ class AuthService {
 
   // ─── Google Sign-In ──────────────────────────────
 
-  /// Sign in with Google
+  /// Sign in with Google.
+  /// Always forces the Google account picker (by signing out of Google first)
+  /// so users can switch between multiple Gmail accounts on the same device.
+  /// Each Gmail account gets a unique Firebase UID, so profiles stay separate.
   static Future<AuthResult> signInWithGoogle() async {
     try {
+      // Force fresh account picker — without this Google silently reuses the
+      // last-used account and the user can't switch emails.
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {
+        // best-effort; ignore if nothing was signed in
+      }
+
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         return AuthResult(success: false, error: 'Google sign-in cancelled');
@@ -168,9 +179,22 @@ class AuthService {
 
   // ─── Sign Out ────────────────────────────────────
 
-  /// Sign out from all providers
+  /// Sign out from all providers.
+  /// Uses disconnect() on Google so the token is revoked — next sign-in will
+  /// show the full account picker instead of silently re-using the previous
+  /// account. This is what lets users truly switch between different Gmails.
+  ///
+  /// Note: Caller should ALSO call StorageService.clearAllLocalData() so the
+  /// previous user's cached profile doesn't leak into the next session.
   static Future<void> signOut() async {
-    await _googleSignIn.signOut();
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {
+      // disconnect can throw if not currently signed in with Google — ignore
+    }
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
     await _auth.signOut();
   }
 

@@ -208,6 +208,26 @@ class StorageService {
   // ─── Reset ──────────────────────────────────────
   static Future<void> reset() async {
     _currentProfile = null;
+    _familyProfiles = [];
     await _prefs?.clear();
+  }
+
+  /// Wipe ALL user-specific data from local storage.
+  /// Called on signOut and before signIn so switching between Gmail accounts
+  /// (or email / phone numbers) never leaks one user's data into another.
+  /// Keeps the onboarding flag (the new user won't have to re-do the tour
+  /// on the same physical device).
+  static Future<void> clearAllLocalData() async {
+    _currentProfile = null;
+    _familyProfiles = [];
+    await _prefs?.remove(_keyProfile);
+    await _prefs?.remove(_keyFamilyProfiles);
+    await _prefs?.remove(_keyActiveProfileIndex);
+    await _prefs?.remove(_keyUserEmail);
+    await _prefs?.remove(_keyUserPassword);
+    await _prefs?.remove(_keyIsLoggedIn);
+    await _prefs?.remove(_keyChatUsed);
+    await _prefs?.remove(_keyPalmUsed);
+    await _prefs?.remove(_keyIsPremium);
   }
 }

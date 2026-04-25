@@ -22,6 +22,10 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isGoogleLoading = false;
   bool _obscurePassword = true;
+  // Email login is hidden by default — Indian users overwhelmingly prefer
+  // phone OTP (industry standard for AstroTalk, AstroSage, AstroYogi, etc).
+  // Email stays as a quiet fallback under "More options".
+  bool _showEmailForm = false;
 
   @override
   void dispose() {
@@ -41,6 +45,10 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (result.success && mounted) {
+      // Wipe any cached profile data from a previous account before loading
+      // this account's cloud data. Without this, a stale profile from the
+      // last email can leak into the new session.
+      await StorageService.clearAllLocalData();
       // Also save login state locally for offline access
       await StorageService.signUp(
         _emailController.text.trim(),
@@ -68,6 +76,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final result = await AuthService.signInWithGoogle();
 
     if (result.success && mounted) {
+      // Clear any cached profile from a previous Gmail account — each Gmail
+      // maps to its own Firebase UID and should see only its own data.
+      await StorageService.clearAllLocalData();
       await StorageService.signUp(
         result.user?.email ?? '',
         'google_auth',
@@ -216,136 +227,38 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 48),
 
-                  // Email field
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: AppColors.textPrimary),
-                    decoration: InputDecoration(
-                      hintText: 'Email address',
-                      prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textMuted, size: 20),
-                      filled: true,
-                      fillColor: AppColors.surfaceLight,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+                  // ═══ PRIMARY: Phone OTP (hero button, purple) ════════
+                  // Phone is the default login for Indian astrology apps —
+                  // matches user expectation and has the highest conversion.
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PhoneLoginScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.phone_android, color: Colors.white, size: 22),
+                      label: const Text(
+                        'Continue with Phone',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: AppColors.purpleAccent, width: 1.5),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.purpleAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Enter your email';
-                      if (!v.contains('@')) return 'Enter a valid email';
-                      return null;
-                    },
                   )
                       .animate()
                       .fadeIn(duration: 500.ms, delay: 400.ms)
                       .slideY(begin: 0.1, end: 0, duration: 500.ms, delay: 400.ms),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
-                  // Password field
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    style: const TextStyle(color: AppColors.textPrimary),
-                    decoration: InputDecoration(
-                      hintText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textMuted, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: AppColors.textMuted,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                      filled: true,
-                      fillColor: AppColors.surfaceLight,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: AppColors.purpleAccent, width: 1.5),
-                      ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Enter your password';
-                      if (v.length < 6) return 'Password must be 6+ characters';
-                      return null;
-                    },
-                  )
-                      .animate()
-                      .fadeIn(duration: 500.ms, delay: 500.ms)
-                      .slideY(begin: 0.1, end: 0, duration: 500.ms, delay: 500.ms),
-
-                  const SizedBox(height: 12),
-
-                  // Forgot password
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _handleForgotPassword,
-                      child: const Text(
-                        'Forgot Password?',
-                        style: TextStyle(color: AppColors.purpleLight, fontSize: 13),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Login button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.purpleAccent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24, height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                            )
-                          : const Text(
-                              'Login',
-                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.white),
-                            ),
-                    ),
-                  )
-                      .animate()
-                      .fadeIn(duration: 500.ms, delay: 600.ms)
-                      .slideY(begin: 0.1, end: 0, duration: 500.ms, delay: 600.ms),
-
-                  const SizedBox(height: 24),
-
-                  // OR divider
-                  Row(
-                    children: [
-                      Expanded(child: Container(height: 1, color: AppColors.divider)),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('OR', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                      ),
-                      Expanded(child: Container(height: 1, color: AppColors.divider)),
-                    ],
-                  )
-                      .animate()
-                      .fadeIn(duration: 500.ms, delay: 700.ms),
-
-                  const SizedBox(height: 24),
-
-                  // Google sign-in button (REAL)
+                  // ═══ SECONDARY: Google (outlined) ════════════════════
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -368,35 +281,151 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   )
                       .animate()
-                      .fadeIn(duration: 500.ms, delay: 800.ms),
+                      .fadeIn(duration: 500.ms, delay: 500.ms),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 28),
 
-                  // Phone OTP login
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const PhoneLoginScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.phone_android, color: AppColors.textSecondary, size: 20),
-                      label: const Text(
-                        'Continue with Phone',
-                        style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                  // ═══ TERTIARY: Collapsed email option ═══════════════
+                  // Hidden by default. Small text link to expand.
+                  if (!_showEmailForm)
+                    TextButton(
+                      onPressed: () => setState(() => _showEmailForm = true),
+                      child: const Text(
+                        'Use email instead',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.divider, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ).animate().fadeIn(duration: 500.ms, delay: 600.ms),
+
+                  // Expanded email form — only visible if user explicitly opens it
+                  if (_showEmailForm) ...[
+                    // Divider above
+                    Row(
+                      children: [
+                        Expanded(child: Container(height: 1, color: AppColors.divider)),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('EMAIL LOGIN', style: TextStyle(color: AppColors.textMuted, fontSize: 11, letterSpacing: 1.2)),
+                        ),
+                        Expanded(child: Container(height: 1, color: AppColors.divider)),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Email field
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'Email address',
+                        prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textMuted, size: 20),
+                        filled: true,
+                        fillColor: AppColors.surfaceLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: AppColors.purpleAccent, width: 1.5),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (!_showEmailForm) return null;
+                        if (v == null || v.trim().isEmpty) return 'Enter your email';
+                        if (!v.contains('@')) return 'Enter a valid email';
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Password field
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'Password',
+                        prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textMuted, size: 20),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            color: AppColors.textMuted,
+                            size: 20,
+                          ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                        filled: true,
+                        fillColor: AppColors.surfaceLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: AppColors.purpleAccent, width: 1.5),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (!_showEmailForm) return null;
+                        if (v == null || v.trim().isEmpty) return 'Enter your password';
+                        if (v.length < 6) return 'Password must be 6+ characters';
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _handleForgotPassword,
+                        child: const Text(
+                          'Forgot Password?',
+                          style: TextStyle(color: AppColors.purpleLight, fontSize: 13),
+                        ),
                       ),
                     ),
-                  )
-                      .animate()
-                      .fadeIn(duration: 500.ms, delay: 900.ms),
+
+                    const SizedBox(height: 10),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _handleLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.surfaceLight,
+                          foregroundColor: AppColors.textPrimary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: const BorderSide(color: AppColors.divider),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 22, height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted),
+                              )
+                            : const Text(
+                                'Login with Email',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+                    Center(
+                      child: TextButton(
+                        onPressed: () => setState(() => _showEmailForm = false),
+                        child: const Text(
+                          'Hide',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  ].map((w) => w.animate().fadeIn(duration: 400.ms)).toList(),
 
                   const SizedBox(height: 32),
 
@@ -405,13 +434,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
-                        "Don't have an account? ",
+                        "New here? ",
                         style: TextStyle(color: AppColors.textMuted, fontSize: 14),
                       ),
                       GestureDetector(
                         onTap: _goToSignUp,
                         child: const Text(
-                          'Sign Up',
+                          'Create an account',
                           style: TextStyle(
                             color: AppColors.purpleLight,
                             fontSize: 14,
@@ -422,7 +451,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   )
                       .animate()
-                      .fadeIn(duration: 500.ms, delay: 1000.ms),
+                      .fadeIn(duration: 500.ms, delay: 700.ms),
 
                   const SizedBox(height: 40),
                 ],
