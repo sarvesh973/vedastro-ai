@@ -4,7 +4,7 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../widgets/starfield_background.dart';
-import 'user_details_screen.dart';
+import 'login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -61,9 +61,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _completeOnboarding() async {
     await StorageService.setOnboardingComplete();
     if (mounted) {
+      // After welcome slides, go to LOGIN first.
+      // Profile (birth details) is collected AFTER login so each
+      // authenticated user has their own isolated profile data.
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const UserDetailsScreen(fromOnboarding: true),
+          pageBuilder: (_, __, ___) => const LoginScreen(),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(
               opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),

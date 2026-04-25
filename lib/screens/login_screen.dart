@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
+import '../providers/providers.dart';
 import '../widgets/starfield_background.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
 import 'phone_login_screen.dart';
+import 'user_details_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -57,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Restore this email account's profile from cloud
       await StorageService.loadFromCloudForCurrentUser();
       setState(() => _isLoading = false);
-      _navigateToHome();
+      _navigateAfterLogin();
     } else if (mounted) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -88,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // or a fresh install, their profile reappears here.
       await StorageService.loadFromCloudForCurrentUser();
       setState(() => _isGoogleLoading = false);
-      _navigateToHome();
+      _navigateAfterLogin();
     } else if (mounted) {
       setState(() => _isGoogleLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -127,10 +130,31 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _navigateToHome() {
+  /// After a successful login, decide where to go:
+  ///  - If this account has a profile in cloud (loaded into StorageService) -> Home
+  ///  - If brand-new account with no profile yet -> UserDetailsScreen to collect it
+  /// Also re-syncs Riverpod providers so the new screen sees fresh state.
+  void _navigateAfterLogin() {
+    // Push the latest StorageService state into Riverpod so home_screen / etc.
+    // see the right profile/usage data immediately, not the previous user's.
+    ref.read(userProfileProvider.notifier).state = StorageService.currentProfile;
+    ref.read(familyProfilesProvider.notifier).state =
+        List.from(StorageService.familyProfiles);
+    ref.read(activeProfileIndexProvider.notifier).state =
+        StorageService.activeProfileIndex;
+    ref.read(isPremiumProvider.notifier).state = StorageService.isPremium;
+    ref.read(chatQuestionsUsedProvider.notifier).state =
+        StorageService.chatQuestionsUsed;
+    ref.read(palmReadingsUsedProvider.notifier).state =
+        StorageService.palmReadingsUsed;
+    ref.read(chatMessagesProvider.notifier).clear();
+
+    final hasProfile = StorageService.hasProfile;
     Navigator.of(context).pushAndRemoveUntil(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const HomeScreen(),
+        pageBuilder: (_, __, ___) => hasProfile
+            ? const HomeScreen()
+            : const UserDetailsScreen(fromOnboarding: true),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(
             opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),

@@ -12,6 +12,7 @@ import 'services/firestore_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/user_details_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -116,24 +117,29 @@ class VedAstroApp extends StatelessWidget {
     );
   }
 
-  /// Determine the initial screen based on app state
+  /// Determine the initial screen based on app state.
+  /// Order: onboarding -> login -> profile -> home.
+  /// Profile is now collected AFTER login so each authenticated user has
+  /// their own isolated birth-details data tied to their Firebase UID.
   Widget _getStartScreen() {
-    // First time user -> Onboarding
+    // First time user -> Onboarding (welcome slides)
     if (!StorageService.isOnboardingComplete) {
       return const OnboardingScreen();
     }
 
-    // Check Firebase auth state first, then fall back to local
-    if (AuthService.isLoggedIn) {
-      return const HomeScreen();
-    }
-
-    // Not logged in -> Login
-    if (!StorageService.isLoggedIn) {
+    // Not logged in (Firebase + no local fallback) -> Login
+    if (!AuthService.isLoggedIn && !StorageService.isLoggedIn) {
       return const LoginScreen();
     }
 
-    // Local login exists but no Firebase (offline user)
+    // Logged in but profile not yet entered for this account -> collect details
+    // (e.g. brand-new email/phone signup, or fresh install on a new device
+    //  before cloud profile finishes loading).
+    if (!StorageService.hasProfile) {
+      return const UserDetailsScreen(fromOnboarding: true);
+    }
+
+    // Logged in + profile exists -> Home
     return const HomeScreen();
   }
 }

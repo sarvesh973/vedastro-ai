@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
+import '../providers/providers.dart';
 import '../widgets/starfield_background.dart';
 import 'home_screen.dart';
+import 'user_details_screen.dart';
 
-class SignupScreen extends StatefulWidget {
+class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -55,7 +58,7 @@ class _SignupScreenState extends State<SignupScreen> {
       // In case this email was used before (e.g. reinstall) — restore cloud
       await StorageService.loadFromCloudForCurrentUser();
       setState(() => _isLoading = false);
-      _navigateToHome();
+      _navigateAfterSignup();
     } else if (mounted) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -68,10 +71,29 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  void _navigateToHome() {
+  /// After successful email signup, brand-new accounts won't have a profile
+  /// yet -> route them to UserDetailsScreen to collect birth details.
+  /// Returning users (e.g. re-installing) will already have profile loaded
+  /// from cloud and skip straight to home.
+  void _navigateAfterSignup() {
+    ref.read(userProfileProvider.notifier).state = StorageService.currentProfile;
+    ref.read(familyProfilesProvider.notifier).state =
+        List.from(StorageService.familyProfiles);
+    ref.read(activeProfileIndexProvider.notifier).state =
+        StorageService.activeProfileIndex;
+    ref.read(isPremiumProvider.notifier).state = StorageService.isPremium;
+    ref.read(chatQuestionsUsedProvider.notifier).state =
+        StorageService.chatQuestionsUsed;
+    ref.read(palmReadingsUsedProvider.notifier).state =
+        StorageService.palmReadingsUsed;
+    ref.read(chatMessagesProvider.notifier).clear();
+
+    final hasProfile = StorageService.hasProfile;
     Navigator.of(context).pushAndRemoveUntil(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const HomeScreen(),
+        pageBuilder: (_, __, ___) => hasProfile
+            ? const HomeScreen()
+            : const UserDetailsScreen(fromOnboarding: true),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(
             opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),

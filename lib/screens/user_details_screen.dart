@@ -7,9 +7,7 @@ import '../models/user_profile.dart';
 import '../providers/providers.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
-import 'chat_screen.dart';
 import 'home_screen.dart';
-import 'login_screen.dart';
 
 class UserDetailsScreen extends ConsumerStatefulWidget {
   final bool fromOnboarding;
@@ -134,11 +132,13 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
     FirestoreService.syncProfile(profile);
 
     if (widget.fromOnboarding) {
-      // From onboarding -> go to login/signup
-      Navigator.of(context).pushReplacement(
+      // First-time profile setup AFTER login is already done -> go to Home.
+      // (Old flow used to bounce back to LoginScreen here, but login now
+      //  always happens BEFORE this screen, so we go straight to Home.)
+      Navigator.of(context).pushAndRemoveUntil(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
-              const LoginScreen(),
+              const HomeScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
@@ -147,6 +147,7 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
           },
           transitionDuration: const Duration(milliseconds: 400),
         ),
+        (_) => false,
       );
     } else {
       // From home -> go back to home

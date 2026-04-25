@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
+import '../providers/providers.dart';
 import '../widgets/starfield_background.dart';
 import 'home_screen.dart';
+import 'user_details_screen.dart';
 
 /// Phone + OTP login screen. Two-step flow:
 /// 1. Enter phone number -> send OTP
 /// 2. Enter OTP -> verify & sign in
-class PhoneLoginScreen extends StatefulWidget {
+class PhoneLoginScreen extends ConsumerStatefulWidget {
   const PhoneLoginScreen({super.key});
 
   @override
-  State<PhoneLoginScreen> createState() => _PhoneLoginScreenState();
+  ConsumerState<PhoneLoginScreen> createState() => _PhoneLoginScreenState();
 }
 
-class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
+class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
 
@@ -67,7 +70,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
         await StorageService.clearAllLocalData();
         await StorageService.signUp(fullNumber, 'phone_auth');
         await StorageService.loadFromCloudForCurrentUser();
-        if (mounted) _navigateToHome();
+        if (mounted) _navigateAfterLogin();
       },
     );
   }
@@ -97,7 +100,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
       await StorageService.loadFromCloudForCurrentUser();
       if (mounted) {
         setState(() => _loading = false);
-        _navigateToHome();
+        _navigateAfterLogin();
       }
     } else {
       setState(() => _loading = false);
@@ -124,10 +127,29 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     );
   }
 
-  void _navigateToHome() {
+  /// After successful phone OTP login, route based on whether THIS phone
+  /// number's account already has a profile in cloud (returning user) or not
+  /// (first-time signup -> collect birth details next).
+  /// Also re-syncs Riverpod state so the next screen sees fresh data.
+  void _navigateAfterLogin() {
+    ref.read(userProfileProvider.notifier).state = StorageService.currentProfile;
+    ref.read(familyProfilesProvider.notifier).state =
+        List.from(StorageService.familyProfiles);
+    ref.read(activeProfileIndexProvider.notifier).state =
+        StorageService.activeProfileIndex;
+    ref.read(isPremiumProvider.notifier).state = StorageService.isPremium;
+    ref.read(chatQuestionsUsedProvider.notifier).state =
+        StorageService.chatQuestionsUsed;
+    ref.read(palmReadingsUsedProvider.notifier).state =
+        StorageService.palmReadingsUsed;
+    ref.read(chatMessagesProvider.notifier).clear();
+
+    final hasProfile = StorageService.hasProfile;
     Navigator.of(context).pushAndRemoveUntil(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const HomeScreen(),
+        pageBuilder: (_, __, ___) => hasProfile
+            ? const HomeScreen()
+            : const UserDetailsScreen(fromOnboarding: true),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
           opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
           child: child,
