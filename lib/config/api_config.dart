@@ -20,6 +20,27 @@ class ApiConfig {
   static const int premiumPriceMonthlyPaise = 200; // ₹2
   static const int premiumPriceYearlyPaise = 200;  // ₹2 (same for testing)
 
+  /// Founder / admin / staff emails that bypass paywalls and limits.
+  /// These accounts get unlimited access automatically — no Razorpay, no
+  /// chat caps, no palm caps. Use for personal testing and team accounts.
+  ///
+  /// SECURITY: This is just the client-side check. The server (index.js)
+  /// MUST also have this same list and verify against the Firebase ID
+  /// token's email claim — otherwise anyone could spoof admin by setting
+  /// their email locally. Keep both lists in sync.
+  ///
+  /// Add lowercase only. Emails are normalized to lowercase before compare.
+  static const List<String> adminEmails = [
+    'sarry1254@gmail.com',
+  ];
+
+  /// Returns true if the given email is on the admin list.
+  /// Pass null/empty -> returns false.
+  static bool isAdminEmail(String? email) {
+    if (email == null || email.isEmpty) return false;
+    return adminEmails.contains(email.trim().toLowerCase());
+  }
+
   static bool get isConfigured =>
       geminiApiKey.isNotEmpty &&
       geminiApiKey != 'YOUR_GEMINI_API_KEY_HERE' &&

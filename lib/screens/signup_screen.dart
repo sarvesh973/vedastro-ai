@@ -75,7 +75,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   /// yet -> route them to UserDetailsScreen to collect birth details.
   /// Returning users (e.g. re-installing) will already have profile loaded
   /// from cloud and skip straight to home.
-  void _navigateAfterSignup() {
+  void _navigateAfterSignup() async {
+    // Founder/admin auto-unlock — bypasses paywall, unlimited everything.
+    if (AuthService.isAdmin && !StorageService.isPremium) {
+      await StorageService.upgradeToPremium();
+    }
+
     ref.read(userProfileProvider.notifier).state = StorageService.currentProfile;
     ref.read(familyProfilesProvider.notifier).state =
         List.from(StorageService.familyProfiles);

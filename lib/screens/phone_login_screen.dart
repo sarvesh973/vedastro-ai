@@ -131,7 +131,13 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   /// number's account already has a profile in cloud (returning user) or not
   /// (first-time signup -> collect birth details next).
   /// Also re-syncs Riverpod state so the next screen sees fresh data.
-  void _navigateAfterLogin() {
+  void _navigateAfterLogin() async {
+    // Founder/admin auto-unlock (only matters if admin signs in via phone
+    // AND has linked their admin email — rare but possible).
+    if (AuthService.isAdmin && !StorageService.isPremium) {
+      await StorageService.upgradeToPremium();
+    }
+
     ref.read(userProfileProvider.notifier).state = StorageService.currentProfile;
     ref.read(familyProfilesProvider.notifier).state =
         List.from(StorageService.familyProfiles);

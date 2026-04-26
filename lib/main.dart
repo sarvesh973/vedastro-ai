@@ -50,6 +50,13 @@ void _syncCloudData() async {
   try {
     if (!AuthService.isLoggedIn) return;
 
+    // Founder/admin auto-unlock on every app launch — defensive check in
+    // case someone managed to skip the login_screen path (e.g. existing
+    // session from before the admin list was added).
+    if (AuthService.isAdmin && !StorageService.isPremium) {
+      await StorageService.upgradeToPremium();
+    }
+
     // Try to restore profile from cloud if local is empty
     if (!StorageService.hasProfile) {
       final cloudProfile = await FirestoreService.loadCloudProfile();

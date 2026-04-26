@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../config/api_config.dart';
 
 /// Firebase Authentication Service
 class AuthService {
@@ -14,6 +15,16 @@ class AuthService {
 
   /// User email
   static String? get userEmail => _auth.currentUser?.email;
+
+  /// Is the currently signed-in user a founder / admin / staff?
+  /// Checked via [ApiConfig.adminEmails]. Admins bypass:
+  ///   - Paywall (always treated as premium)
+  ///   - Chat / palm reading caps
+  ///   - Razorpay subscription flow
+  /// SECURITY: server-side check is the source of truth — this is for UX only.
+  /// The server verifies the Firebase ID token's email claim, so a malicious
+  /// actor can't fake admin by editing the APK.
+  static bool get isAdmin => ApiConfig.isAdminEmail(userEmail);
 
   /// User display name
   static String? get userName => _auth.currentUser?.displayName;

@@ -134,7 +134,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   ///  - If this account has a profile in cloud (loaded into StorageService) -> Home
   ///  - If brand-new account with no profile yet -> UserDetailsScreen to collect it
   /// Also re-syncs Riverpod providers so the new screen sees fresh state.
-  void _navigateAfterLogin() {
+  void _navigateAfterLogin() async {
+    // Founder/admin auto-unlock: if signed-in email is on the admin list,
+    // mark them premium so they bypass all paywalls + caps. No payment needed.
+    if (AuthService.isAdmin && !StorageService.isPremium) {
+      await StorageService.upgradeToPremium();
+    }
+
     // Push the latest StorageService state into Riverpod so home_screen / etc.
     // see the right profile/usage data immediately, not the previous user's.
     ref.read(userProfileProvider.notifier).state = StorageService.currentProfile;
