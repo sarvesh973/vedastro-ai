@@ -28,7 +28,7 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
-      - name: Create API config from GitHub Secret
+      - name: Inject Gemini API key into api_config.dart
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -41,19 +41,12 @@ jobs:
           fi
           echo "Gemini key length: ${#GEMINI_KEY}"
           echo "Gemini key prefix: ${GEMINI_KEY:0:4}"
-          mkdir -p lib/config
-          cat > lib/config/api_config.dart << DART
-          class ApiConfig {
-            static const String geminiApiKey = '$GEMINI_KEY';
-            static const String cloudFunctionBaseUrl = 'https://vedastro-rag-server.onrender.com';
-            static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
-            static const String razorpayCompanyName = 'VedAstro AI';
-            static const int premiumPriceMonthlyPaise = 200;
-            static const int premiumPriceYearlyPaise = 200;
-            static bool get isConfigured => geminiApiKey.isNotEmpty && geminiApiKey != 'INJECTED_BY_CI_AT_BUILD_TIME' && geminiApiKey.length > 30;
-            static bool get isRazorpayConfigured => razorpayKeyId.isNotEmpty && !razorpayKeyId.contains('YOUR_KEY');
-          }
-          DART
+          # Replace ONLY the placeholder string — leaves adminEmails, plan
+          # constants, helpers, etc. intact. The repo file is the source
+          # of truth; this step only swaps in the secret at build time.
+          sed -i "s|INJECTED_BY_CI_AT_BUILD_TIME|$GEMINI_KEY|" lib/config/api_config.dart
+          echo "=== Verifying admin emails are preserved ==="
+          grep -A2 "adminEmails" lib/config/api_config.dart || echo "WARN: adminEmails not found"
 
       - name: Set up release keystore
         env:
