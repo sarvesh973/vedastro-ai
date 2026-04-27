@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../models/subscription_plan.dart';
+import '../providers/providers.dart';
 import '../services/auth_service.dart';
+import '../services/payment_service.dart';
+import '../services/storage_service.dart';
 import '../widgets/autopay_disclosure.dart';
 
 /// Paywall with three plans: Trial (₹1 -> ₹99/mo), Standard (₹199/mo),
@@ -30,6 +33,18 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   SubscriptionPlan _selectedPlan = SubscriptionPlan.trial;
   bool _autopayAcknowledged = false;
   bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    PaymentService.init();
+  }
+
+  @override
+  void dispose() {
+    PaymentService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -402,32 +417,70 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
   }
 
-  /// Wired up in commit 4 (PaymentService refactor).
-  /// For now shows a placeholder snackbar so the UI flow can be tested.
-  void _handleSubscribe() {
+  /// Calls server to create a Razorpay subscription, opens Razorpay's
+  /// payment sheet, and updates premium status on success.
+  void _handleSubscribe() async {
+    if (_isProcessing) return;
     setState(() => _isProcessing = true);
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      setState(() => _isProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Subscription flow being wired up. Selected: ${_selectedPlan.displayName}',
+
+    await PaymentService.openSubscriptionCheckout(
+      plan: _selectedPlan,
+      onSuccess: (paymentId, planId) {
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+
+        // Reflect the new premium state in Riverpod immediately so the
+        // home screen / chat / paywall close-state pick it up.
+        ref.read(isPremiumProvider.notifier).state =
+            StorageService.isPremium;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.workspace_premium,
+                    color: AppColors.goldLight, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                    child: Text(
+                        'Premium activated! Enjoy your subscription.')),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
           ),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    });
+        );
+        Navigator.pop(context);
+      },
+      onFailure: (message) {
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      },
+    );
   }
 
-  /// Restore previous subscription (e.g. user reinstalled the app).
-  /// Wired up in commit 4.
-  void _restorePurchase() {
+  /// Restore subscription state by re-fetching from cloud.
+  /// Useful if the user re-installs or moves to a new device.
+  void _restorePurchase() async {
+    await StorageService.loadFromCloudForCurrentUser();
+    if (!mounted) return;
+    ref.read(isPremiumProvider.notifier).state = StorageService.isPremium;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Restore purchase coming soon'),
+      SnackBar(
+        content: Text(StorageService.isPremium
+            ? 'Premium restored from cloud!'
+            : 'No active subscription found for this account.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
