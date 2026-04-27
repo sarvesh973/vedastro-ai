@@ -2,7 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-/// Widget that reveals text character by character, like ChatGPT
+/// Widget that reveals text character by character, like ChatGPT.
+/// Default pace tuned to feel like Melooha — calm, readable, not racing.
 class TypewriterText extends StatefulWidget {
   final String text;
   final Duration charDuration;
@@ -12,7 +13,9 @@ class TypewriterText extends StatefulWidget {
   const TypewriterText({
     super.key,
     required this.text,
-    this.charDuration = const Duration(milliseconds: 18),
+    // 35ms per char ≈ Melooha pace. The previous 18ms felt rushed because
+    // the implementation also revealed 2 chars per tick (effective 9ms).
+    this.charDuration = const Duration(milliseconds: 35),
     this.onComplete,
     this.isComplete = false,
   });
@@ -49,8 +52,9 @@ class _TypewriterTextState extends State<TypewriterText> {
       }
       if (mounted) {
         setState(() {
-          // Reveal multiple chars at once for faster feel
-          _charIndex += 2;
+          // One char at a time -> readable Melooha pace.
+          // (Was 2 chars/tick before, which made it feel like a flash.)
+          _charIndex += 1;
           if (_charIndex > widget.text.length) {
             _charIndex = widget.text.length;
           }

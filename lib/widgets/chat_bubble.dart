@@ -99,12 +99,16 @@ class ChatBubble extends StatelessWidget {
               ? TypewriterText(
                   key: ValueKey('tw_${message.timestamp.millisecondsSinceEpoch}'),
                   text: message.text,
-                  charDuration: const Duration(milliseconds: 15),
+                  // Melooha-like pace — slower, calmer, easier to read.
+                  charDuration: const Duration(milliseconds: 35),
                   onComplete: onTypewriterComplete,
                 )
               : _buildFormattedAiText(message.text),
         ),
-        if (message.hasSources && !isLatestAiMessage) _buildSourceCitations(),
+        // Always show sources below — even for the latest message currently
+        // being typed — so users see citations in the dedicated section
+        // instead of cluttering the answer body.
+        if (message.hasSources) _buildSourceCitations(),
       ],
     );
   }

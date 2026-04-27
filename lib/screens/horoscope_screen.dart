@@ -81,7 +81,28 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
-    final sign = profile?.westernSign ?? 'Aries';
+    // Use the SAME sign system the AI fetches with (Vedic / sunSign), so
+    // header and content always agree. Old code used westernSign for the
+    // header but sunSign for the data — that's why some users saw a
+    // mismatch where the title said one sign and the prediction was for
+    // another.
+    //
+    // sunSign returns "Makara (Capricorn)" style — we split it for display:
+    //   primaryName = "Capricorn" (familiar English, big)
+    //   sanskritName = "Makara"   (Sanskrit, subtle subtitle)
+    final fullSign = profile?.sunSign ?? '';
+    String primaryName = '';
+    String sanskritName = '';
+    if (fullSign.isNotEmpty) {
+      final paren = RegExp(r'^([^\(]+)\s*\(([^\)]+)\)\s*$').firstMatch(fullSign);
+      if (paren != null) {
+        sanskritName = paren.group(1)!.trim();
+        primaryName = paren.group(2)!.trim();
+      } else {
+        primaryName = fullSign;
+      }
+    }
+    if (primaryName.isEmpty) primaryName = 'Aries';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -122,7 +143,7 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
           ? _buildLoadingState()
           : _horoscopeData == null
               ? _buildErrorState()
-              : _buildHoroscopeContent(sign),
+              : _buildHoroscopeContent(primaryName, sanskritName, profile?.firstName ?? ''),
     );
   }
 
@@ -161,7 +182,7 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
     );
   }
 
-  Widget _buildHoroscopeContent(String sign) {
+  Widget _buildHoroscopeContent(String sign, String sanskritName, String firstName) {
     final zodiacEmoji = _getZodiacEmoji(sign);
 
     return SingleChildScrollView(
@@ -190,14 +211,39 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
               children: [
                 Text(zodiacEmoji, style: const TextStyle(fontSize: 48)),
                 const SizedBox(height: 12),
+                // Optional "Sarvesh's" prefix when name is known — makes it
+                // unmistakeable that this horoscope is FOR THIS USER.
+                if (firstName.isNotEmpty)
+                  Text(
+                    "$firstName's Horoscope",
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                if (firstName.isNotEmpty) const SizedBox(height: 4),
                 Text(
                   sign,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
-                    fontSize: 24,
+                    fontSize: 26,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (sanskritName.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    sanskritName,
+                    style: TextStyle(
+                      color: AppColors.goldLight.withValues(alpha: 0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 6),
                 // Date label
                 Text(

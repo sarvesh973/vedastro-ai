@@ -8,7 +8,7 @@ import '../services/ai_service.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/chat_bubble.dart';
-import '../widgets/typing_indicator.dart';
+import '../widgets/contextual_loader.dart';
 import 'paywall_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -23,6 +23,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   bool _hasInitialized = false;
   bool _isTypewriterActive = false;
+
+  /// Last question the user asked — passed to ContextualLoader so it can
+  /// show topic-aware "Reading your career line..." style messages.
+  String _lastUserQuestion = '';
 
   @override
   void dispose() {
@@ -59,6 +63,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     _messageController.clear();
+
+    // Remember question text so ContextualLoader can show a relevant
+    // "Reading your <topic> ..." message while we wait.
+    _lastUserQuestion = text;
 
     final chatNotifier = ref.read(chatMessagesProvider.notifier);
     final typingController = ref.read(isAiTypingProvider.notifier);
@@ -225,7 +233,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     itemCount: messages.length + (isTyping ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index == messages.length && isTyping) {
-                        return const TypingIndicator();
+                        return ContextualLoader(
+                          userQuestion: _lastUserQuestion,
+                        );
                       }
                       final msg = messages[index];
                       final isLastAi = msg.isAi &&
