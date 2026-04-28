@@ -7,38 +7,55 @@ import '../providers/providers.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
 import '../services/storage_service.dart';
-import '../widgets/autopay_disclosure.dart';
+import '../widgets/autopay_confirm_sheet.dart';
 
-/// Paywall with three plans: Trial (₹1 -> ₹99/mo), Standard (₹199/mo),
+/// Paywall with up to three plans: Free 7-Day Trial, Standard (₹199/mo),
 /// Premium (₹499/mo).
 ///
-/// COMPLIANCE: This screen is designed to be 100% safe under India CCPA
-/// dark-pattern guidelines:
-///  - All recurring charges shown in BOLD before purchase via AutopayDisclosure
-///  - User must explicitly tick "I understand" checkbox to enable Subscribe
-///  - Cancel-anytime messaging on every plan
-///  - "Restore" link for users who subscribed previously
+/// Compliance UX:
+///  - Plan cards on the screen — no checkbox visible inline
+///  - Tap Subscribe -> bottom-sheet popup opens with the full autopay
+///    disclosure + required consent checkbox
+///  - Razorpay only opens after the user ticks the box and taps Confirm
 ///
-/// The actual Razorpay subscription flow is wired up in PaymentService.
-/// This screen only handles plan selection + disclosure consent.
+/// Smart upgrade behaviour:
+///  - [availablePlans] lets the caller hide irrelevant plans, e.g. when a
+///    Standard subscriber hits their cap, only show Premium.
+///  - Pass `null` to show all 3 plans (default).
 class PaywallScreen extends ConsumerStatefulWidget {
-  const PaywallScreen({super.key});
+  /// If null, shows all 3 plans. If set, shows only the listed plans
+  /// in their order. Used by chat / palm screens to hide already-active
+  /// plans after a usage cap is hit (e.g. Standard exhausted -> only
+  /// Premium card is shown so the user can upgrade).
+  final List<SubscriptionPlan>? availablePlans;
+
+  const PaywallScreen({super.key, this.availablePlans});
 
   @override
   ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
 }
 
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
-  /// Default selection — Trial is shown first as the strongest hook.
-  SubscriptionPlan _selectedPlan = SubscriptionPlan.trial;
-  bool _autopayAcknowledged = false;
+  late SubscriptionPlan _selectedPlan;
   bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
     PaymentService.init();
+    // Default selection = first plan in the available list (so it works
+    // for both "all 3" and "only premium" cases).
+    _selectedPlan = (widget.availablePlans ?? _defaultPlanOrder).first;
   }
+
+  static const List<SubscriptionPlan> _defaultPlanOrder = [
+    SubscriptionPlan.trial,
+    SubscriptionPlan.standard,
+    SubscriptionPlan.premium,
+  ];
+
+  List<SubscriptionPlan> get _plansToShow =>
+      widget.availablePlans ?? _defaultPlanOrder;
 
   @override
   void dispose() {
@@ -90,68 +107,44 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             ),
 
             const SizedBox(height: 4),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Pick the plan that suits your journey',
-                  style:
-                      TextStyle(color: AppColors.textMuted, fontSize: 14),
+                  _subtitleForContext(),
+                  style: const TextStyle(
+                      color: AppColors.textMuted, fontSize: 14),
                 ),
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // ─── Scrollable plan list + disclosure ─────────────
+            // ─── Scrollable plan list ──────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
-                    _planCard(
-                      plan: SubscriptionPlan.trial,
-                      badge: '7 DAYS FREE',
-                      badgeColor: AppColors.success,
-                    ).animate().fadeIn(delay: 100.ms).slideY(
-                          begin: 0.05,
-                          end: 0,
-                          duration: 400.ms,
-                          delay: 100.ms,
-                        ),
-                    const SizedBox(height: 12),
-                    _planCard(
-                      plan: SubscriptionPlan.standard,
-                    ).animate().fadeIn(delay: 200.ms).slideY(
-                          begin: 0.05,
-                          end: 0,
-                          duration: 400.ms,
-                          delay: 200.ms,
-                        ),
-                    const SizedBox(height: 12),
-                    _planCard(
-                      plan: SubscriptionPlan.premium,
-                      badge: 'BEST VALUE',
-                      badgeColor: AppColors.purpleLight,
-                    ).animate().fadeIn(delay: 300.ms).slideY(
-                          begin: 0.05,
-                          end: 0,
-                          duration: 400.ms,
-                          delay: 300.ms,
-                        ),
+                    // Render only the plans the caller asked for, in order.
+                    // Each card animates in with a small stagger.
+                    for (var i = 0; i < _plansToShow.length; i++) ...[
+                      _planCard(
+                        plan: _plansToShow[i],
+                        badge: _badgeFor(_plansToShow[i]),
+                        badgeColor: _badgeColorFor(_plansToShow[i]),
+                      ).animate().fadeIn(delay: (100 + i * 100).ms).slideY(
+                            begin: 0.05,
+                            end: 0,
+                            duration: 400.ms,
+                            delay: (100 + i * 100).ms,
+                          ),
+                      if (i < _plansToShow.length - 1)
+                        const SizedBox(height: 12),
+                    ],
 
-                    const SizedBox(height: 20),
-
-                    // ─── COMPLIANCE: bold autopay disclosure ──
-                    AutopayDisclosure(
-                      plan: _selectedPlan,
-                      acknowledged: _autopayAcknowledged,
-                      onAcknowledgedChanged: (v) =>
-                          setState(() => _autopayAcknowledged = v),
-                    ).animate().fadeIn(delay: 400.ms),
-
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
                     // ─── Trust links ──────────────────────────
                     Wrap(
@@ -187,9 +180,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: (_canSubscribe() && !_isProcessing)
-                        ? _handleSubscribe
-                        : null,
+                    onPressed: _isProcessing ? null : _handleSubscribe,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.purpleAccent,
                       disabledBackgroundColor:
@@ -209,12 +200,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                           )
                         : Text(
                             _subscribeButtonLabel(),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: _canSubscribe()
-                                  ? Colors.white
-                                  : AppColors.textMuted,
+                              color: Colors.white,
                             ),
                           ),
                   ),
@@ -236,11 +225,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }) {
     final selected = _selectedPlan == plan;
     return GestureDetector(
-      onTap: () => setState(() {
-        _selectedPlan = plan;
-        // Re-tick required if user switches plans (different terms).
-        _autopayAcknowledged = false;
-      }),
+      onTap: () => setState(() => _selectedPlan = plan),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(18),
@@ -399,12 +384,50 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
+  // ─── Plan badges + context-aware copy ─────────────────────────
+
+  String? _badgeFor(SubscriptionPlan plan) {
+    switch (plan) {
+      case SubscriptionPlan.trial:
+        return '7 DAYS FREE';
+      case SubscriptionPlan.premium:
+        return _plansToShow.contains(SubscriptionPlan.standard)
+            ? 'BEST VALUE'
+            : 'UPGRADE';
+      default:
+        return null;
+    }
+  }
+
+  Color? _badgeColorFor(SubscriptionPlan plan) {
+    switch (plan) {
+      case SubscriptionPlan.trial:
+        return AppColors.success;
+      case SubscriptionPlan.premium:
+        return AppColors.purpleLight;
+      default:
+        return null;
+    }
+  }
+
+  /// Subtitle changes based on which plans are available — gives the user
+  /// a clear reason for being on this screen.
+  String _subtitleForContext() {
+    final plans = _plansToShow;
+    if (plans.length == 1 && plans.first == SubscriptionPlan.premium) {
+      return "You've reached your Standard plan limit. Upgrade to Premium for unlimited access.";
+    }
+    if (!plans.contains(SubscriptionPlan.trial) &&
+        plans.contains(SubscriptionPlan.standard) &&
+        plans.contains(SubscriptionPlan.premium)) {
+      return "Your free chats are over. Pick a plan to keep going.";
+    }
+    return 'Pick the plan that suits your journey';
+  }
+
   // ─── Action handlers ──────────────────────────────────────────
 
-  bool _canSubscribe() => _autopayAcknowledged;
-
   String _subscribeButtonLabel() {
-    if (!_autopayAcknowledged) return 'Tick the box above to continue';
     switch (_selectedPlan) {
       case SubscriptionPlan.trial:
         return 'Start Free 7-Day Trial';
@@ -417,10 +440,20 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
   }
 
-  /// Calls server to create a Razorpay subscription, opens Razorpay's
-  /// payment sheet, and updates premium status on success.
+  /// 1. Show the autopay-confirmation popup (with required tick).
+  /// 2. If user confirms, open Razorpay's payment sheet.
+  /// 3. On success, mark premium + close the paywall.
   void _handleSubscribe() async {
     if (_isProcessing) return;
+
+    // Step 1 — popup with bold autopay disclosure + required checkbox.
+    final confirmed = await showAutopayConfirmSheet(
+      context: context,
+      plan: _selectedPlan,
+    );
+    if (!confirmed || !mounted) return;
+
+    // Step 2 — open Razorpay (only after consent given in the popup).
     setState(() => _isProcessing = true);
 
     await PaymentService.openSubscriptionCheckout(

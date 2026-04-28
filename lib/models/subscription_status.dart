@@ -6,7 +6,7 @@ enum SubscriptionState {
   /// User has never subscribed.
   none,
 
-  /// In 7-day trial. ₹1 already paid. ₹99 will auto-debit on day 8.
+  /// In 7-day free trial. e-mandate registered. ₹99 will auto-debit on day 8.
   trialing,
 
   /// Active paid subscription.

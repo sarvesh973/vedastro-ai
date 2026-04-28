@@ -9,6 +9,7 @@ import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/contextual_loader.dart';
+import '../models/subscription_plan.dart';
 import 'paywall_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -126,10 +127,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _showPaywall() {
+    // Smart plan filtering based on user's current state:
+    //  - Free user (no isPremium) -> hide trial, show Standard + Premium
+    //    so they can pay directly. Trial is for fresh users picking
+    //    their first plan from the home screen, not for users who've
+    //    already exhausted free chats.
+    //  - Standard subscriber -> show only Premium (upgrade)
+    //  - Premium subscriber -> shouldn't reach here (unlimited chats)
+    //
+    // We don't yet persist the exact plan (Standard vs Premium) — when
+    // we do, refine the Standard-exhausted branch to detect it.
+    final availablePlans = StorageService.isPremium
+        ? const [SubscriptionPlan.premium]
+        : const [SubscriptionPlan.standard, SubscriptionPlan.premium];
+
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const PaywallScreen(),
+            PaywallScreen(availablePlans: availablePlans),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(

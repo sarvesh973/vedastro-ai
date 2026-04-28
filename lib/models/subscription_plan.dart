@@ -12,7 +12,7 @@ enum SubscriptionPlan {
   /// Free tier — 2 chats, 1 palm reading total. No subscription.
   free,
 
-  /// ₹1 today, ₹99/month auto-debit after 7 days. 10 chats during trial.
+  /// Free 7 days, then ₹99/month auto-debit. 10 chats during the trial.
   trial,
 
   /// ₹199/month. 30 chats + 5 palm readings per month.
