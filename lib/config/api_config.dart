@@ -9,16 +9,22 @@ class ApiConfig {
   static const String cloudFunctionBaseUrl =
       'https://vedastro-rag-server.onrender.com';
 
-  /// Razorpay API Key (Test mode — switch to live key before Play Store launch)
+  /// Razorpay LIVE API Key — REAL MONEY mode.
+  /// Subscriptions opened with this key WILL CHARGE the user's card.
   /// Get your keys from: https://dashboard.razorpay.com/app/keys
-  static const String razorpayKeyId = 'rzp_test_Sdmo8azvABuanX';
+  static const String razorpayKeyId = 'rzp_live_SiqZ5RU6i3w3XV';
 
   /// Company/App name shown on Razorpay checkout
   static const String razorpayCompanyName = 'VedAstro AI';
 
-  /// Premium pricing in paise (₹2 = 200 paise for testing)
-  static const int premiumPriceMonthlyPaise = 200; // ₹2
-  static const int premiumPriceYearlyPaise = 200;  // ₹2 (same for testing)
+  /// Legacy one-time payment prices (paise). Used by the old openCheckout()
+  /// flow only. The new openSubscriptionCheckout() flow reads prices from
+  /// SubscriptionPlan.firstChargePaise / recurringPaise instead.
+  ///
+  /// Standard monthly = 19900 paise (₹199)
+  /// Premium monthly  = 49900 paise (₹499)
+  static const int premiumPriceMonthlyPaise = 19900;
+  static const int premiumPriceYearlyPaise = 49900;
 
   /// Founder / admin / staff emails that bypass paywalls and limits.
   /// These accounts get unlimited access automatically — no Razorpay, no
@@ -47,5 +53,8 @@ class ApiConfig {
       geminiApiKey != 'PLACEHOLDER_GEMINI' &&
       geminiApiKey != 'INJECTED_BY_CI_AT_BUILD_TIME' &&
       geminiApiKey.length > 30;
-  static bool get isRazorpayConfigured => razorpayKeyId != 'rzp_test_YOUR_KEY_HERE';
+  static bool get isRazorpayConfigured =>
+      razorpayKeyId.isNotEmpty &&
+      !razorpayKeyId.contains('YOUR_KEY') &&
+      (razorpayKeyId.startsWith('rzp_test_') || razorpayKeyId.startsWith('rzp_live_'));
 }
