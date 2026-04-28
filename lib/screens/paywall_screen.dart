@@ -112,8 +112,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   children: [
                     _planCard(
                       plan: SubscriptionPlan.trial,
-                      badge: 'TRY FOR ₹1',
-                      badgeColor: AppColors.goldLight,
+                      badge: '7 DAYS FREE',
+                      badgeColor: AppColors.success,
                     ).animate().fadeIn(delay: 100.ms).slideY(
                           begin: 0.05,
                           end: 0,
@@ -407,7 +407,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     if (!_autopayAcknowledged) return 'Tick the box above to continue';
     switch (_selectedPlan) {
       case SubscriptionPlan.trial:
-        return 'Pay ₹1 — Start 7-day Trial';
+        return 'Start Free 7-Day Trial';
       case SubscriptionPlan.standard:
         return 'Subscribe — ₹199/month';
       case SubscriptionPlan.premium:

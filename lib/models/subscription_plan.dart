@@ -46,7 +46,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return 'Free';
       case SubscriptionPlan.trial:
-        return 'Try for ₹1';
+        return 'Free 7-Day Trial';
       case SubscriptionPlan.standard:
         return 'Standard';
       case SubscriptionPlan.premium:
@@ -54,13 +54,13 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
-  /// Headline price label (e.g. "₹199/month", "₹1 then ₹99/month")
+  /// Headline price label (e.g. "₹199/month", "Free 7 days, then ₹99/month")
   String get priceLabel {
     switch (this) {
       case SubscriptionPlan.free:
         return 'Free';
       case SubscriptionPlan.trial:
-        return '₹1 today, then ₹99/month';
+        return 'Free 7 days, then ₹99/month';
       case SubscriptionPlan.standard:
         return '₹199/month';
       case SubscriptionPlan.premium:
@@ -74,7 +74,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return 'Limited free chats';
       case SubscriptionPlan.trial:
-        return '7-day trial — auto-renews to ₹99/month';
+        return 'No charge today — auto-renews ₹99/month after 7 days';
       case SubscriptionPlan.standard:
         return 'For regular seekers';
       case SubscriptionPlan.premium:
@@ -83,14 +83,14 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
   }
 
   /// Amount in PAISE that Razorpay should charge for the FIRST debit.
-  /// For trial = ₹1 = 100 paise (auth charge only).
+  /// For free trial = 0 (mandate setup only, first charge happens day 7).
   /// For monthly plans = monthly price.
   int get firstChargePaise {
     switch (this) {
       case SubscriptionPlan.free:
         return 0;
       case SubscriptionPlan.trial:
-        return 100;       // ₹1
+        return 0;         // Free trial — no charge today
       case SubscriptionPlan.standard:
         return 19900;     // ₹199
       case SubscriptionPlan.premium:
@@ -167,10 +167,10 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
         return ['2 free chats', '1 free palm reading', 'Daily horoscope'];
       case SubscriptionPlan.trial:
         return [
-          '10 chats in 7 days',
+          '10 chats during the 7-day trial',
           '2 palm readings',
-          'Cancel anytime',
-          'After trial: ₹99/month',
+          'No charge today — cancel anytime',
+          'Auto-renews ₹99/month after day 7',
         ];
       case SubscriptionPlan.standard:
         return [
