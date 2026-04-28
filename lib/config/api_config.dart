@@ -53,6 +53,10 @@ class ApiConfig {
       geminiApiKey != 'PLACEHOLDER_GEMINI' &&
       geminiApiKey != 'INJECTED_BY_CI_AT_BUILD_TIME' &&
       geminiApiKey.length > 30;
+
+  /// True only if a real Razorpay key (test or live) is present.
+  /// Tighter than just "not the placeholder" — also requires the rzp_
+  /// prefix so a typo or accidentally-blanked value doesn't slip through.
   static bool get isRazorpayConfigured =>
       razorpayKeyId.isNotEmpty &&
       !razorpayKeyId.contains('YOUR_KEY') &&
