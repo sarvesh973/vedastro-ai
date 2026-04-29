@@ -1,9 +1,12 @@
 // VedAstro AI - Vedic Astrology Platform
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'services/storage_service.dart';
@@ -15,34 +18,66 @@ import 'screens/login_screen.dart';
 import 'screens/user_details_screen.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Wrap the entire app in a Zone so any uncaught async errors are
+  // captured by Crashlytics. Without this, Future-based crashes are
+  // invisible in production.
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+    // Initialize Firebase
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
-  // Initialize persistent storage
-  await StorageService.init();
+    // ─── Crashlytics ─────────────────────────────────────────
+    // Catches Flutter framework errors AND native crashes. Disabled in
+    // debug builds so we don't spam Crashlytics with dev test crashes.
+    if (!kDebugMode) {
+      FlutterError.onError =
+          FirebaseCrashlytics.instance.recordFlutterFatalError;
+      // PlatformDispatcher catches errors outside the Flutter framework
+      // (e.g. async errors in plugins).
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+    } else {
+      // In debug, send everything to console instead.
+      FlutterError.onError = (details) => FlutterError.presentError(details);
+    }
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
 
-  // Sync cloud data if user is logged in
-  _syncCloudData();
+    // Initialize persistent storage
+    await StorageService.init();
 
-  // Set system UI overlay style for premium dark look
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppColors.background,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+    // Sync cloud data if user is logged in
+    _syncCloudData();
 
-  // Lock to portrait for best experience
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+    // Set system UI overlay style for premium dark look
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: AppColors.background,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
 
-  runApp(const ProviderScope(child: VedAstroApp()));
+    // Lock to portrait for best experience
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
+    runApp(const ProviderScope(child: VedAstroApp()));
+  }, (error, stack) {
+    // Catches uncaught zone errors (anything not caught by FlutterError /
+    // PlatformDispatcher above). Forwarded to Crashlytics in release.
+    if (!kDebugMode) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    } else {
+      debugPrint('Uncaught zone error: $error\n$stack');
+    }
+  });
 }
 
 /// Background cloud sync (non-blocking)

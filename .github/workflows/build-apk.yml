@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK + AAB
 
 on:
   push:
@@ -85,25 +85,43 @@ jobs:
       - name: Build APK
         run: |
           if [ "$RELEASE_BUILD" = "true" ]; then
-            echo "Building RELEASE APK..."
+            echo "Building RELEASE APK (for sideload + testing)..."
             flutter build apk --release
           else
             echo "Building DEBUG APK (no keystore)..."
             flutter build apk --debug
           fi
 
+      # AAB (Android App Bundle) is the format Play Store requires for
+      # uploads. Only built on a properly-signed release run; debug builds
+      # skip AAB since Play Store rejects unsigned bundles anyway.
+      - name: Build AAB (Android App Bundle for Play Store)
+        if: env.RELEASE_BUILD == 'true'
+        run: |
+          echo "Building RELEASE AAB for Play Store upload..."
+          flutter build appbundle --release
+          ls -lh build/app/outputs/bundle/release/
+
       - name: Upload Release APK
         if: env.RELEASE_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: VedAstro-AI-release
+          name: VedAstro-AI-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Upload Release AAB (Play Store)
+        if: env.RELEASE_BUILD == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VedAstro-AI-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
 
       - name: Upload Debug APK
         if: env.RELEASE_BUILD != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: VedAstro-AI-debug
+          name: VedAstro-AI-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30

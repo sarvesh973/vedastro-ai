@@ -8,6 +8,8 @@ import '../services/auth_service.dart';
 import '../providers/providers.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
+import 'subscription_screen.dart';
+import 'delete_account_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -108,6 +110,40 @@ class SettingsScreen extends ConsumerWidget {
             ).animate().fadeIn(duration: 500.ms, delay: 550.ms),
 
             const SizedBox(height: 24),
+
+            // ─── Subscription management ─────────────────────────
+            _buildSectionTitle('Subscription'),
+            const SizedBox(height: 8),
+            _buildInfoTile(
+              icon: Icons.card_membership_outlined,
+              title: 'Manage Subscription',
+              subtitle: 'View plan, cancel anytime',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const SubscriptionScreen()),
+                );
+              },
+            ).animate().fadeIn(duration: 500.ms, delay: 600.ms),
+
+            const SizedBox(height: 24),
+
+            // ─── Account ─────────────────────────────────────────
+            _buildSectionTitle('Account'),
+            const SizedBox(height: 8),
+            _buildInfoTile(
+              icon: Icons.person_remove_outlined,
+              title: 'Delete Account',
+              subtitle: 'Permanently delete your data',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const DeleteAccountScreen()),
+                );
+              },
+            ).animate().fadeIn(duration: 500.ms, delay: 650.ms),
+
+            const SizedBox(height: 16),
 
             // Logout
             SizedBox(
