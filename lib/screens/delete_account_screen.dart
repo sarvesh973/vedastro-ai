@@ -365,7 +365,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       //    step — requires "recent login" credentials. If it fails with
       //    requires-recent-login, we tell the user to log in again first.
       try {
-        await user.delete();
+        await user!.delete();
       } on Exception catch (e) {
         // Most common: 'requires-recent-login' for accounts older than
         // ~5 minutes. We've already cleaned data + signed out, so the
