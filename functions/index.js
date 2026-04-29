@@ -2,8 +2,44 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const cors = require('cors')({ origin: true });
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
 
 admin.initializeApp();
+
+// ─── RAZORPAY CONFIG ──────────────────────────────────────────────
+// Set these via:
+//   firebase functions:config:set razorpay.key_id="rzp_live_xxx" \
+//                                   razorpay.key_secret="xxx" \
+//                                   razorpay.webhook_secret="xxx"
+function getRazorpay() {
+  const cfg = functions.config().razorpay || {};
+  const keyId = cfg.key_id || process.env.RAZORPAY_KEY_ID;
+  const keySecret = cfg.key_secret || process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) {
+    throw new Error('Razorpay credentials not configured');
+  }
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+}
+
+// Razorpay plan IDs configured in dashboard.razorpay.com → Subscriptions → Plans
+// IMPORTANT: trial_99 must be ₹99/month with NO trial period set in the plan.
+// Server controls the 7-day delay via start_at parameter.
+const PLAN_IDS = {
+  trial:    'plan_trial_99',     // ₹99/month, but 7-day free trial via start_at
+  standard: 'plan_standard_199', // ₹199/month
+  premium:  'plan_premium_499',  // ₹499/month
+};
+
+// Comma-separated list of admin emails who skip payment.
+// Set via: firebase functions:config:set admin.emails="you@x.com,founder@y.com"
+function isAdminEmail(email) {
+  if (!email) return false;
+  const cfg = (functions.config().admin && functions.config().admin.emails) ||
+              process.env.ADMIN_EMAILS || '';
+  const list = cfg.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  return list.includes(email.toLowerCase());
+}
 
 // --- LOAD KNOWLEDGE BASE ---
 // Loaded once on cold start, stays in memory
@@ -301,4 +337,266 @@ exports.search = functions
         return res.status(500).json({ error: err.message });
       }
     });
+  });
+
+// ════════════════════════════════════════════════════════════════════
+//   SUBSCRIPTION ENDPOINTS — Razorpay
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /subscription/create
+ * Body: { plan: 'trial'|'standard'|'premium', userEmail, userId }
+ * Returns: { subscriptionId, shortUrl } OR { admin: true }
+ *
+ * For 'trial' plan: server passes start_at = now + 7 days,
+ * so Razorpay e-mandate is registered today (₹0) and first ₹99
+ * is auto-debited on day 7. Then ₹99/month recurring.
+ */
+exports.subscriptionCreate = functions
+  .region('us-central1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onRequest((req, res) => {
+    cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+      }
+      try {
+        const { plan, userEmail, userId } = req.body || {};
+        if (!plan || !PLAN_IDS[plan]) {
+          return res.status(400).json({ error: 'Invalid plan. Use trial|standard|premium' });
+        }
+        if (!userEmail || !userId) {
+          return res.status(400).json({ error: 'userEmail and userId required' });
+        }
+
+        // Admin bypass — no payment required
+        if (isAdminEmail(userEmail)) {
+          await admin.firestore().doc(`usage/${userId}`).set({
+            isPremium: true,
+            plan: plan,
+            via: 'admin_bypass',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          return res.status(200).json({ admin: true });
+        }
+
+        const razorpay = getRazorpay();
+
+        // For trial: delay first charge by 7 days.
+        // For standard/premium: charge immediately.
+        const sevenDays = 7 * 24 * 60 * 60;
+        const startAt = plan === 'trial'
+          ? Math.floor(Date.now() / 1000) + sevenDays
+          : Math.floor(Date.now() / 1000);
+
+        const subscription = await razorpay.subscriptions.create({
+          plan_id: PLAN_IDS[plan],
+          total_count: 12,           // Run for 12 cycles (1 year)
+          customer_notify: 1,        // Razorpay sends email/SMS on each charge
+          start_at: startAt,
+          notes: {
+            plan: plan,
+            userId: userId,
+            userEmail: userEmail,
+          },
+        });
+
+        // Persist subscription mapping in Firestore so we can look it up
+        // when the webhook fires (webhook only knows subscription_id).
+        await admin.firestore().doc(`subscriptions/${subscription.id}`).set({
+          subscriptionId: subscription.id,
+          userId: userId,
+          userEmail: userEmail,
+          plan: plan,
+          status: subscription.status,
+          startAt: startAt,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return res.status(200).json({
+          subscriptionId: subscription.id,
+          shortUrl: subscription.short_url,
+          status: subscription.status,
+          startAt: startAt,
+        });
+      } catch (err) {
+        console.error('subscriptionCreate error:', err);
+        return res.status(500).json({
+          error: err.message || 'Failed to create subscription',
+        });
+      }
+    });
+  });
+
+/**
+ * POST /subscription/cancel
+ * Body: { subscriptionId, userEmail, immediate? }
+ * Default: cancel at end of current billing period (RBI-compliant).
+ */
+exports.subscriptionCancel = functions
+  .region('us-central1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onRequest((req, res) => {
+    cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+      }
+      try {
+        const { subscriptionId, userEmail, immediate = false } = req.body || {};
+        if (!subscriptionId) {
+          return res.status(400).json({ error: 'subscriptionId required' });
+        }
+
+        const razorpay = getRazorpay();
+        const result = await razorpay.subscriptions.cancel(
+          subscriptionId,
+          immediate ? false : true,  // cancel_at_cycle_end = true unless immediate
+        );
+
+        // Update Firestore mapping
+        await admin.firestore().doc(`subscriptions/${subscriptionId}`).set({
+          status: result.status,
+          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          cancelImmediate: immediate,
+        }, { merge: true });
+
+        // If immediate, revoke premium right now. Otherwise let webhook
+        // handle it when the period ends.
+        if (immediate) {
+          const sub = await admin.firestore()
+            .doc(`subscriptions/${subscriptionId}`).get();
+          const userId = sub.data()?.userId;
+          if (userId) {
+            await admin.firestore().doc(`usage/${userId}`).set({
+              isPremium: false,
+              plan: 'free',
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+        }
+
+        return res.status(200).json({
+          status: result.status,
+          cancelled: true,
+          immediate: immediate,
+        });
+      } catch (err) {
+        console.error('subscriptionCancel error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+    });
+  });
+
+/**
+ * POST /razorpay/webhook
+ * Razorpay fires this on subscription events.
+ * Configure webhook URL + secret in Razorpay dashboard.
+ *
+ * Events handled:
+ *   subscription.charged    → mark user premium (first ₹99 debit on day 7)
+ *   subscription.activated  → mandate registered (₹0 today)
+ *   subscription.cancelled  → revoke premium
+ *   subscription.completed  → 12 cycles done, free again
+ *   payment.failed          → log + future: notify user
+ */
+exports.razorpayWebhook = functions
+  .region('us-central1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onRequest(async (req, res) => {
+    try {
+      // 1. Verify webhook signature
+      const cfg = functions.config().razorpay || {};
+      const webhookSecret = cfg.webhook_secret || process.env.RAZORPAY_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        console.error('Webhook secret not configured');
+        return res.status(500).send('Server misconfigured');
+      }
+      const signature = req.headers['x-razorpay-signature'];
+      const body = JSON.stringify(req.body);
+      const expectedSig = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(body)
+        .digest('hex');
+      if (signature !== expectedSig) {
+        console.error('Invalid webhook signature');
+        return res.status(400).send('Invalid signature');
+      }
+
+      const event = req.body.event;
+      const payload = req.body.payload || {};
+      const sub = payload.subscription && payload.subscription.entity;
+      const subscriptionId = sub?.id;
+
+      console.log(`Razorpay webhook: ${event} for sub ${subscriptionId}`);
+
+      if (!subscriptionId) {
+        return res.status(200).send('No subscription in payload');
+      }
+
+      // Look up our Firestore record to find userId
+      const subDoc = await admin.firestore()
+        .doc(`subscriptions/${subscriptionId}`).get();
+      if (!subDoc.exists) {
+        console.warn(`Subscription ${subscriptionId} not found in Firestore`);
+        return res.status(200).send('ok');
+      }
+      const userId = subDoc.data().userId;
+      const plan = subDoc.data().plan;
+
+      switch (event) {
+        case 'subscription.charged':
+          // First real ₹99 debit on day 7, then monthly recurring
+          await admin.firestore().doc(`usage/${userId}`).set({
+            isPremium: true,
+            plan: plan,
+            lastChargedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          await admin.firestore()
+            .doc(`subscriptions/${subscriptionId}`).set({
+              status: 'active',
+              lastChargedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          break;
+
+        case 'subscription.activated':
+          // E-mandate registered (today, ₹0). For trial: user gets premium
+          // ACCESS during 7-day trial; for paid plans: immediate access.
+          await admin.firestore().doc(`usage/${userId}`).set({
+            isPremium: true,
+            plan: plan,
+            mandateActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          break;
+
+        case 'subscription.cancelled':
+        case 'subscription.completed':
+          await admin.firestore().doc(`usage/${userId}`).set({
+            isPremium: false,
+            plan: 'free',
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          break;
+
+        case 'subscription.halted':
+        case 'payment.failed':
+          // Don't revoke premium yet — Razorpay will retry. Just log.
+          await admin.firestore()
+            .doc(`subscriptions/${subscriptionId}`).set({
+              lastFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+              status: event === 'subscription.halted' ? 'halted' : 'payment_failed',
+            }, { merge: true });
+          break;
+
+        default:
+          console.log(`Unhandled event: ${event}`);
+      }
+
+      return res.status(200).send('ok');
+    } catch (err) {
+      console.error('Webhook error:', err);
+      return res.status(500).send('error');
+    }
   });
