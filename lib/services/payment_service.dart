@@ -46,7 +46,7 @@ class PaymentService {
   /// Open Razorpay subscription checkout for the given plan.
   ///
   /// Flow:
-  ///   1. POST /subscription/create on our server
+  ///   1. POST /subscriptionCreate on our server
   ///   2. Server creates a Razorpay subscription via Razorpay API,
   ///      returns subscriptionId + shortUrl
   ///   3. App opens Razorpay's payment sheet with subscriptionId
@@ -81,7 +81,7 @@ class PaymentService {
     try {
       final resp = await http
           .post(
-            Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/subscription/create'),
+            Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/subscriptionCreate'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'plan': plan.id,
@@ -219,7 +219,7 @@ class PaymentService {
     try {
       final resp = await http
           .post(
-            Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/subscription/cancel'),
+            Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/subscriptionCancel'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'subscriptionId': subscriptionId,
