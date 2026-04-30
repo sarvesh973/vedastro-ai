@@ -28,6 +28,20 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
+      # ─── Auto-bump versionCode on every push ───────────────────
+      # Uses GitHub run_number as the build number — strictly monotonic,
+      # so every Play Store upload gets a higher versionCode automatically.
+      # versionName (1.1.0) stays as-is in pubspec.yaml; only the +N is bumped.
+      - name: Auto-bump versionCode
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          # Read current "version: 1.1.0+2" and replace the +N
+          CURRENT_LINE=$(grep -E '^version:' pubspec.yaml)
+          VERSION_NAME=$(echo "$CURRENT_LINE" | sed -E 's/version:[[:space:]]*([^+]+)\+.*/\1/' | tr -d ' ')
+          echo "Setting version to: $VERSION_NAME+$BUILD_NUMBER"
+          sed -i -E "s/^version:.*/version: $VERSION_NAME+$BUILD_NUMBER/" pubspec.yaml
+          grep -E '^version:' pubspec.yaml
+
       - name: Inject Gemini API key into api_config.dart
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
