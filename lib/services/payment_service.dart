@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../config/api_config.dart';
@@ -6,6 +7,22 @@ import '../models/subscription_plan.dart';
 import 'storage_service.dart';
 import 'firestore_service.dart';
 import 'auth_service.dart';
+
+/// Get headers with Firebase Auth ID token. Cloud Functions reject
+/// unauthenticated subscription requests.
+Future<Map<String, String>> _authHeaders() async {
+  final user = FirebaseAuth.instance.currentUser;
+  String token = '';
+  if (user != null) {
+    try {
+      token = await user.getIdToken() ?? '';
+    } catch (_) {}
+  }
+  return {
+    'Content-Type': 'application/json',
+    if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+  };
+}
 
 /// Callback types for payment results
 typedef PaymentSuccessCallback = void Function(String paymentId, String plan);
@@ -79,14 +96,15 @@ class PaymentService {
     // Step 1 — ask our server to create a Razorpay subscription
     final Map<String, dynamic> serverResp;
     try {
+      final headers = await _authHeaders();
       final resp = await http
           .post(
             Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/subscriptionCreate'),
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: jsonEncode({
               'plan': plan.id,
-              'userEmail': userEmail,
-              'userId': uid,
+              // userEmail and userId come from the verified Firebase token
+              // server-side; we don't trust client-supplied values anymore.
             }),
           )
           .timeout(const Duration(seconds: 20));
@@ -215,16 +233,15 @@ class PaymentService {
     required String subscriptionId,
     bool immediate = false,
   }) async {
-    final userEmail = AuthService.userEmail ?? '';
     try {
+      final headers = await _authHeaders();
       final resp = await http
           .post(
             Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/subscriptionCancel'),
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: jsonEncode({
               'subscriptionId': subscriptionId,
-              'userEmail': userEmail,
-              'cancelAtCycleEnd': !immediate,
+              'immediate': immediate,
             }),
           )
           .timeout(const Duration(seconds: 20));
