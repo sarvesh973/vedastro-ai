@@ -561,13 +561,25 @@ Formatting rules:
   }
 
   static PalmLineResult _parsePalmLine(dynamic data) {
-    final map = data as Map<String, dynamic>;
+    // Defensive: handle null, wrong type, or missing fields without crashing.
+    // This used to crash with `data as Map<String, dynamic>` when Gemini
+    // returned null/string/list, taking down the palm reading screen.
+    if (data == null || data is! Map) {
+      return const PalmLineResult(
+        title: 'Reading',
+        emoji: '🔮',
+        insight: 'Unable to read this line clearly. Please try again with a clearer photo.',
+        meaning: '',
+        advice: '',
+      );
+    }
+    final map = Map<String, dynamic>.from(data);
     return PalmLineResult(
-      title: map['title'] ?? 'Reading',
-      emoji: map['emoji'] ?? '🔮',
-      insight: map['insight'] ?? '',
-      meaning: map['meaning'] ?? '',
-      advice: map['advice'] ?? '',
+      title: (map['title'] ?? 'Reading').toString(),
+      emoji: (map['emoji'] ?? '🔮').toString(),
+      insight: (map['insight'] ?? '').toString(),
+      meaning: (map['meaning'] ?? '').toString(),
+      advice: (map['advice'] ?? '').toString(),
     );
   }
 
