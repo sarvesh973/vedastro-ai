@@ -2,29 +2,59 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can read/write their own data
+
+    // ─── USERS ────────────────────────────────────────────────
+    // Profile + chat + palm readings — owner can read/write
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      // Chat subcollection
       match /chats/{chatId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // Palm readings subcollection
       match /palmReadings/{readingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /family/{profileId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
-    // Usage collection - users can read/write their own usage
+    // ─── USAGE ────────────────────────────────────────────────
+    // CRITICAL: client may READ but NEVER WRITE this — server-only.
+    // Otherwise users could flip isPremium=true and bypass paywall.
     match /usage/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;  // only Cloud Functions (admin SDK) can write
     }
 
-    // Vedic texts knowledge base - read-only for authenticated users
+    // ─── SUBSCRIPTIONS ────────────────────────────────────────
+    // Server-only writes via webhook + subscriptionCreate
+    match /subscriptions/{subId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+      allow write: if false;  // only Cloud Functions
+    }
+
+    // ─── VEDIC TEXTS (knowledge base) ─────────────────────────
+    // Read-only for authenticated users; writes via deploy script
     match /vedic_texts/{docId} {
       allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ─── HOROSCOPE CACHE ──────────────────────────────────────
+    // Server caches one horoscope per (sign × period × date)
+    // Clients read; only Cloud Functions write.
+    match /horoscope_cache/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Default deny everything else
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
