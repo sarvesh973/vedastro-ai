@@ -1,4 +1,26 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ─── PERMISSIONS ──────────────────────────────────────── -->
+    <!-- Required for all network calls (Firebase, Gemini, Razorpay).
+         Without this, release builds have ZERO network access. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- For palm reading via camera capture path -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- For palm reading via gallery (Android 13+ photo picker is permissionless,
+         but READ_MEDIA_IMAGES needed for full gallery access on older flows) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+
+    <!-- Razorpay payment intents -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission"/>
+
+    <!-- Camera feature is OPTIONAL — app works without it -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+
     <application
         android:label="VedAstro AI"
         android:name="${applicationName}"
