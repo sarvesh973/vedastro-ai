@@ -100,7 +100,9 @@ jobs:
         run: |
           if [ "$RELEASE_BUILD" = "true" ]; then
             echo "Building RELEASE APK (for sideload + testing)..."
-            flutter build apk --release
+            flutter build apk --release \
+              --obfuscate \
+              --split-debug-info=build/symbols
           else
             echo "Building DEBUG APK (no keystore)..."
             flutter build apk --debug
@@ -113,7 +115,9 @@ jobs:
         if: env.RELEASE_BUILD == 'true'
         run: |
           echo "Building RELEASE AAB for Play Store upload..."
-          flutter build appbundle --release
+          flutter build appbundle --release \
+            --obfuscate \
+            --split-debug-info=build/symbols
           ls -lh build/app/outputs/bundle/release/
 
       - name: Upload Release APK
@@ -131,6 +135,16 @@ jobs:
           name: VedAstro-AI-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
+
+      # Debug symbols for Crashlytics stack-trace deobfuscation.
+      # Upload these to Firebase Console → Crashlytics after each release.
+      - name: Upload Debug Symbols (for Crashlytics)
+        if: env.RELEASE_BUILD == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VedAstro-AI-debug-symbols
+          path: build/symbols
+          retention-days: 90
 
       - name: Upload Debug APK
         if: env.RELEASE_BUILD != 'true'
