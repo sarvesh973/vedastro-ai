@@ -57,7 +57,11 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
-            // Razorpay proguard rules
+            // R8 code shrinking + obfuscation + resource shrinking.
+            // Without this the AAB is 2-3× larger AND code (including Razorpay
+            // logic) is readable in plaintext after decompilation.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
