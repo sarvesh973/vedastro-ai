@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,22 @@ import '../config/vedic_system_prompt.dart';
 import '../models/user_profile.dart';
 import '../models/palm_result.dart';
 import '../models/chat_message.dart';
+
+/// Helper: get headers with Firebase Auth ID token for Cloud Function calls.
+/// Cloud Functions reject unauthenticated requests.
+Future<Map<String, String>> _authHeaders() async {
+  final user = FirebaseAuth.instance.currentUser;
+  String token = '';
+  if (user != null) {
+    try {
+      token = await user.getIdToken() ?? '';
+    } catch (_) {}
+  }
+  return {
+    'Content-Type': 'application/json',
+    if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+  };
+}
 
 /// Response from AI service, including text and optional Vedic sources
 class AiResponse {
@@ -65,10 +82,11 @@ class AiService {
     try {
       final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/chat');
       print('[RAG] Calling: $url');
+      final headers = await _authHeaders();
       final response = await http
           .post(
             url,
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: jsonEncode({
               'question': userMessage,
               'userProfile': profile.profileSummary,
@@ -114,37 +132,22 @@ class AiService {
     required UserProfile profile,
     required String period,
   }) async {
-    // 1) Try pre-generated cache — fail fast (5s) if not ready
-    try {
-      final cachedUrl = Uri.parse(
-        '${ApiConfig.cloudFunctionBaseUrl}/horoscope/cached?sign=${Uri.encodeComponent(profile.sunSign)}&period=${Uri.encodeComponent(period)}',
-      );
-      print('[HOROSCOPE] Trying cached: $cachedUrl');
-      final cachedResponse = await http.get(cachedUrl).timeout(const Duration(seconds: 5));
-
-      if (cachedResponse.statusCode == 200) {
-        final data = jsonDecode(cachedResponse.body) as Map<String, dynamic>;
-        if (data['_cached'] == true) {
-          print('[HOROSCOPE] Cache HIT for ${profile.sunSign} $period');
-          return data;
-        }
-      }
-    } catch (e) {
-      print('[HOROSCOPE] Cached endpoint miss/error: $e');
-    }
-
-    // 2) Cache empty — ask server for a live Gemini response
-    // Server's key is paid/fresh, avoids burning app-side free quota
+    // Server now caches automatically per (sign × period × date), so we just
+    // call /horoscope and the server returns cached or generates fresh.
     try {
       final liveUrl = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/horoscope');
-      print('[HOROSCOPE] Trying live server: $liveUrl');
+      print('[HOROSCOPE] Calling: $liveUrl');
+      final headers = await _authHeaders();
       final liveResponse = await http
           .post(
             liveUrl,
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: jsonEncode({
-              'sign': profile.sunSign,
-              'period': period,
+              'userProfile': {
+                'sunSign': profile.sunSign,
+                'westernSign': profile.westernSign,
+              },
+              'type': period,
             }),
           )
           .timeout(const Duration(seconds: 45));
