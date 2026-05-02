@@ -19,7 +19,9 @@ if (hasKeystore) {
 
 android {
     namespace = "com.vedastro.ai"
-    compileSdk = flutter.compileSdkVersion
+    // Pinned to API 34 — Play Store requires targetSdk >= 34 for new apps
+    // and updates after Aug 31, 2024. compileSdk must be >= targetSdk.
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -33,8 +35,8 @@ android {
 
     defaultConfig {
         applicationId = "com.vedastro.ai"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 23                    // Android 6.0+ — covers ~99% of devices
+        targetSdk = 34                 // Required by Play Store
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
