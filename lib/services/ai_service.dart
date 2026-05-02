@@ -234,7 +234,7 @@ class AiService {
     required String userMessage,
     required List<String> chatHistory,
   }) async {
-    // 1. Try Cloud Function (RAG-powered with real Vedic sources)
+    // 1. Try server (RAG-powered with real Vedic sources, auth-protected, rate-limited)
     final cloudResponse = await _tryCloudFunction(
       profile: profile,
       userMessage: userMessage,
@@ -242,26 +242,20 @@ class AiService {
     );
     if (cloudResponse != null) return cloudResponse;
 
-    // 2. Server down (free tier sleeping?) — try direct Gemini as backup
-    print('[FALLBACK] Server unavailable ($_lastError), trying direct Gemini...');
-    try {
-      _initChatModel(profile);
-      if (_currentChat != null) {
-        final geminiResponse = await _currentChat!
-            .sendMessage(Content.text(userMessage))
-            .timeout(const Duration(seconds: 45));
-        final text = geminiResponse.text;
-        if (text != null && text.isNotEmpty) {
-          print('[GEMINI-DIRECT] Success! ${text.length} chars');
-          return AiResponse(text: text);
-        }
-      }
-    } catch (e) {
-      print('[GEMINI-DIRECT] Also failed: $e');
+    // 2. Server failed. We deliberately DO NOT fall back to direct Gemini
+    // anymore — bundling the Gemini key in the APK is a security risk
+    // (decompilable in 5 minutes). Server-only path keeps the key safe.
+    //
+    // If the server returned a friendly auth/rate-limit error, that message
+    // is already in lastDiagnosticError. Otherwise show a generic offline message.
+    if (_lastError == 'AUTH_EXPIRED' ||
+        _lastError == 'RATE_LIMITED' ||
+        _lastError == 'SERVER_DOWN') {
+      return AiResponse(text: lastDiagnosticError);
     }
 
-    // 3. Everything failed — use smart template fallback (FREE, no API cost)
-    print('[FALLBACK] All AI failed, using template response');
+    // 3. Network or unknown error — show template guidance
+    print('[FALLBACK] Server unreachable, using template response');
     return AiResponse(text: _getFallbackResponse(profile, userMessage));
   }
 
@@ -311,103 +305,18 @@ class AiService {
       print('[HOROSCOPE-CACHE] Read error: $e');
     }
 
-    // 1. Try Cloud Function (cached first, then live)
+    // 1. Try server (RAG, auth-protected, cached per sign × period × date)
     final cloudResult = await _tryCloudHoroscope(profile: profile, period: period);
     if (cloudResult != null) {
       _saveHoroscopeToCache(cacheKey, cloudResult);
       return cloudResult;
     }
 
-    // 2. Server down — try direct Gemini for unique horoscope
-    print('[HOROSCOPE] Server unavailable, trying direct Gemini...');
-    try {
-      if (!ApiConfig.isConfigured) {
-        lastDiagnosticError = 'API key not configured (key=${ApiConfig.geminiApiKey.length} chars, starts with ${ApiConfig.geminiApiKey.length > 4 ? ApiConfig.geminiApiKey.substring(0, 4) : "??"})';
-        throw Exception(lastDiagnosticError);
-      }
+    // 2. Server failed. Direct-Gemini fallback REMOVED for security
+    // (the bundled API key was extractable from a decompiled APK,
+    // letting attackers run Gemini calls on the user's bill).
 
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: ApiConfig.geminiApiKey,
-        generationConfig: GenerationConfig(
-          temperature: 0.9,
-          maxOutputTokens: 1000,
-        ),
-      );
-
-      final periodLabel = period == 'daily'
-          ? 'today'
-          : period == 'tomorrow'
-              ? 'tomorrow'
-              : period == 'weekly'
-                  ? 'this week'
-                  : 'this month';
-
-      final firstName = profile.firstName;
-      final prompt = '''You are VedAstro Guruji, a Vedic astrologer. Generate a ${period} horoscope for ${profile.sunSign} sign for $periodLabel.
-${firstName.isNotEmpty ? 'User\'s first name: $firstName (use it at most once per section, never with "beta"/"ji"/"dear" suffix).' : ''}
-
-CRITICAL: Return ONLY valid compact JSON on a single line. No markdown, no code blocks, no newlines inside string values, no unescaped quotes.
-
-{"overall":"3-4 sentence Hinglish overview","love":"2-3 sentences about relationships","career":"2-3 sentences about work","health":"2-3 sentences about health","luckyNumber":7,"luckyColor":"Yellow","luckyDay":"Thursday","rating":4,"sources":"BPHS Ch.X; Phaladeepika Ch.Y"}
-
-Tone & language rules:
-- Warm Hinglish, formal "aap" form — never "tum" / "tu".
-- NO "beta", NO "bachcha", NO "Jai Shree Ram", NO religious salutations, NO "ji" after the name.
-- Address user by FIRST NAME only if you mention them.
-- Body sections (overall/love/career/health) should be readable prose. Do NOT stuff multiple "(BPHS Ch.X)" inline in the body — only ONE inline reference max across the whole body.
-- Any extra references must go in the "sources" field as a short semicolon-separated list (e.g. "BPHS Ch.7; Phaladeepika Ch.26 Sloka 18"). If only one source was used, put it there alone.
-
-Formatting rules:
-- All string values single-line (no \\n).
-- Use single quotes ' inside string values, not ".
-- Be specific to ${profile.sunSign}.''';
-
-      final response = await model
-          .generateContent([Content.text(prompt)])
-          .timeout(const Duration(seconds: 30));
-
-      final text = response.text;
-      if (text != null && text.isNotEmpty) {
-        var cleaned = text.trim();
-        if (cleaned.startsWith('```')) {
-          cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
-          cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
-          cleaned = cleaned.trim();
-        }
-
-        // Try strict JSON parse first
-        Map<String, dynamic>? data;
-        try {
-          data = jsonDecode(cleaned) as Map<String, dynamic>;
-          print('[GEMINI-DIRECT] Horoscope success for ${profile.sunSign} $period');
-        } catch (_) {
-          // Fallback: extract fields with regex when Gemini returns malformed JSON
-          print('[GEMINI-DIRECT] Strict JSON failed, trying regex extraction');
-          data = _extractHoroscopeFields(cleaned);
-          if (data != null) {
-            print('[GEMINI-DIRECT] Regex extraction succeeded');
-          }
-        }
-
-        if (data != null) {
-          _saveHoroscopeToCache(cacheKey, data);
-          return data;
-        }
-      }
-    } catch (e) {
-      final errStr = e.toString();
-      // Detect quota/rate-limit errors for user-friendly message
-      if (errStr.contains('quota') || errStr.contains('429') ||
-          errStr.contains('RESOURCE_EXHAUSTED')) {
-        lastDiagnosticError = 'Daily AI quota reached. Tomorrow fresh horoscope milega!';
-      } else {
-        lastDiagnosticError = errStr.length > 200 ? errStr.substring(0, 200) : errStr;
-      }
-      print('[GEMINI-DIRECT] Horoscope also failed: $e');
-    }
-
-    // 3. Everything failed — clean fallback (no DEBUG text in production)
+    // 3. Show graceful template fallback
     // Quota message only shown if it was a rate-limit error
     final isQuotaError = lastDiagnosticError.contains('Daily AI quota');
     final noticeLine = isQuotaError
