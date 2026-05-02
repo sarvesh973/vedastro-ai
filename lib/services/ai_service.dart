@@ -116,6 +116,31 @@ class AiService {
 
         print('[RAG] Success! chartUsed=${data['chartUsed']}, sources=${sources.length}');
         return AiResponse(text: answer, sources: sources);
+      } else if (response.statusCode == 401) {
+        // Token expired or invalid — surface user-friendly message and signal re-login
+        _lastError = 'AUTH_EXPIRED';
+        lastDiagnosticError = 'Your session expired. Please log in again.';
+        print('[RAG] 401 Unauthorized — token expired or missing');
+        // Force-refresh token in case it's just stale; let next call retry
+        try {
+          await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        } catch (_) {}
+      } else if (response.statusCode == 429) {
+        // Rate limit hit — parse server's friendly message
+        _lastError = 'RATE_LIMITED';
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          lastDiagnosticError = data['error'] as String? ??
+              'Daily chat limit reached. Upgrade your plan for more questions.';
+        } catch (_) {
+          lastDiagnosticError = 'Daily chat limit reached. Upgrade your plan for more questions.';
+        }
+        print('[RAG] 429 Rate limited — $lastDiagnosticError');
+        return AiResponse(text: lastDiagnosticError, sources: const []);
+      } else if (response.statusCode == 503) {
+        _lastError = 'SERVER_DOWN';
+        lastDiagnosticError = 'Our astrology service is briefly unavailable. Please try again in a moment.';
+        print('[RAG] 503 Service unavailable');
       } else {
         _lastError = 'RAG error ${response.statusCode}: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}';
         print('[RAG] $_lastError');
@@ -160,6 +185,22 @@ class AiService {
           print('[HOROSCOPE] Live server HIT for ${profile.sunSign} $period');
           return data;
         }
+      } else if (liveResponse.statusCode == 401) {
+        print('[HOROSCOPE] 401 — refreshing token');
+        try {
+          await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        } catch (_) {}
+      } else if (liveResponse.statusCode == 429) {
+        print('[HOROSCOPE] 429 — daily limit');
+        try {
+          final data = jsonDecode(liveResponse.body) as Map<String, dynamic>;
+          return {
+            'overall': data['error'] ?? 'Daily horoscope limit reached. Upgrade your plan for more.',
+            'love': '', 'career': '', 'health': '',
+            'luckyNumber': 7, 'luckyColor': 'Gold', 'luckyDay': 'Today',
+            'rating': 0, '_rateLimited': true,
+          };
+        } catch (_) {}
       }
       print('[HOROSCOPE] Live server returned ${liveResponse.statusCode}');
     } catch (e) {
