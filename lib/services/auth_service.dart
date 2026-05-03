@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api_config.dart';
+import 'analytics_service.dart';
 
 /// Firebase Authentication Service
 class AuthService {
@@ -54,6 +55,12 @@ class AuthService {
         await credential.user?.updateDisplayName(displayName);
       }
 
+      // Analytics: track signup + associate with UID
+      if (credential.user != null) {
+        await Analytics.signupCompleted(method: 'email');
+        await Analytics.setUser(uid: credential.user!.uid);
+      }
+
       return AuthResult(success: true, user: credential.user);
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: _getErrorMessage(e.code));
@@ -72,6 +79,10 @@ class AuthService {
         email: email,
         password: password,
       );
+      if (credential.user != null) {
+        await Analytics.loginCompleted(method: 'email');
+        await Analytics.setUser(uid: credential.user!.uid);
+      }
       return AuthResult(success: true, user: credential.user);
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: _getErrorMessage(e.code));
@@ -108,6 +119,16 @@ class AuthService {
       );
 
       final userCredential = await _auth.signInWithCredential(credential);
+      if (userCredential.user != null) {
+        // Distinguish first-time signup vs subsequent login
+        final isNew = userCredential.additionalUserInfo?.isNewUser ?? false;
+        if (isNew) {
+          await Analytics.signupCompleted(method: 'google');
+        } else {
+          await Analytics.loginCompleted(method: 'google');
+        }
+        await Analytics.setUser(uid: userCredential.user!.uid);
+      }
       return AuthResult(success: true, user: userCredential.user);
     } catch (e) {
       return AuthResult(success: false, error: 'Google error: $e');
@@ -207,6 +228,7 @@ class AuthService {
       await _googleSignIn.signOut();
     } catch (_) {}
     await _auth.signOut();
+    await Analytics.clearUser();
   }
 
   // ─── Error Messages ──────────────────────────────
