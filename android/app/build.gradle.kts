@@ -19,9 +19,11 @@ if (hasKeystore) {
 
 android {
     namespace = "com.vedastro.ai"
-    // Pinned to API 34 — Play Store requires targetSdk >= 34 for new apps
-    // and updates after Aug 31, 2024. compileSdk must be >= targetSdk.
-    compileSdk = 34
+    // compileSdk = 36 to satisfy AndroidX libs (activity 1.12.4, core 1.18.0).
+    // targetSdk stays at 34 (Play Store minimum, avoids new runtime behavior
+    // changes from API 35/36). compileSdk only affects what APIs the code can
+    // call — does NOT change app's runtime target.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
