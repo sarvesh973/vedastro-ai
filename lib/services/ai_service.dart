@@ -10,6 +10,7 @@ import '../config/vedic_system_prompt.dart';
 import '../models/user_profile.dart';
 import '../models/palm_result.dart';
 import '../models/chat_message.dart';
+import 'analytics_service.dart';
 
 /// Helper: get headers with Firebase Auth ID token for Cloud Function calls.
 /// Cloud Functions reject unauthenticated requests.
@@ -234,13 +235,25 @@ class AiService {
     required String userMessage,
     required List<String> chatHistory,
   }) async {
+    // Analytics: chat sent (no PII — only length bucket + chart presence)
+    Analytics.chatSent(
+      promptLen: userMessage.length,
+      hasChart: profile.timeOfBirth != null && profile.timeOfBirth!.isNotEmpty,
+    );
+
     // 1. Try server (RAG-powered with real Vedic sources, auth-protected, rate-limited)
     final cloudResponse = await _tryCloudFunction(
       profile: profile,
       userMessage: userMessage,
       chatHistory: chatHistory,
     );
-    if (cloudResponse != null) return cloudResponse;
+    if (cloudResponse != null) {
+      Analytics.chatReceived(sourcesCount: cloudResponse.sources.length);
+      return cloudResponse;
+    }
+    if (_lastError == 'RATE_LIMITED') {
+      Analytics.rateLimitHit(feature: 'chat');
+    }
 
     // 2. Server failed. We deliberately DO NOT fall back to direct Gemini
     // anymore — bundling the Gemini key in the APK is a security risk
@@ -402,6 +415,7 @@ class AiService {
 
   /// Palm reading using Gemini Vision
   static Future<PalmReadingResult> analyzePalm(String imagePath) async {
+    Analytics.palmUploaded(source: imagePath.contains('camera') ? 'camera' : 'gallery');
     try {
       // Read + base64-encode the image. Image picker is already capped at
       // 1200x1200 + 85% quality, so this is typically ~200-500 KB.
@@ -446,6 +460,7 @@ class AiService {
           );
         }
 
+        Analytics.palmAnalyzed(success: true);
         return PalmReadingResult(
           loveLine: _parsePalmLine(data['loveLine']),
           careerLine: _parsePalmLine(data['careerLine']),
@@ -459,6 +474,7 @@ class AiService {
           'Your session expired. Please log in again.',
         );
       } else if (response.statusCode == 429) {
+        Analytics.rateLimitHit(feature: 'palm');
         try {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           throw PalmValidationException(
