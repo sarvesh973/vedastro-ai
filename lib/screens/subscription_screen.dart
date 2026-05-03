@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
+import '../models/subscription_plan.dart';
+import '../models/subscription_status.dart';
 import '../providers/providers.dart';
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../services/payment_service.dart';
 import '../services/storage_service.dart';
 import 'paywall_screen.dart';
@@ -27,7 +31,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPremium = ref.watch(isPremiumProvider);
     final isAdmin = AuthService.isAdmin;
 
     return Scaffold(
@@ -51,10 +54,24 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           children: [
             if (isAdmin)
               _buildAdminCard()
-            else if (isPremium)
-              _buildActiveCard()
             else
-              _buildNoSubscriptionCard(),
+              // Live subscription state from Firestore. Stream means the
+              // screen updates the moment a webhook lands (paid/refunded/
+              // cancelled) without the user having to refresh.
+              StreamBuilder<SubscriptionStatus>(
+                stream: FirestoreService.subscriptionStream(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting &&
+                      !snap.hasData) {
+                    return _buildLoadingCard();
+                  }
+                  final sub = snap.data ?? SubscriptionStatus.free;
+                  if (sub.isActive) {
+                    return _buildActiveCard(sub);
+                  }
+                  return _buildNoSubscriptionCard();
+                },
+              ),
 
             const SizedBox(height: 28),
 
@@ -66,7 +83,52 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     );
   }
 
-  Widget _buildActiveCard() {
+  Widget _buildLoadingCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: AppColors.purpleLight),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveCard(SubscriptionStatus sub) {
+    final df = DateFormat('d MMM yyyy');
+    final isTrialing = sub.state == SubscriptionState.trialing;
+    final isCancelled = sub.state == SubscriptionState.cancelledPending;
+    final periodEnds = sub.currentPeriodEndsAt;
+    final trialEnds = sub.trialEndsAt;
+
+    String headlineLabel;
+    String headlineSub;
+    if (isTrialing) {
+      headlineLabel = 'Free Trial — ${sub.trialDaysRemaining}d left';
+      headlineSub = trialEnds != null
+          ? 'First ₹99 charge on ${df.format(trialEnds)}'
+          : 'Auto-renews ₹99/month after day 7';
+    } else if (isCancelled) {
+      headlineLabel = 'Cancelled — access until period end';
+      headlineSub = periodEnds != null
+          ? 'Premium ends on ${df.format(periodEnds)}'
+          : 'Premium ends at the end of your current period';
+    } else {
+      headlineLabel = '${sub.plan.displayName} — Active';
+      headlineSub = periodEnds != null
+          ? 'Renews on ${df.format(periodEnds)} • ₹${sub.plan.recurringPaise ~/ 100}/mo'
+          : '₹${sub.plan.recurringPaise ~/ 100}/month';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -102,22 +164,22 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                         color: AppColors.goldLight, size: 24),
                   ),
                   const SizedBox(width: 14),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Active Subscription',
-                          style: TextStyle(
+                          headlineLabel,
+                          style: const TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Premium features unlocked',
-                          style: TextStyle(
+                          headlineSub,
+                          style: const TextStyle(
                               color: AppColors.textMuted, fontSize: 13),
                         ),
                       ],
@@ -132,11 +194,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   color: AppColors.background.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Text(
-                  "Manage your subscription below. You can cancel anytime — "
-                  "you'll keep premium access until the end of your current "
-                  "paid period.",
-                  style: TextStyle(
+                child: Text(
+                  isCancelled
+                      ? "Your subscription is already cancelled. You'll keep "
+                          "premium access until the end of your current paid "
+                          "period, then automatically move to the Free plan."
+                      : "Manage your subscription below. You can cancel anytime — "
+                          "you'll keep premium access until the end of your current "
+                          "paid period.",
+                  style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
                     height: 1.5,
@@ -153,11 +219,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         const SizedBox(height: 16),
 
         // ─── Cancel button (the legal requirement) ─────────────
-        SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: OutlinedButton.icon(
-            onPressed: _isCancelling ? null : _confirmCancel,
+        // Hidden if subscription is already cancelled-pending — there's
+        // nothing to cancel twice. Stays visible for trialing + active.
+        if (!isCancelled)
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: OutlinedButton.icon(
+              onPressed: _isCancelling
+                  ? null
+                  : () => _confirmCancel(sub.razorpaySubscriptionId),
             icon: _isCancelling
                 ? const SizedBox(
                     width: 18,
@@ -380,7 +451,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
   // ─── Cancel flow ────────────────────────────────────────────────
 
-  void _confirmCancel() {
+  void _confirmCancel(String? subscriptionId) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -406,7 +477,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _executeCancel();
+              _executeCancel(subscriptionId);
             },
             child: const Text('Yes, Cancel',
                 style: TextStyle(color: AppColors.error)),
@@ -416,14 +487,44 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     );
   }
 
-  void _executeCancel() async {
+  void _showSupportFallback() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18)),
+        title: const Text("Couldn't find your subscription",
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: const Text(
+          "We couldn't locate your subscription record automatically. "
+          "Please email support@vedastro.ai with your registered email "
+          "and we'll cancel within 24 hours.",
+          style:
+              TextStyle(color: AppColors.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK',
+                style: TextStyle(color: AppColors.purpleLight)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _executeCancel(String? subscriptionId) async {
     setState(() => _isCancelling = true);
 
-    // We don't yet store the Razorpay subscription ID locally — until
-    // SubscriptionStatus is persisted in Firestore + loaded back into the
-    // app, we ask the user to email support for now. This is a known gap.
-    // TODO: load subscription state from Firestore + pass real ID here.
-    final subscriptionId = StorageService.userEmail ?? 'unknown';
+    // The subscription ID comes from Firestore (synced by webhook on
+    // subscription.activated). If for some reason it's not yet present
+    // (e.g. webhook hasn't fired), fall back to email-based contact.
+    if (subscriptionId == null || subscriptionId.isEmpty) {
+      setState(() => _isCancelling = false);
+      _showSupportFallback();
+      return;
+    }
 
     final ok = await PaymentService.cancelSubscription(
       subscriptionId: subscriptionId,

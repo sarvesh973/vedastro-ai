@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_profile.dart';
+import '../models/subscription_plan.dart';
+import '../models/subscription_status.dart';
 import 'auth_service.dart';
 
 /// Cloud Firestore service for persistent cloud storage
@@ -9,6 +11,85 @@ class FirestoreService {
 
   /// Get current user's UID (or null)
   static String? get _uid => AuthService.currentUser?.uid;
+
+  // ─── Subscription State (read-side) ────────────────────────────
+  //
+  // The webhook (vedastro-rag-server -> /subscription/webhook) writes
+  // subscription state to:
+  //   users/{uid}/subscription/current
+  // This method reads it back so the app can show the user their plan
+  // and pass the real razorpaySubscriptionId to /subscription/cancel.
+  //
+  // Returns SubscriptionStatus.free if the user has no record yet
+  // (e.g. brand new user, or doc was deleted on account deletion).
+
+  /// Loads the current user's subscription state from Firestore.
+  /// Safe to call frequently — reads one doc, single network round-trip.
+  static Future<SubscriptionStatus> loadCurrentSubscription() async {
+    if (_uid == null) return SubscriptionStatus.free;
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(_uid!)
+          .collection('subscription')
+          .doc('current')
+          .get();
+
+      if (!doc.exists || doc.data() == null) {
+        return SubscriptionStatus.free;
+      }
+      final data = doc.data()!;
+      // Firestore returns Timestamp objects; convert to ISO strings so
+      // SubscriptionStatus.fromJson can parse them uniformly.
+      final normalized = <String, dynamic>{
+        ...data,
+        'trialEndsAt': _tsToIso(data['trialEndsAt']),
+        'currentPeriodEndsAt': _tsToIso(data['currentPeriodEndsAt']),
+        'cancelledAt': _tsToIso(data['cancelledAt']),
+      };
+      return SubscriptionStatus.fromJson(normalized);
+    } catch (e) {
+      // Network / permission failure -> conservative fallback. The app's
+      // local isPremium flag still drives gating until cloud catches up.
+      return SubscriptionStatus.free;
+    }
+  }
+
+  /// Real-time stream of subscription state — useful for the Settings
+  /// → Subscription screen so it updates the moment a webhook fires
+  /// (e.g. user just paid, screen shows "Active" without manual refresh).
+  static Stream<SubscriptionStatus> subscriptionStream() {
+    if (_uid == null) {
+      return Stream.value(SubscriptionStatus.free);
+    }
+    return _db
+        .collection('users')
+        .doc(_uid!)
+        .collection('subscription')
+        .doc('current')
+        .snapshots()
+        .map((snap) {
+      if (!snap.exists || snap.data() == null) {
+        return SubscriptionStatus.free;
+      }
+      final data = snap.data()!;
+      final normalized = <String, dynamic>{
+        ...data,
+        'trialEndsAt': _tsToIso(data['trialEndsAt']),
+        'currentPeriodEndsAt': _tsToIso(data['currentPeriodEndsAt']),
+        'cancelledAt': _tsToIso(data['cancelledAt']),
+      };
+      return SubscriptionStatus.fromJson(normalized);
+    });
+  }
+
+  static String? _tsToIso(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Timestamp) return raw.toDate().toIso8601String();
+    if (raw is DateTime) return raw.toIso8601String();
+    if (raw is String) return raw;
+    return null;
+  }
 
   // ─── User Profile ───────────────────────────────
 
