@@ -1,0 +1,21 @@
+title: VedAstro AI — Legal
+description: Privacy Policy & Terms of Service
+theme: jekyll-theme-minimal
+
+# Auto-process markdown files at root of docs/
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+# Don't publish these internal docs as web pages
+exclude:
+  - KEYSTORE_SETUP.md
+  - PLAY_STORE_LAUNCH.md
+  - SECURE_DEPLOY.md
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
