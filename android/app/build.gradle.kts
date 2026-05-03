@@ -19,7 +19,11 @@ if (hasKeystore) {
 
 android {
     namespace = "com.vedastro.ai"
-    compileSdk = flutter.compileSdkVersion
+    // compileSdk = 36 to satisfy AndroidX libs (activity 1.12.4, core 1.18.0).
+    // targetSdk stays at 34 (Play Store minimum, avoids new runtime behavior
+    // changes from API 35/36). compileSdk only affects what APIs the code can
+    // call — does NOT change app's runtime target.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -33,8 +37,8 @@ android {
 
     defaultConfig {
         applicationId = "com.vedastro.ai"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 23                    // Android 6.0+ — covers ~99% of devices
+        targetSdk = 34                 // Required by Play Store
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

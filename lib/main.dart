@@ -12,6 +12,7 @@ import 'theme/app_theme.dart';
 import 'services/storage_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
+import 'services/analytics_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
@@ -47,6 +48,11 @@ void main() async {
     }
     await FirebaseCrashlytics.instance
         .setCrashlyticsCollectionEnabled(!kDebugMode);
+
+    // ─── Analytics ──────────────────────────────────────────
+    // Tracks: signup, chat, palm, paywall, subscription events.
+    // Never logs PII (name/email/birth/chat content).
+    await Analytics.init();
 
     // Initialize persistent storage
     await StorageService.init();
@@ -126,6 +132,10 @@ class VedAstroApp extends StatelessWidget {
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
+      ],
+      // Auto-track screen views (screen_view event) for funnel analysis
+      navigatorObservers: [
+        if (Analytics.observer != null) Analytics.observer!,
       ],
       home: _getStartScreen(),
       // Global error handling for UI

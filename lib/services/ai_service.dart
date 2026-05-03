@@ -10,6 +10,7 @@ import '../config/vedic_system_prompt.dart';
 import '../models/user_profile.dart';
 import '../models/palm_result.dart';
 import '../models/chat_message.dart';
+import 'analytics_service.dart';
 
 /// Helper: get headers with Firebase Auth ID token for Cloud Function calls.
 /// Cloud Functions reject unauthenticated requests.
@@ -116,6 +117,31 @@ class AiService {
 
         print('[RAG] Success! chartUsed=${data['chartUsed']}, sources=${sources.length}');
         return AiResponse(text: answer, sources: sources);
+      } else if (response.statusCode == 401) {
+        // Token expired or invalid — surface user-friendly message and signal re-login
+        _lastError = 'AUTH_EXPIRED';
+        lastDiagnosticError = 'Your session expired. Please log in again.';
+        print('[RAG] 401 Unauthorized — token expired or missing');
+        // Force-refresh token in case it's just stale; let next call retry
+        try {
+          await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        } catch (_) {}
+      } else if (response.statusCode == 429) {
+        // Rate limit hit — parse server's friendly message
+        _lastError = 'RATE_LIMITED';
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          lastDiagnosticError = data['error'] as String? ??
+              'Daily chat limit reached. Upgrade your plan for more questions.';
+        } catch (_) {
+          lastDiagnosticError = 'Daily chat limit reached. Upgrade your plan for more questions.';
+        }
+        print('[RAG] 429 Rate limited — $lastDiagnosticError');
+        return AiResponse(text: lastDiagnosticError, sources: const []);
+      } else if (response.statusCode == 503) {
+        _lastError = 'SERVER_DOWN';
+        lastDiagnosticError = 'Our astrology service is briefly unavailable. Please try again in a moment.';
+        print('[RAG] 503 Service unavailable');
       } else {
         _lastError = 'RAG error ${response.statusCode}: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}';
         print('[RAG] $_lastError');
@@ -160,6 +186,22 @@ class AiService {
           print('[HOROSCOPE] Live server HIT for ${profile.sunSign} $period');
           return data;
         }
+      } else if (liveResponse.statusCode == 401) {
+        print('[HOROSCOPE] 401 — refreshing token');
+        try {
+          await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        } catch (_) {}
+      } else if (liveResponse.statusCode == 429) {
+        print('[HOROSCOPE] 429 — daily limit');
+        try {
+          final data = jsonDecode(liveResponse.body) as Map<String, dynamic>;
+          return {
+            'overall': data['error'] ?? 'Daily horoscope limit reached. Upgrade your plan for more.',
+            'love': '', 'career': '', 'health': '',
+            'luckyNumber': 7, 'luckyColor': 'Gold', 'luckyDay': 'Today',
+            'rating': 0, '_rateLimited': true,
+          };
+        } catch (_) {}
       }
       print('[HOROSCOPE] Live server returned ${liveResponse.statusCode}');
     } catch (e) {
@@ -193,34 +235,40 @@ class AiService {
     required String userMessage,
     required List<String> chatHistory,
   }) async {
-    // 1. Try Cloud Function (RAG-powered with real Vedic sources)
+    // Analytics: chat sent (no PII — only length bucket + chart presence)
+    Analytics.chatSent(
+      promptLen: userMessage.length,
+      hasChart: profile.timeOfBirth != null && profile.timeOfBirth!.isNotEmpty,
+    );
+
+    // 1. Try server (RAG-powered with real Vedic sources, auth-protected, rate-limited)
     final cloudResponse = await _tryCloudFunction(
       profile: profile,
       userMessage: userMessage,
       chatHistory: chatHistory,
     );
-    if (cloudResponse != null) return cloudResponse;
-
-    // 2. Server down (free tier sleeping?) — try direct Gemini as backup
-    print('[FALLBACK] Server unavailable ($_lastError), trying direct Gemini...');
-    try {
-      _initChatModel(profile);
-      if (_currentChat != null) {
-        final geminiResponse = await _currentChat!
-            .sendMessage(Content.text(userMessage))
-            .timeout(const Duration(seconds: 45));
-        final text = geminiResponse.text;
-        if (text != null && text.isNotEmpty) {
-          print('[GEMINI-DIRECT] Success! ${text.length} chars');
-          return AiResponse(text: text);
-        }
-      }
-    } catch (e) {
-      print('[GEMINI-DIRECT] Also failed: $e');
+    if (cloudResponse != null) {
+      Analytics.chatReceived(sourcesCount: cloudResponse.sources.length);
+      return cloudResponse;
+    }
+    if (_lastError == 'RATE_LIMITED') {
+      Analytics.rateLimitHit(feature: 'chat');
     }
 
-    // 3. Everything failed — use smart template fallback (FREE, no API cost)
-    print('[FALLBACK] All AI failed, using template response');
+    // 2. Server failed. We deliberately DO NOT fall back to direct Gemini
+    // anymore — bundling the Gemini key in the APK is a security risk
+    // (decompilable in 5 minutes). Server-only path keeps the key safe.
+    //
+    // If the server returned a friendly auth/rate-limit error, that message
+    // is already in lastDiagnosticError. Otherwise show a generic offline message.
+    if (_lastError == 'AUTH_EXPIRED' ||
+        _lastError == 'RATE_LIMITED' ||
+        _lastError == 'SERVER_DOWN') {
+      return AiResponse(text: lastDiagnosticError);
+    }
+
+    // 3. Network or unknown error — show template guidance
+    print('[FALLBACK] Server unreachable, using template response');
     return AiResponse(text: _getFallbackResponse(profile, userMessage));
   }
 
@@ -270,103 +318,18 @@ class AiService {
       print('[HOROSCOPE-CACHE] Read error: $e');
     }
 
-    // 1. Try Cloud Function (cached first, then live)
+    // 1. Try server (RAG, auth-protected, cached per sign × period × date)
     final cloudResult = await _tryCloudHoroscope(profile: profile, period: period);
     if (cloudResult != null) {
       _saveHoroscopeToCache(cacheKey, cloudResult);
       return cloudResult;
     }
 
-    // 2. Server down — try direct Gemini for unique horoscope
-    print('[HOROSCOPE] Server unavailable, trying direct Gemini...');
-    try {
-      if (!ApiConfig.isConfigured) {
-        lastDiagnosticError = 'API key not configured (key=${ApiConfig.geminiApiKey.length} chars, starts with ${ApiConfig.geminiApiKey.length > 4 ? ApiConfig.geminiApiKey.substring(0, 4) : "??"})';
-        throw Exception(lastDiagnosticError);
-      }
+    // 2. Server failed. Direct-Gemini fallback REMOVED for security
+    // (the bundled API key was extractable from a decompiled APK,
+    // letting attackers run Gemini calls on the user's bill).
 
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: ApiConfig.geminiApiKey,
-        generationConfig: GenerationConfig(
-          temperature: 0.9,
-          maxOutputTokens: 1000,
-        ),
-      );
-
-      final periodLabel = period == 'daily'
-          ? 'today'
-          : period == 'tomorrow'
-              ? 'tomorrow'
-              : period == 'weekly'
-                  ? 'this week'
-                  : 'this month';
-
-      final firstName = profile.firstName;
-      final prompt = '''You are VedAstro Guruji, a Vedic astrologer. Generate a ${period} horoscope for ${profile.sunSign} sign for $periodLabel.
-${firstName.isNotEmpty ? 'User\'s first name: $firstName (use it at most once per section, never with "beta"/"ji"/"dear" suffix).' : ''}
-
-CRITICAL: Return ONLY valid compact JSON on a single line. No markdown, no code blocks, no newlines inside string values, no unescaped quotes.
-
-{"overall":"3-4 sentence Hinglish overview","love":"2-3 sentences about relationships","career":"2-3 sentences about work","health":"2-3 sentences about health","luckyNumber":7,"luckyColor":"Yellow","luckyDay":"Thursday","rating":4,"sources":"BPHS Ch.X; Phaladeepika Ch.Y"}
-
-Tone & language rules:
-- Warm Hinglish, formal "aap" form — never "tum" / "tu".
-- NO "beta", NO "bachcha", NO "Jai Shree Ram", NO religious salutations, NO "ji" after the name.
-- Address user by FIRST NAME only if you mention them.
-- Body sections (overall/love/career/health) should be readable prose. Do NOT stuff multiple "(BPHS Ch.X)" inline in the body — only ONE inline reference max across the whole body.
-- Any extra references must go in the "sources" field as a short semicolon-separated list (e.g. "BPHS Ch.7; Phaladeepika Ch.26 Sloka 18"). If only one source was used, put it there alone.
-
-Formatting rules:
-- All string values single-line (no \\n).
-- Use single quotes ' inside string values, not ".
-- Be specific to ${profile.sunSign}.''';
-
-      final response = await model
-          .generateContent([Content.text(prompt)])
-          .timeout(const Duration(seconds: 30));
-
-      final text = response.text;
-      if (text != null && text.isNotEmpty) {
-        var cleaned = text.trim();
-        if (cleaned.startsWith('```')) {
-          cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
-          cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
-          cleaned = cleaned.trim();
-        }
-
-        // Try strict JSON parse first
-        Map<String, dynamic>? data;
-        try {
-          data = jsonDecode(cleaned) as Map<String, dynamic>;
-          print('[GEMINI-DIRECT] Horoscope success for ${profile.sunSign} $period');
-        } catch (_) {
-          // Fallback: extract fields with regex when Gemini returns malformed JSON
-          print('[GEMINI-DIRECT] Strict JSON failed, trying regex extraction');
-          data = _extractHoroscopeFields(cleaned);
-          if (data != null) {
-            print('[GEMINI-DIRECT] Regex extraction succeeded');
-          }
-        }
-
-        if (data != null) {
-          _saveHoroscopeToCache(cacheKey, data);
-          return data;
-        }
-      }
-    } catch (e) {
-      final errStr = e.toString();
-      // Detect quota/rate-limit errors for user-friendly message
-      if (errStr.contains('quota') || errStr.contains('429') ||
-          errStr.contains('RESOURCE_EXHAUSTED')) {
-        lastDiagnosticError = 'Daily AI quota reached. Tomorrow fresh horoscope milega!';
-      } else {
-        lastDiagnosticError = errStr.length > 200 ? errStr.substring(0, 200) : errStr;
-      }
-      print('[GEMINI-DIRECT] Horoscope also failed: $e');
-    }
-
-    // 3. Everything failed — clean fallback (no DEBUG text in production)
+    // 3. Show graceful template fallback
     // Quota message only shown if it was a rate-limit error
     final isQuotaError = lastDiagnosticError.contains('Daily AI quota');
     final noticeLine = isQuotaError
@@ -452,66 +415,89 @@ Formatting rules:
 
   /// Palm reading using Gemini Vision
   static Future<PalmReadingResult> analyzePalm(String imagePath) async {
-    if (!ApiConfig.isConfigured) {
-      return _getFallbackPalmReading();
-    }
-
+    Analytics.palmUploaded(source: imagePath.contains('camera') ? 'camera' : 'gallery');
     try {
-      _initVisionModel();
-
-      // Read the image file
+      // Read + base64-encode the image. Image picker is already capped at
+      // 1200x1200 + 85% quality, so this is typically ~200-500 KB.
       final imageBytes = await File(imagePath).readAsBytes();
+      if (imageBytes.length > 5 * 1024 * 1024) {
+        throw PalmValidationException(
+          'Image too large (max 5MB). Please retake or choose a smaller photo.',
+        );
+      }
       final mimeType = imagePath.toLowerCase().endsWith('.png')
           ? 'image/png'
-          : 'image/jpeg';
+          : imagePath.toLowerCase().endsWith('.webp')
+              ? 'image/webp'
+              : 'image/jpeg';
+      final imageB64 = base64Encode(imageBytes);
 
-      final response = await _visionModel!.generateContent([
-        Content.multi([
-          TextPart(VedicSystemPrompt.palmReadingPrompt),
-          DataPart(mimeType, imageBytes),
-        ]),
-      ]);
+      // Server-side palm analysis (was direct Gemini before — security risk)
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/palm');
+      final headers = await _authHeaders();
+      print('[PALM] Calling: $url (${imageBytes.length} bytes)');
+      final response = await http
+          .post(
+            url,
+            headers: headers,
+            body: jsonEncode({
+              'imageBase64': imageB64,
+              'mimeType': mimeType,
+            }),
+          )
+          .timeout(const Duration(seconds: 90));
 
-      final text = response.text;
-      print('[PALM] Response length: ${text?.length ?? 0}');
+      print('[PALM] Status: ${response.statusCode}');
 
-      if (text == null || text.isEmpty) {
-        // API returned nothing — use fallback, don't block user
-        print('[PALM] Empty response, using fallback');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // NOT_A_PALM short-circuit
+        if (data['error'] == 'NOT_A_PALM') {
+          throw PalmValidationException(
+            (data['message'] as String?) ??
+                'This image does not show a hand. Please upload a clear photo of your palm.',
+          );
+        }
+
+        Analytics.palmAnalyzed(success: true);
+        return PalmReadingResult(
+          loveLine: _parsePalmLine(data['loveLine']),
+          careerLine: _parsePalmLine(data['careerLine']),
+          lifeLine: _parsePalmLine(data['lifeLine']),
+        );
+      } else if (response.statusCode == 401) {
+        try {
+          await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        } catch (_) {}
+        throw PalmValidationException(
+          'Your session expired. Please log in again.',
+        );
+      } else if (response.statusCode == 429) {
+        Analytics.rateLimitHit(feature: 'palm');
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          throw PalmValidationException(
+            (data['error'] as String?) ??
+                'Daily palm reading limit reached. Upgrade your plan for more.',
+          );
+        } catch (_) {
+          throw PalmValidationException('Daily palm reading limit reached.');
+        }
+      } else if (response.statusCode == 413) {
+        throw PalmValidationException(
+          'Image too large (max 5MB). Please retake with smaller resolution.',
+        );
+      } else {
+        // Server error — fallback so user isn't blocked
+        print('[PALM] Server error ${response.statusCode}: ${response.body}');
         return _getFallbackPalmReading();
       }
-
-      // ONLY reject if AI explicitly says NOT_A_PALM
-      if (text.contains('NOT_A_PALM')) {
-        var cleaned = text.trim();
-        if (cleaned.startsWith('```')) {
-          cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
-          cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
-          cleaned = cleaned.trim();
-        }
-        String errorMsg = 'Yeh ek palm ki photo nahi lag rahi. Please apni hatheli ki clear photo upload karein.';
-        try {
-          final errJson = jsonDecode(cleaned) as Map<String, dynamic>;
-          errorMsg = errJson['message'] as String? ?? errorMsg;
-        } catch (_) {}
-        throw PalmValidationException(errorMsg);
-      }
-
-      // Try to parse the real AI response
-      final parsed = _tryParsePalmResponse(text);
-      if (parsed != null) {
-        print('[PALM] Successfully parsed AI analysis');
-        return parsed;
-      }
-
-      // Parse failed — use fallback silently
-      print('[PALM] Parse failed, using fallback');
-      return _getFallbackPalmReading();
     } on PalmValidationException {
-      rethrow; // Only NOT_A_PALM errors reach the UI
+      rethrow; // Surface friendly errors to UI
     } catch (e) {
-      // Network error, timeout, API error — use fallback, don't block user
-      print('[PALM] Error: $e — using fallback');
+      // Network/timeout — graceful fallback
+      print('[PALM] Network error: $e — using fallback');
       return _getFallbackPalmReading();
     }
   }
