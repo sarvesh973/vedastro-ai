@@ -7,6 +7,7 @@ import '../models/subscription_plan.dart';
 import 'storage_service.dart';
 import 'firestore_service.dart';
 import 'auth_service.dart';
+import 'analytics_service.dart';
 
 /// Get headers with Firebase Auth ID token. Cloud Functions reject
 /// unauthenticated subscription requests.
@@ -258,6 +259,14 @@ class PaymentService {
     final planId = _currentPlan?.id ?? 'unknown';
     print('[PAYMENT] Success! paymentId=$paymentId, plan=$planId, sub=${_currentSubscriptionId ?? "n/a"}');
 
+    // Analytics: subscription started
+    Analytics.subscriptionStarted(plan: planId, paymentMethod: 'razorpay');
+    // Update user's plan in analytics
+    final uidForAnalytics = AuthService.currentUser?.uid;
+    if (uidForAnalytics != null) {
+      Analytics.setUser(uid: uidForAnalytics, plan: planId);
+    }
+
     // Activate premium locally — webhook will also confirm server-side soon.
     await StorageService.upgradeToPremium();
 
@@ -278,6 +287,11 @@ class PaymentService {
 
   static void _handlePaymentError(PaymentFailureResponse response) {
     final code = response.code ?? -1;
+    final desc = response.message ?? 'unknown';
+    Analytics.subscriptionFailed(
+      plan: _currentPlan?.id ?? 'unknown',
+      reason: 'code=$code: $desc',
+    );
     final msg = response.message ?? 'Payment failed';
     print('[PAYMENT] Error: code=$code, msg=$msg');
 
