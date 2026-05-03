@@ -402,66 +402,86 @@ class AiService {
 
   /// Palm reading using Gemini Vision
   static Future<PalmReadingResult> analyzePalm(String imagePath) async {
-    if (!ApiConfig.isConfigured) {
-      return _getFallbackPalmReading();
-    }
-
     try {
-      _initVisionModel();
-
-      // Read the image file
+      // Read + base64-encode the image. Image picker is already capped at
+      // 1200x1200 + 85% quality, so this is typically ~200-500 KB.
       final imageBytes = await File(imagePath).readAsBytes();
+      if (imageBytes.length > 5 * 1024 * 1024) {
+        throw PalmValidationException(
+          'Image too large (max 5MB). Please retake or choose a smaller photo.',
+        );
+      }
       final mimeType = imagePath.toLowerCase().endsWith('.png')
           ? 'image/png'
-          : 'image/jpeg';
+          : imagePath.toLowerCase().endsWith('.webp')
+              ? 'image/webp'
+              : 'image/jpeg';
+      final imageB64 = base64Encode(imageBytes);
 
-      final response = await _visionModel!.generateContent([
-        Content.multi([
-          TextPart(VedicSystemPrompt.palmReadingPrompt),
-          DataPart(mimeType, imageBytes),
-        ]),
-      ]);
+      // Server-side palm analysis (was direct Gemini before — security risk)
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/palm');
+      final headers = await _authHeaders();
+      print('[PALM] Calling: $url (${imageBytes.length} bytes)');
+      final response = await http
+          .post(
+            url,
+            headers: headers,
+            body: jsonEncode({
+              'imageBase64': imageB64,
+              'mimeType': mimeType,
+            }),
+          )
+          .timeout(const Duration(seconds: 90));
 
-      final text = response.text;
-      print('[PALM] Response length: ${text?.length ?? 0}');
+      print('[PALM] Status: ${response.statusCode}');
 
-      if (text == null || text.isEmpty) {
-        // API returned nothing — use fallback, don't block user
-        print('[PALM] Empty response, using fallback');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // NOT_A_PALM short-circuit
+        if (data['error'] == 'NOT_A_PALM') {
+          throw PalmValidationException(
+            (data['message'] as String?) ??
+                'This image does not show a hand. Please upload a clear photo of your palm.',
+          );
+        }
+
+        return PalmReadingResult(
+          loveLine: _parsePalmLine(data['loveLine']),
+          careerLine: _parsePalmLine(data['careerLine']),
+          lifeLine: _parsePalmLine(data['lifeLine']),
+        );
+      } else if (response.statusCode == 401) {
+        try {
+          await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        } catch (_) {}
+        throw PalmValidationException(
+          'Your session expired. Please log in again.',
+        );
+      } else if (response.statusCode == 429) {
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          throw PalmValidationException(
+            (data['error'] as String?) ??
+                'Daily palm reading limit reached. Upgrade your plan for more.',
+          );
+        } catch (_) {
+          throw PalmValidationException('Daily palm reading limit reached.');
+        }
+      } else if (response.statusCode == 413) {
+        throw PalmValidationException(
+          'Image too large (max 5MB). Please retake with smaller resolution.',
+        );
+      } else {
+        // Server error — fallback so user isn't blocked
+        print('[PALM] Server error ${response.statusCode}: ${response.body}');
         return _getFallbackPalmReading();
       }
-
-      // ONLY reject if AI explicitly says NOT_A_PALM
-      if (text.contains('NOT_A_PALM')) {
-        var cleaned = text.trim();
-        if (cleaned.startsWith('```')) {
-          cleaned = cleaned.replaceAll(RegExp(r'^```\w*\n?'), '');
-          cleaned = cleaned.replaceAll(RegExp(r'\n?```$'), '');
-          cleaned = cleaned.trim();
-        }
-        String errorMsg = 'Yeh ek palm ki photo nahi lag rahi. Please apni hatheli ki clear photo upload karein.';
-        try {
-          final errJson = jsonDecode(cleaned) as Map<String, dynamic>;
-          errorMsg = errJson['message'] as String? ?? errorMsg;
-        } catch (_) {}
-        throw PalmValidationException(errorMsg);
-      }
-
-      // Try to parse the real AI response
-      final parsed = _tryParsePalmResponse(text);
-      if (parsed != null) {
-        print('[PALM] Successfully parsed AI analysis');
-        return parsed;
-      }
-
-      // Parse failed — use fallback silently
-      print('[PALM] Parse failed, using fallback');
-      return _getFallbackPalmReading();
     } on PalmValidationException {
-      rethrow; // Only NOT_A_PALM errors reach the UI
+      rethrow; // Surface friendly errors to UI
     } catch (e) {
-      // Network error, timeout, API error — use fallback, don't block user
-      print('[PALM] Error: $e — using fallback');
+      // Network/timeout — graceful fallback
+      print('[PALM] Network error: $e — using fallback');
       return _getFallbackPalmReading();
     }
   }
