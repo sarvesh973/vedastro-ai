@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../theme/app_theme.dart';
 import '../config/api_config.dart';
@@ -9,6 +10,23 @@ import '../providers/providers.dart';
 import '../widgets/kundli_chart.dart';
 import '../models/user_profile.dart';
 import 'user_details_screen.dart';
+
+/// Build Firebase-authed headers for the kundli/chart API.
+/// Server's `/chart` endpoint now requires a Bearer token (security backport)
+/// — without this header it returns 401 and the screen shows "retry".
+Future<Map<String, String>> _kundliAuthHeaders() async {
+  final user = FirebaseAuth.instance.currentUser;
+  String token = '';
+  if (user != null) {
+    try {
+      token = await user.getIdToken() ?? '';
+    } catch (_) {}
+  }
+  return {
+    'Content-Type': 'application/json',
+    if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+  };
+}
 
 class KundliScreen extends ConsumerStatefulWidget {
   const KundliScreen({super.key});
@@ -52,11 +70,17 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
 
     try {
       final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/chart');
+      // Server expects YYYY-MM-DD; profile.dobFormatted is DD/MM/YYYY,
+      // so format here directly from the DateTime to avoid the mismatch.
+      final dob = profile.dateOfBirth;
+      final dobIso =
+          '${dob.year.toString().padLeft(4, '0')}-${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}';
+      final headers = await _kundliAuthHeaders();
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
-          'birthDate': profile.dobFormatted,
+          'birthDate': dobIso,
           'birthTime': profile.timeOfBirth ?? '',
           'place': profile.placeOfBirth,
         }),
@@ -156,9 +180,15 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
 
     try {
       final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/chat');
+      // Same fix as the /chart call: server's /chat now requires auth +
+      // expects ISO date format (YYYY-MM-DD), not DD/MM/YYYY.
+      final dob = profile.dateOfBirth;
+      final dobIso =
+          '${dob.year.toString().padLeft(4, '0')}-${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}';
+      final headers = await _kundliAuthHeaders();
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           'question': 'Based on my complete birth chart, give me a brief personalized reading. '
               'Cover these 5 areas in 2-3 lines each: '
@@ -169,7 +199,7 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
               '5. CHALLENGES: What should I be careful about? '
               'Format each section starting with the label like "PERSONALITY:" etc. Keep it warm, Hinglish, and specific to MY chart positions.',
           'userProfile': profile.profileSummary,
-          'birthDate': profile.dobFormatted,
+          'birthDate': dobIso,
           'birthTime': profile.timeOfBirth ?? '',
           'place': profile.placeOfBirth,
           'chatHistory': <String>[],

@@ -164,16 +164,25 @@ class AiService {
       final liveUrl = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/horoscope');
       print('[HOROSCOPE] Calling: $liveUrl');
       final headers = await _authHeaders();
+      // Render server expects flat fields:
+      //   { sign, period, userProfile (string), birthDate, birthTime, place }
+      // The Cloud Functions schema (nested userProfile + type) is different.
+      // Until we fully migrate to CF, send the Render-compatible shape.
+      final dob = profile.dateOfBirth;
+      final dobIso =
+          '${dob.year.toString().padLeft(4, '0')}-${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}';
       final liveResponse = await http
           .post(
             liveUrl,
             headers: headers,
             body: jsonEncode({
-              'userProfile': {
-                'sunSign': profile.sunSign,
-                'westernSign': profile.westernSign,
-              },
-              'type': period,
+              'sign': profile.sunSign,            // "Mesha (Aries)" — server normalizes
+              'period': period,                    // daily | tomorrow | weekly | monthly
+              'userProfile': profile.profileSummary, // formatted multi-line string
+              'birthDate': dobIso,
+              if (profile.timeOfBirth != null && profile.timeOfBirth!.isNotEmpty)
+                'birthTime': profile.timeOfBirth,
+              'place': profile.placeOfBirth,
             }),
           )
           .timeout(const Duration(seconds: 45));
