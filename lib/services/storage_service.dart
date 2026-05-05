@@ -169,6 +169,19 @@ class StorageService {
         }
         await _saveFamilyProfiles();
       }
+
+      // Subscription state — critical for re-installs. Without this,
+      // a paying user who reinstalls sees "Free plan" instead of their
+      // active subscription. Webhook already wrote it; we just read it
+      // back into local SharedPreferences so the UI immediately reflects
+      // their paid status.
+      try {
+        final cloudSub = await FirestoreService.loadCurrentSubscription();
+        if (cloudSub.isActive) {
+          await _prefs?.setBool(_keyIsPremium, true);
+        }
+      } catch (_) {}
+
       return cloudProfile != null || cloudFamily.isNotEmpty;
     } catch (_) {
       return false;

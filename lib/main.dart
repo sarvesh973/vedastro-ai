@@ -106,6 +106,18 @@ void _syncCloudData() async {
       }
     }
 
+    // Restore subscription state from Firestore.
+    // Critical for re-installs: the user paid → webhook wrote subscription
+    // to users/{uid}/subscription/current → they uninstall → re-install →
+    // sign in same email → without this lookup they'd see "Free plan"
+    // even though Firestore knows they're paid.
+    if (!StorageService.isPremium) {
+      final cloudSub = await FirestoreService.loadCurrentSubscription();
+      if (cloudSub.isActive) {
+        await StorageService.upgradeToPremium();
+      }
+    }
+
     // Sync local usage stats to cloud
     FirestoreService.syncUsage(
       StorageService.chatQuestionsUsed,
