@@ -96,6 +96,17 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # Regenerate launcher icons + splash from assets/icon/app_icon.png.
+      # Without these steps the APK keeps shipping the previous icon
+      # baked into android/app/src/main/res/mipmap-* even when the
+      # source PNG is updated. flutter_launcher_icons + flutter_native_splash
+      # configs live in pubspec.yaml.
+      - name: Regenerate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Regenerate splash screen
+        run: dart run flutter_native_splash:create
+
       - name: Build APK
         run: |
           if [ "$RELEASE_BUILD" = "true" ]; then
