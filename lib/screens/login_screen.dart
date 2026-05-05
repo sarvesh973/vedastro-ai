@@ -286,32 +286,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       .fadeIn(duration: 500.ms, delay: 400.ms)
                       .slideY(begin: 0.1, end: 0, duration: 500.ms, delay: 400.ms),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 18),
 
-                  // ═══ SECONDARY: Google (outlined) ════════════════════
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton.icon(
-                      onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
+                  // ═══ SECONDARY: Google (small text link) ═════════════
+                  // Phone is the strongly preferred path (matches Indian
+                  // astro app norms — AstroTalk, AstroSage, etc). Google
+                  // sign-in is kept as a quiet fallback option, not a
+                  // co-equal CTA. Compact text link only.
+                  Center(
+                    child: TextButton.icon(
+                      onPressed:
+                          _isGoogleLoading ? null : _handleGoogleSignIn,
                       icon: _isGoogleLoading
                           ? const SizedBox(
-                              width: 20, height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted),
+                              width: 14, height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.textMuted,
+                              ),
                             )
-                          : const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+                          : const Text(
+                              'G',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
                       label: Text(
-                        _isGoogleLoading ? 'Signing in...' : 'Continue with Google',
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                        _isGoogleLoading
+                            ? 'Signing in…'
+                            : 'or continue with Google',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.divider, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
-                  )
-                      .animate()
-                      .fadeIn(duration: 500.ms, delay: 500.ms),
+                  ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
 
                   const SizedBox(height: 28),
 
