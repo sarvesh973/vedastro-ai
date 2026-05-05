@@ -192,73 +192,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Title — "moksha" styled like the brand logo:
-                    // lowercase, gold accent dot, with the dharma-style
-                    // top bar (built with a Border above the text).
-                    Container(
-                      padding: const EdgeInsets.only(top: 8),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          top: BorderSide(
+                    Text(
+                      'Moksha',
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                            letterSpacing: 1,
                             color: AppColors.textPrimary,
-                            width: 2,
+                            fontWeight: FontWeight.w700,
                           ),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Text(
-                            'm',
-                            style: Theme.of(context)
-                                .textTheme
-                                .displayLarge
-                                ?.copyWith(
-                                  letterSpacing: 1,
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          // 'o' rendered separately so we can drop the
-                          // gold accent dot in its center, like the logo.
-                          Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Text(
-                                'o',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .displayLarge
-                                    ?.copyWith(
-                                      letterSpacing: 1,
-                                      color: AppColors.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppColors.goldLight,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'ksha',
-                            style: Theme.of(context)
-                                .textTheme
-                                .displayLarge
-                                ?.copyWith(
-                                  letterSpacing: 1,
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ],
-                      ),
                     )
                         .animate()
                         .fadeIn(duration: 600.ms, delay: 200.ms)
@@ -675,57 +615,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Compact "moksha" wordmark for the drawer / smaller
-                  // header — matches the logo's lowercase + top-bar look.
-                  Container(
-                    padding: const EdgeInsets.only(top: 4),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                            color: AppColors.textPrimary, width: 1.5),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'm',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            const Text(
-                              'o',
-                              style: TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Container(
-                              width: 5,
-                              height: 5,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.goldLight,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Text(
-                          'ksha',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                  const Text(
+                    'Moksha',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
