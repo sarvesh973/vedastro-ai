@@ -123,7 +123,7 @@ class VedAstroApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'VedAstro AI',
+      title: 'Moksha',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       locale: const Locale('en', 'IN'),

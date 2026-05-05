@@ -22,7 +22,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <application
-        android:label="VedAstro AI"
+        android:label="Moksha"
         android:name="${applicationName}"
         android:allowBackup="false"
         android:fullBackupContent="false"
