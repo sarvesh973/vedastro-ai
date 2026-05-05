@@ -67,12 +67,22 @@ Anytime, from inside the app:
 
 You may also email support@vedastro.ai or contact your bank to revoke the e-mandate.
 
-### 4.4 Refund policy
-- **Within 48 hours of any charge:** full refund on request, no questions asked
-- **Trial cancellation:** never charged → no refund needed
-- **After 48 hours:** at our discretion, depending on usage and reason
+### 4.4 Refund policy — no refunds
 
-To request a refund: email support@vedastro.ai with your registered phone number, the date / amount of the charge, and a brief reason. We respond within 3 working days.
+**All payments are final and non-refundable.**
+
+When you cancel a paid plan:
+- You keep premium access until the end of your current paid period
+- No future auto-debit happens
+- Past charges are NOT refunded
+
+The free 7-day trial is the safest way to evaluate the app — you can cancel any time during the trial and you will never be charged.
+
+**Exceptions** (handled case-by-case at our sole discretion):
+- Demonstrable technical fault on our side that prevented the user from using paid features for the entire billing cycle
+- Confirmed unauthorized transaction (you must also notify your bank for a chargeback investigation)
+
+For exception requests: email support@vedastro.ai with your registered phone/email, the charge date, and details. We respond within 3 working days but make no commitment to refund.
 
 ### 4.5 Failed payments
 If your bank declines a recurring debit (insufficient funds, expired card, etc.):

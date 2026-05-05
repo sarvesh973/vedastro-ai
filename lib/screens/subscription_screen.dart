@@ -69,6 +69,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   if (sub.isActive) {
                     return _buildActiveCard(sub);
                   }
+                  // Edge case: app marked user premium locally (e.g. just
+                  // paid, webhook hasn't landed yet OR they're on an old
+                  // build that didn't sync). Don't show "No subscription"
+                  // — show a fallback that lets them contact support.
+                  if (StorageService.isPremium) {
+                    return _buildPremiumNoRecordCard();
+                  }
                   return _buildNoSubscriptionCard();
                 },
               ),
@@ -80,6 +87,79 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Shown when the app thinks the user is premium (local cache) but the
+  /// Firestore subscription record isn't there yet. Could be:
+  ///  - Just-completed payment, webhook still in flight (~1-5 sec)
+  ///  - Admin user on an old account who upgraded via legacy path
+  ///  - Webhook delivery failure (rare but possible)
+  /// Either way, don't show "No subscription" — explain + offer support.
+  Widget _buildPremiumNoRecordCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: AppColors.gold.withValues(alpha: 0.3), width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.workspace_premium,
+                      color: AppColors.goldLight, size: 22),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Premium Active',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "Your premium features are unlocked. We're still syncing "
+                "your subscription details — pull to refresh in a moment "
+                "to see plan info and the cancel option.",
+                style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    height: 1.5),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.background.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  "Need to cancel right now? Email support@vedastro.ai "
+                  "with your registered email and we'll cancel within "
+                  "24 hours.",
+                  style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12.5,
+                      height: 1.5),
+                ),
+              ),
+            ],
+          ),
+        ).animate().fadeIn(duration: 400.ms),
+      ],
     );
   }
 
@@ -398,22 +478,24 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           const SizedBox(height: 12),
           _faqItem(
             'Will I get a refund if I cancel?',
-            "If you cancel within 48 hours of your last charge, email "
-                "support@vedastro.ai for a full refund. After 48 hours, "
-                "you keep access until your current paid period ends — no "
-                "future charges.",
+            "No. All payments are final and non-refundable. When you "
+                "cancel, you keep access until the end of your current "
+                "paid period — no future charges happen, but past "
+                "charges are not returned.",
           ),
           _faqItem(
             'Can I cancel during my free trial?',
-            "Yes — cancel anytime during the 7-day trial and you'll never "
-                "be charged. The auto-debit only activates if you don't "
-                "cancel before day 7.",
+            "Yes — cancel anytime during the 7-day trial and you'll "
+                "never be charged. The auto-debit only activates if you "
+                "don't cancel before day 7. This is the safest way to "
+                "explore the app.",
           ),
           _faqItem(
-            'How do I get my money back if charged by mistake?',
-            "Email support@vedastro.ai with your registered phone number "
-                "and the charge date. We respond within 3 working days "
-                "and refund eligible cases instantly.",
+            'I was charged by mistake, what do I do?',
+            "If you believe a charge is genuinely unauthorized (someone "
+                "else used your card), contact your bank to dispute it. "
+                "For all other cases, please cancel from this screen so "
+                "no future debits happen — past charges are non-refundable.",
           ),
         ],
       ),
@@ -554,8 +636,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           content: const Text(
             "There was a problem reaching the cancellation service.\n\n"
             "Please email support@vedastro.ai with your registered email "
-            "and we'll cancel your subscription within 24 hours and refund "
-            "any charge that happens in the meantime.",
+            "and we'll cancel your subscription within 24 hours so no "
+            "further charges happen.",
             style:
                 TextStyle(color: AppColors.textSecondary, height: 1.5),
           ),

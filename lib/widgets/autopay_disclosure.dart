@@ -161,7 +161,7 @@ class AutopayDisclosure extends StatelessWidget {
                     bold: true,
                   ),
                 _bulletPoint(
-                  'Refund within 48 hours by emailing support',
+                  'All payments are final — no refunds after charge',
                 ),
 
                 const SizedBox(height: 16),

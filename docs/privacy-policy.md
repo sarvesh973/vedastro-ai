@@ -118,7 +118,7 @@ You can delete your account at any time from **Settings → Delete Account**. De
 
 **Cannot be undone.** You'll need to start fresh if you want to use the app again.
 
-We retain anonymized financial transaction records for 7 years to comply with India's Income Tax Act / GST regulations, but these contain no personal information.
+We retain anonymized financial transaction records for 7 years to comply with India's Income Tax Act / GST regulations, but these contain no personal information. Note: payments themselves are non-refundable per the Terms of Service.
 
 ## 8. Children's privacy
 
