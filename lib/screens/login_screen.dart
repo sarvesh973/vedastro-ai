@@ -8,7 +8,6 @@ import '../providers/providers.dart';
 import '../widgets/starfield_background.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
-import 'phone_login_screen.dart';
 import 'user_details_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -257,80 +256,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                   const SizedBox(height: 48),
 
-                  // ═══ PRIMARY: Phone OTP (hero button, purple) ════════
-                  // Phone is the default login for Indian astrology apps —
-                  // matches user expectation and has the highest conversion.
+                  // ═══ PRIMARY: Continue with Google (hero button) ═════
+                  // Phone OTP login will return — kept as planned addition.
+                  // Google is the main CTA for now: clean, instant, no SMS cost.
                   SizedBox(
                     width: double.infinity,
                     height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const PhoneLoginScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.phone_android, color: Colors.white, size: 22),
-                      label: const Text(
-                        'Continue with Phone',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
-                      ),
+                    child: ElevatedButton(
+                      onPressed:
+                          _isGoogleLoading ? null : _handleGoogleSignIn,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.purpleAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF1F1F1F),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
+                      child: _isGoogleLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: AppColors.purpleAccent,
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                _GoogleGlyph(size: 22),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Continue with Google',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F1F1F),
+                                    letterSpacing: 0.1,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   )
                       .animate()
                       .fadeIn(duration: 500.ms, delay: 400.ms)
-                      .slideY(begin: 0.1, end: 0, duration: 500.ms, delay: 400.ms),
-
-                  const SizedBox(height: 18),
-
-                  // ═══ SECONDARY: Google (small text link) ═════════════
-                  // Phone is the strongly preferred path (matches Indian
-                  // astro app norms — AstroTalk, AstroSage, etc). Google
-                  // sign-in is kept as a quiet fallback option, not a
-                  // co-equal CTA. Compact text link only.
-                  Center(
-                    child: TextButton.icon(
-                      onPressed:
-                          _isGoogleLoading ? null : _handleGoogleSignIn,
-                      icon: _isGoogleLoading
-                          ? const SizedBox(
-                              width: 14, height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.textMuted,
-                              ),
-                            )
-                          : const Text(
-                              'G',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                      label: Text(
-                        _isGoogleLoading
-                            ? 'Signing in…'
-                            : 'or continue with Google',
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
+                      .slideY(
+                          begin: 0.1,
+                          end: 0,
+                          duration: 500.ms,
+                          delay: 400.ms),
 
                   const SizedBox(height: 28),
 
@@ -506,6 +482,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Multi-color "G" mark that reads as Google without bundling an asset.
+class _GoogleGlyph extends StatelessWidget {
+  const _GoogleGlyph({this.size = 22});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ShaderMask(
+        shaderCallback: (rect) => const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF4285F4),
+            Color(0xFF34A853),
+            Color(0xFFFBBC05),
+            Color(0xFFEA4335),
+          ],
+          stops: [0.0, 0.45, 0.75, 1.0],
+        ).createShader(rect),
+        child: Text(
+          'G',
+          style: TextStyle(
+            fontSize: size,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            height: 1.0,
           ),
         ),
       ),
