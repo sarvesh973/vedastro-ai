@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../widgets/starfield_background.dart';
+import '../widgets/shooting_star_overlay.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import '../providers/providers.dart';
@@ -44,6 +45,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: SafeArea(
           child: Stack(
             children: [
+              // Shooting star — fires every 12s. Sits behind the content
+              // (first child of the Stack) so it never blocks taps and
+              // never covers UI.
+              const Positioned.fill(
+                child: IgnorePointer(child: ShootingStarOverlay()),
+              ),
+
               // Hidden "Made in India" — revealed on overscroll
               Positioned(
                 bottom: 16,

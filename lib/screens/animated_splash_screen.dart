@@ -103,7 +103,7 @@ class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen> {
                 highlightColor: AppColors.goldLight,
                 period: const Duration(milliseconds: 2400),
                 child: const Text(
-                  'moksha',
+                  'Moksha',
                   style: TextStyle(
                     fontSize: 44,
                     fontWeight: FontWeight.w700,

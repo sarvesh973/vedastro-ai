@@ -58,10 +58,16 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
 
 # ─── Splash Screen Config ─────────────────────
-# Splash uses the round Om-mandala only (no wordmark/tagline) so the
-# Android 12+ circular icon mask doesn't clip the design. The "moksha"
-# wordmark + tagline reveal happens right after on AnimatedSplashScreen
-# (in-app) with a fade-up animation.
+# Splash uses the round Om-mandala only (no wordmark/tagline). The
+# image (1600×1600) places the mandala in the inner ~55% of the canvas
+# so content sits well inside any Android 12 circular mask safe zone.
+#
+# IMPORTANT: icon_background_color is intentionally NOT set for android_12.
+# When set, Android 12 treats the image as an adaptive icon foreground
+# (108dp content area, 72dp safe zone) and clips aggressively. Omitting
+# it switches to the wider layout (192dp circle, 152dp content area).
+# The "moksha" wordmark + tagline reveal happens right after on
+# AnimatedSplashScreen (in-app) with a fade-up animation.
 flutter_native_splash:
   color: "#0A0A1A"
   image: "assets/icon/app_splash_logo.png"
@@ -71,5 +77,4 @@ flutter_native_splash:
   ios: false
   android_12:
     color: "#0A0A1A"
-    icon_background_color: "#0A0A1A"
     image: "assets/icon/app_splash_logo.png"
