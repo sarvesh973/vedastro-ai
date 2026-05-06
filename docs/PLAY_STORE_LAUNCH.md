@@ -103,8 +103,8 @@ Every reading ends with a practical Vedic remedy — specific mantras, gemstones
 
 🔮 SUBSCRIPTION PLANS
 
-• Free: 2 chats + 1 palm reading + daily horoscope
-• 7-Day Free Trial: 10 chats + 2 palm readings, then ₹99/month
+• Free: 1 chat + daily horoscope (palm reading is a paid feature)
+• 7-Day Free Trial: 10 chats + 2 palm readings, then ₹99/month auto-renew
 • Standard: ₹199/month — 30 chats, 5 palm readings, family profiles
 • Premium: ₹499/month — Unlimited everything + detailed predictions
 
