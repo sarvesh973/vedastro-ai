@@ -133,10 +133,11 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
   }
 
   /// Palm readings allowed per billing cycle. -1 means unlimited.
+  /// Free plan: 0 — palm reading is a paid-only feature.
   int get palmLimit {
     switch (this) {
       case SubscriptionPlan.free:
-        return 1;
+        return 0;
       case SubscriptionPlan.trial:
         return 2;
       case SubscriptionPlan.standard:

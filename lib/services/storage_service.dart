@@ -8,7 +8,7 @@ class StorageService {
   static UserProfile? _currentProfile;
 
   static const int freeChatLimit = 2;
-  static const int freePalmLimit = 1;
+  static const int freePalmLimit = 0; // Palm reading is paid-only
 
   static List<UserProfile> _familyProfiles = [];
 
