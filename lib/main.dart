@@ -13,10 +13,7 @@ import 'services/storage_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/analytics_service.dart';
-import 'screens/home_screen.dart';
-import 'screens/onboarding_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/user_details_screen.dart';
+import 'screens/animated_splash_screen.dart';
 
 void main() async {
   // Wrap the entire app in a Zone so any uncaught async errors are
@@ -149,7 +146,10 @@ class VedAstroApp extends StatelessWidget {
       navigatorObservers: [
         if (Analytics.observer != null) Analytics.observer!,
       ],
-      home: _getStartScreen(),
+      // AnimatedSplashScreen runs once on launch — plays the wordmark
+      // reveal, then routes to the right screen via _getStartScreen logic
+      // (kept inside the splash widget itself).
+      home: const AnimatedSplashScreen(),
       // Global error handling for UI
       builder: (context, child) {
         // Catch rendering errors gracefully
@@ -181,29 +181,4 @@ class VedAstroApp extends StatelessWidget {
     );
   }
 
-  /// Determine the initial screen based on app state.
-  /// Order: onboarding -> login -> profile -> home.
-  /// Profile is now collected AFTER login so each authenticated user has
-  /// their own isolated birth-details data tied to their Firebase UID.
-  Widget _getStartScreen() {
-    // First time user -> Onboarding (welcome slides)
-    if (!StorageService.isOnboardingComplete) {
-      return const OnboardingScreen();
-    }
-
-    // Not logged in (Firebase + no local fallback) -> Login
-    if (!AuthService.isLoggedIn && !StorageService.isLoggedIn) {
-      return const LoginScreen();
-    }
-
-    // Logged in but profile not yet entered for this account -> collect details
-    // (e.g. brand-new email/phone signup, or fresh install on a new device
-    //  before cloud profile finishes loading).
-    if (!StorageService.hasProfile) {
-      return const UserDetailsScreen(fromOnboarding: true);
-    }
-
-    // Logged in + profile exists -> Home
-    return const HomeScreen();
-  }
 }

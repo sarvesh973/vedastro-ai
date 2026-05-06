@@ -58,14 +58,18 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
 
 # ─── Splash Screen Config ─────────────────────
+# Splash uses the round Om-mandala only (no wordmark/tagline) so the
+# Android 12+ circular icon mask doesn't clip the design. The "moksha"
+# wordmark + tagline reveal happens right after on AnimatedSplashScreen
+# (in-app) with a fade-up animation.
 flutter_native_splash:
   color: "#0A0A1A"
-  image: "assets/icon/app_icon.png"
-  image_dark: "assets/icon/app_icon.png"
+  image: "assets/icon/app_splash_logo.png"
+  image_dark: "assets/icon/app_splash_logo.png"
   color_dark: "#0A0A1A"
   android: true
   ios: false
   android_12:
     color: "#0A0A1A"
     icon_background_color: "#0A0A1A"
-    image: "assets/icon/app_icon_foreground.png"
+    image: "assets/icon/app_splash_logo.png"
