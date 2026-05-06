@@ -7,7 +7,7 @@ class StorageService {
   static SharedPreferences? _prefs;
   static UserProfile? _currentProfile;
 
-  static const int freeChatLimit = 2;
+  static const int freeChatLimit = 1;
   static const int freePalmLimit = 0; // Palm reading is paid-only
 
   static List<UserProfile> _familyProfiles = [];

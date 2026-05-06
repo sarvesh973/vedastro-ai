@@ -9,7 +9,7 @@
 ///    be disclosed in BOLD on the paywall before payment, and the user
 ///    must be able to cancel in one tap from Settings.
 enum SubscriptionPlan {
-  /// Free tier — 2 chats, 1 palm reading total. No subscription.
+  /// Free tier — 1 chat, 0 palm readings. No subscription.
   free,
 
   /// Free 7 days, then ₹99/month auto-debit. 10 chats during the trial.
@@ -122,7 +122,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
   int get chatLimit {
     switch (this) {
       case SubscriptionPlan.free:
-        return 2;
+        return 1;
       case SubscriptionPlan.trial:
         return 10;
       case SubscriptionPlan.standard:
@@ -165,7 +165,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
   List<String> get features {
     switch (this) {
       case SubscriptionPlan.free:
-        return ['2 free chats', '1 free palm reading', 'Daily horoscope'];
+        return ['1 free chat', 'Daily horoscope'];
       case SubscriptionPlan.trial:
         return [
           '10 chats during the 7-day trial',

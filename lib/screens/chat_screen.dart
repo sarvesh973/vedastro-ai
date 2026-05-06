@@ -128,18 +128,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _showPaywall() {
     // Smart plan filtering based on user's current state:
-    //  - Free user (no isPremium) -> hide trial, show Standard + Premium
-    //    so they can pay directly. Trial is for fresh users picking
-    //    their first plan from the home screen, not for users who've
-    //    already exhausted free chats.
+    //  - Free user (no isPremium) -> show Trial first (free 7d → ₹99/mo
+    //    autopay), then Standard + Premium. The trial removes friction
+    //    for users who just hit their 1 free chat — they can keep going
+    //    without paying anything today.
     //  - Standard subscriber -> show only Premium (upgrade)
     //  - Premium subscriber -> shouldn't reach here (unlimited chats)
-    //
-    // We don't yet persist the exact plan (Standard vs Premium) — when
-    // we do, refine the Standard-exhausted branch to detect it.
     final availablePlans = StorageService.isPremium
         ? const [SubscriptionPlan.premium]
-        : const [SubscriptionPlan.standard, SubscriptionPlan.premium];
+        : const [
+            SubscriptionPlan.trial,
+            SubscriptionPlan.standard,
+            SubscriptionPlan.premium,
+          ];
 
     Navigator.of(context).push(
       PageRouteBuilder(
