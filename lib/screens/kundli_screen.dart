@@ -9,6 +9,7 @@ import '../config/api_config.dart';
 import '../providers/providers.dart';
 import '../widgets/kundli_chart.dart';
 import '../models/user_profile.dart';
+import '../services/ai_service.dart';
 import 'user_details_screen.dart';
 
 /// Build Firebase-authed headers for the kundli/chart API.
@@ -45,6 +46,7 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
   // Personalized insights
   Map<String, String> _insights = {};
   bool _insightsLoading = false;
+  String? _insightsError;
 
   @override
   void initState() {
@@ -176,50 +178,62 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     final profile = ref.read(userProfileProvider);
     if (profile == null || _chartData == null) return;
 
-    setState(() => _insightsLoading = true);
+    setState(() {
+      _insightsLoading = true;
+      _insightsError = null;
+    });
+
+    // Route through AiService.getAstrologyResponse — same path as chat,
+    // so auth + rate-limit + server errors all get the same friendly
+    // handling. Previously this called /chat directly and swallowed every
+    // error silently → user saw nothing in any tab when the call failed.
+    const insightPrompt =
+        'Based on my complete birth chart, give me a brief personalized reading. '
+        'Cover these 5 areas in 2-3 lines each: '
+        '1. PERSONALITY: What kind of person am I based on my lagna and planets? '
+        '2. CAREER: What career paths suit me based on 10th house and D10? '
+        '3. RELATIONSHIPS: What is my love/marriage life like based on 7th house and D9? '
+        '4. STRENGTHS: What are my biggest strengths from this chart? '
+        '5. CHALLENGES: What should I be careful about? '
+        'Format each section starting with the label like "PERSONALITY:" etc. '
+        'Keep it warm, Hinglish, and specific to MY chart positions.';
 
     try {
-      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/chat');
-      // Same fix as the /chart call: server's /chat now requires auth +
-      // expects ISO date format (YYYY-MM-DD), not DD/MM/YYYY.
-      final dob = profile.dateOfBirth;
-      final dobIso =
-          '${dob.year.toString().padLeft(4, '0')}-${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}';
-      final headers = await _kundliAuthHeaders();
-      final response = await http.post(
-        url,
-        headers: headers,
-        body: jsonEncode({
-          'question': 'Based on my complete birth chart, give me a brief personalized reading. '
-              'Cover these 5 areas in 2-3 lines each: '
-              '1. PERSONALITY: What kind of person am I based on my lagna and planets? '
-              '2. CAREER: What career paths suit me based on 10th house and D10? '
-              '3. RELATIONSHIPS: What is my love/marriage life like based on 7th house and D9? '
-              '4. STRENGTHS: What are my biggest strengths from this chart? '
-              '5. CHALLENGES: What should I be careful about? '
-              'Format each section starting with the label like "PERSONALITY:" etc. Keep it warm, Hinglish, and specific to MY chart positions.',
-          'userProfile': profile.profileSummary,
-          'birthDate': dobIso,
-          'birthTime': profile.timeOfBirth ?? '',
-          'place': profile.placeOfBirth,
-          'chatHistory': <String>[],
-        }),
-      ).timeout(const Duration(seconds: 90));
+      final response = await AiService.getAstrologyResponse(
+        profile: profile,
+        userMessage: insightPrompt,
+        chatHistory: const [],
+      );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final answer = data['answer']?.toString() ?? '';
-        if (answer.isNotEmpty && mounted) {
-          setState(() {
-            _insights = _parseInsights(answer);
-            _insightsLoading = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _insightsLoading = false);
+      if (!mounted) return;
+
+      final answer = response.text.trim();
+      if (answer.isEmpty) {
+        setState(() {
+          _insightsLoading = false;
+          _insightsError =
+              'Could not generate your reading right now. Please try again.';
+        });
+        return;
       }
+
+      final parsed = _parseInsights(answer);
+      setState(() {
+        _insights = parsed;
+        _insightsLoading = false;
+        // Even if parsing didn't split into 5 sections, _parseInsights falls
+        // back to dumping everything into PERSONALITY — so a non-empty answer
+        // always produces at least one card.
+        _insightsError = parsed.isEmpty
+            ? 'Reading was empty. Tap retry to try again.'
+            : null;
+      });
     } catch (e) {
-      if (mounted) setState(() => _insightsLoading = false);
+      if (!mounted) return;
+      setState(() {
+        _insightsLoading = false;
+        _insightsError = 'Connection issue. Tap retry to load your reading.';
+      });
     }
   }
 
@@ -593,7 +607,55 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       );
     }
 
-    if (_insights.isEmpty) return const SizedBox.shrink();
+    // Error state — show a friendly retry card instead of silent emptiness.
+    // Without this branch the user just sees a blank chart screen after the
+    // server fails or the user is offline.
+    if (_insights.isEmpty) {
+      if (_insightsError != null) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.error.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.cloud_off_outlined,
+                  color: AppColors.error.withOpacity(0.8), size: 28),
+              const SizedBox(height: 10),
+              Text(
+                _insightsError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 38,
+                child: ElevatedButton.icon(
+                  onPressed: _loadInsights,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.purpleAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
 
     const insightConfig = {
       'PERSONALITY': {
