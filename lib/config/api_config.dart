@@ -40,6 +40,7 @@ class ApiConfig {
     'sarry1254@gmail.com',
     'thejresports90@gmail.com',
     'piyush@partnerupmedia.in',
+    'astrotrial0@gmail.com',
   ];
 
   /// Returns true if the given email is on the admin list.
