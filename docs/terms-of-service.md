@@ -1,15 +1,15 @@
 # Terms of Service
 
-**VedAstro AI**
-Last updated: 26 April 2026
+**Moksha**
+Last updated: 7 May 2026
 
-By installing, accessing, or using VedAstro AI ("the app"), you agree to these Terms of Service. If you do not agree, please do not use the app.
+By installing, accessing, or using Moksha ("the app"), you agree to these Terms of Service. If you do not agree, please do not use the app.
 
-For any questions: **support@vedastro.ai**
+For any questions: **Piyushtiwari260309@gmail.com / sarry1254@gmail.com**
 
 ## 1. The service
 
-VedAstro AI is an AI-powered Vedic astrology app. We provide:
+Moksha is an AI-powered Vedic astrology app. We provide:
 - Personalized horoscopes (daily / weekly / monthly / yearly)
 - AI guru chat for astrology questions
 - Palm reading via photo upload
@@ -20,7 +20,7 @@ The predictions are based on classical Vedic texts (BPHS, Phaladeepika, Brighu S
 
 ## 2. Eligibility
 
-You must be at least 13 years old to use VedAstro AI. To subscribe to any paid plan, you must be 18 or have parental / guardian consent and a valid Indian payment method.
+You must be at least 13 years old to use Moksha. To subscribe to any paid plan, you must be 18 or have parental / guardian consent and a valid Indian payment method.
 
 ## 3. Account
 
@@ -65,7 +65,7 @@ Anytime, from inside the app:
 2. Tap **Cancel Subscription**
 3. Cancellation is immediate; you keep access until the end of the current paid period (e.g. you cancel on day 20, you keep access until day 30)
 
-You may also email support@vedastro.ai or contact your bank to revoke the e-mandate.
+You may also email Piyushtiwari260309@gmail.com / sarry1254@gmail.com or contact your bank to revoke the e-mandate.
 
 ### 4.4 Refund policy — no refunds
 
@@ -82,7 +82,7 @@ The free 7-day trial is the safest way to evaluate the app — you can cancel an
 - Demonstrable technical fault on our side that prevented the user from using paid features for the entire billing cycle
 - Confirmed unauthorized transaction (you must also notify your bank for a chargeback investigation)
 
-For exception requests: email support@vedastro.ai with your registered phone/email, the charge date, and details. We respond within 3 working days but make no commitment to refund.
+For exception requests: email Piyushtiwari260309@gmail.com / sarry1254@gmail.com with your registered phone/email, the charge date, and details. We respond within 3 working days but make no commitment to refund.
 
 ### 4.5 Failed payments
 If your bank declines a recurring debit (insufficient funds, expired card, etc.):
@@ -109,7 +109,7 @@ We reserve the right to restrict accounts that abuse the service.
 
 ## 6. Intellectual property
 
-- VedAstro AI app, branding, custom UI, AI prompts, and curated knowledge base: ©  VedAstro AI, all rights reserved
+- Moksha app, branding, custom UI, AI prompts, and curated knowledge base: ©  Moksha, all rights reserved
 - Sanskrit texts (BPHS, Phaladeepika, Brighu Sanhita): public domain, attributed where shown
 - AI-generated predictions: you may use them for personal reference; you may NOT republish them as your own paid content
 - App content, screenshots, and trade names may not be copied without written permission
@@ -125,11 +125,11 @@ The app integrates:
 - **Google Gemini** (AI predictions)
 - **Razorpay** (subscription payments)
 
-Each of these has its own terms. By using VedAstro AI, you also agree to be bound by their respective terms. We are not responsible for outages, errors, or content from these third parties.
+Each of these has its own terms. By using Moksha, you also agree to be bound by their respective terms. We are not responsible for outages, errors, or content from these third parties.
 
 ## 9. Disclaimer — predictions are NOT professional advice
 
-The astrology readings, horoscopes, palm analysis, and AI guru responses provided by VedAstro AI are for **entertainment, cultural, and reflective purposes only**.
+The astrology readings, horoscopes, palm analysis, and AI guru responses provided by Moksha are for **entertainment, cultural, and reflective purposes only**.
 
 **They are NOT and shall not be relied upon as:**
 - Medical advice or diagnosis
@@ -146,7 +146,7 @@ We make no warranty about the accuracy of any prediction.
 ## 10. Limitation of liability
 
 To the maximum extent permitted by law:
-- VedAstro AI is provided "AS IS" without warranties of any kind
+- Moksha is provided "AS IS" without warranties of any kind
 - We are not liable for any indirect, incidental, consequential, or punitive damages arising from your use of the app
 - Our total cumulative liability to you shall not exceed the amount you paid us in the 12 months prior to the claim
 
@@ -160,7 +160,7 @@ We may suspend or terminate your account if you:
 - Abuse the service or other users
 - Receive multiple chargebacks
 
-We will notify you and provide reason. You may appeal by emailing support@vedastro.ai.
+We will notify you and provide reason. You may appeal by emailing Piyushtiwari260309@gmail.com / sarry1254@gmail.com.
 
 You may terminate at any time by deleting your account in Settings.
 
@@ -176,12 +176,12 @@ We may update these Terms as the service evolves. Material changes will be annou
 
 These Terms are governed by the laws of the Republic of India. Any dispute will be resolved through:
 
-1. **Good-faith negotiation** by emailing support@vedastro.ai
+1. **Good-faith negotiation** by emailing Piyushtiwari260309@gmail.com / sarry1254@gmail.com
 2. If unresolved within 30 days, **arbitration** under the Arbitration and Conciliation Act, 1996, in [Your city], with a sole arbitrator
 3. Subject to the above, exclusive **jurisdiction** of courts in [Your city], India
 
 ## 15. Contact
 
-**Email:** support@vedastro.ai
+**Email:** Piyushtiwari260309@gmail.com / sarry1254@gmail.com
 **Operator:** [Your registered name / business entity]
 **Address:** [Your registered address]

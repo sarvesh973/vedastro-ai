@@ -1,15 +1,15 @@
 # Privacy Policy
 
-**VedAstro AI**
-Last updated: 26 April 2026
+**Moksha**
+Last updated: 7 May 2026
 
 ## 1. Who we are
 
-VedAstro AI ("we", "us", "the app") is an AI-powered Vedic astrology application that provides personalized predictions, palm reading, kundli analysis, and AI guru chat based on classical Vedic texts (Brihat Parashara Hora Shastra, Phaladeepika, Brighu Sanhita).
+Moksha ("we", "us", "the app") is an AI-powered Vedic astrology application that provides personalized predictions, palm reading, kundli analysis, and AI guru chat based on classical Vedic texts (Brihat Parashara Hora Shastra, Phaladeepika, Brighu Sanhita).
 
 This Privacy Policy explains what personal information we collect, how we use it, and your rights as a user. We are committed to compliance with the Digital Personal Data Protection Act, 2023 (DPDP Act), Information Technology Act 2000, and Google Play's data-safety requirements.
 
-For any questions: **support@vedastro.ai**
+For any questions: **Piyushtiwari260309@gmail.com / sarry1254@gmail.com**
 
 ## 2. Information we collect
 
@@ -104,7 +104,7 @@ Under the DPDP Act 2023 and applicable laws, you have the right to:
 - **Portability** — request a JSON export of your data
 - **Lodge a complaint** with the Data Protection Board of India
 
-To exercise any of these, email **support@vedastro.ai** with the subject line "Data request". We respond within 7 days.
+To exercise any of these, email **Piyushtiwari260309@gmail.com / sarry1254@gmail.com** with the subject line "Data request". We respond within 7 days.
 
 ## 7. Account deletion
 
@@ -122,7 +122,7 @@ We retain anonymized financial transaction records for 7 years to comply with In
 
 ## 8. Children's privacy
 
-VedAstro AI is not intended for users under 13. We do not knowingly collect data from anyone under 13. Users between 13-18 should use the app with parental consent, especially before subscribing to any paid plan.
+Moksha is not intended for users under 13. We do not knowingly collect data from anyone under 13. Users between 13-18 should use the app with parental consent, especially before subscribing to any paid plan.
 
 If you believe a child has provided us data, email us and we'll delete it.
 
@@ -142,7 +142,7 @@ The mobile app does not use cookies. We use one anonymous "install ID" assigned 
 
 ## 11. Third-party services in detail
 
-By using VedAstro AI you agree that the following third parties also process your data, each governed by their own privacy policy:
+By using Moksha you agree that the following third parties also process your data, each governed by their own privacy policy:
 
 - **Google Firebase**: https://firebase.google.com/support/privacy
 - **Google Gemini**: https://policies.google.com/privacy
@@ -155,7 +155,7 @@ We may update this Privacy Policy as features change. Material changes will be a
 
 ## 13. Contact
 
-**Email:** support@vedastro.ai
+**Email:** Piyushtiwari260309@gmail.com / sarry1254@gmail.com
 **Operator:** [Your registered name / business entity]
 **Address:** [Your registered address]
 
