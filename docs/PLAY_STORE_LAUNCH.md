@@ -1,4 +1,4 @@
-# Play Store Launch Pack — VedAstro AI
+# Play Store Launch Pack — Moksha
 
 Everything you need to fill out the Play Console. Copy/paste from here.
 
@@ -61,7 +61,7 @@ Pick "Utility, Productivity, Communication, or Other" → All answers below shou
 
 ### App Name (max 30 chars)
 ```
-VedAstro AI: Vedic Astrology
+Moksha: Vedic Astrology
 ```
 
 ### Short Description (max 80 chars)
@@ -72,10 +72,10 @@ Authentic Vedic astrology, palm reading & daily horoscope. Powered by AI.
 ### Full Description (max 4000 chars)
 
 ```
-Discover your destiny with VedAstro AI — the only Vedic astrology app powered by classical texts (Brihat Parashara Hora Shastra & Phaladeepika).
+Discover your destiny with Moksha — the only Vedic astrology app powered by classical texts (Brihat Parashara Hora Shastra & Phaladeepika).
 
 🔮 WHAT MAKES US DIFFERENT
-Most astrology apps give vague predictions. VedAstro AI cites the exact verse and chapter from sacred texts behind every reading. No black box — just authentic Vedic wisdom delivered through cutting-edge AI.
+Most astrology apps give vague predictions. Moksha cites the exact verse and chapter from sacred texts behind every reading. No black box — just authentic Vedic wisdom delivered through cutting-edge AI.
 
 ✨ FEATURES
 
@@ -120,14 +120,14 @@ Subscriptions auto-renew. Cancel anytime in Settings.
 Built with love by Indian developers, rooted in 5000-year-old Vedic wisdom.
 
 📜 DISCLAIMER
-VedAstro AI is for guidance and entertainment. For serious health, legal, or financial decisions, please consult qualified professionals.
+Moksha is for guidance and entertainment. For serious health, legal, or financial decisions, please consult qualified professionals.
 ```
 
 ### Keywords / Tags (Play Console doesn't have them, but useful for ASO)
 ```
 vedic astrology, kundli, horoscope, palm reading, jyotish, panchang,
 astrology hindi, daily horoscope, birth chart, samudrik shastra,
-brihat parashara, phaladeepika, vedastro, ai astrologer, palm reader
+brihat parashara, phaladeepika, moksha, ai astrologer, palm reader
 ```
 
 ### Category
@@ -244,5 +244,5 @@ Or use the Flutter web preview, resize browser to 360×640, screenshot, upscale.
 
 ---
 
-Generated for: VedAstro AI
+Generated for: Moksha
 Updated: April 2026
