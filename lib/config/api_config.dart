@@ -38,6 +38,8 @@ class ApiConfig {
   /// Add lowercase only. Emails are normalized to lowercase before compare.
   static const List<String> adminEmails = [
     'sarry1254@gmail.com',
+    'thejresports90@gmail.com',
+    'piyush@partnerupmedia.in',
   ];
 
   /// Returns true if the given email is on the admin list.
