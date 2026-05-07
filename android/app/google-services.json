@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "1030095774035-ct3aq7495uljpglo80v9ndffem9mhpmn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mokshastro.ai",
+            "certificate_hash": "2f5a06832ba05dc521c336e778e11c95e3afac1d"
+          }
+        },
+        {
+          "client_id": "1030095774035-g0n0e8kq5keegcbed4ljgned1bjg95ag.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mokshastro.ai",
+            "certificate_hash": "e1dda0a963f8d4ebbcc073610d0b83da601c8bda"
+          }
+        },
+        {
           "client_id": "1030095774035-kmbq68k28trd8nfcrmdst4h6k4gncu59.apps.googleusercontent.com",
           "client_type": 3
         }
