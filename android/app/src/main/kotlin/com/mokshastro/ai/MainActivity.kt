@@ -1,4 +1,4 @@
-package com.vedastro.ai
+package com.mokshastro.ai
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -7,6 +7,35 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:1030095774035:android:68ff9f4a9d8bf1968201a6",
+        "android_client_info": {
+          "package_name": "com.mokshastro.ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1030095774035-kmbq68k28trd8nfcrmdst4h6k4gncu59.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4G_BQSQIt3gRuy05H_qKhOevstpJGoC4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1030095774035-kmbq68k28trd8nfcrmdst4h6k4gncu59.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:1030095774035:android:7751e07ddd10cef78201a6",
         "android_client_info": {
           "package_name": "com.vedastro.ai"
