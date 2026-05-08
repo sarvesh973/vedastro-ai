@@ -288,7 +288,10 @@ class FirestoreService {
     } catch (_) {}
   }
 
-  /// Set premium status
+  /// Set premium status (legacy flag in usage/{uid}). The canonical
+  /// subscription doc lives at users/{uid}/subscription/current and is
+  /// written by the Razorpay webhook on Render — clients can't write it
+  /// (Firestore rules enforce server-only writes).
   static Future<void> setPremium(String uid, bool isPremium) async {
     try {
       await _db.collection('usage').doc(uid).set({
