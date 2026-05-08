@@ -435,7 +435,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               color: AppColors.goldLight, size: 36),
           const SizedBox(height: 10),
           const Text(
-            "VedAstro Admin",
+            "Moksha Admin",
             style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 17,

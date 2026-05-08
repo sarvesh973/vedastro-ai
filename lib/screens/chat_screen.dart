@@ -210,7 +210,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'VedAstro AI',
+                  'Moksha',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

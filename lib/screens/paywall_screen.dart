@@ -82,7 +82,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 children: [
                   const Expanded(
                     child: Text(
-                      'Unlock VedAstro AI',
+                      'Unlock Moksha',
                       style: TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 22,
@@ -591,7 +591,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   duration: 400.ms),
               const SizedBox(height: 24),
               const Text(
-                "You're a VedAstro admin",
+                "You're a Moksha admin",
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 24,

@@ -87,7 +87,7 @@ class PaymentService {
 
     final userEmail = AuthService.userEmail ?? '';
     final uid = AuthService.currentUser?.uid ?? '';
-    final userName = StorageService.currentProfile?.name ?? 'VedAstro User';
+    final userName = StorageService.currentProfile?.name ?? 'Moksha User';
 
     if (plan == SubscriptionPlan.free) {
       onFailure('Free plan needs no subscription.');
@@ -192,15 +192,15 @@ class PaymentService {
         : ApiConfig.premiumPriceMonthlyPaise;
 
     final userEmail = AuthService.userEmail ?? 'user@vedastro.ai';
-    final userName = StorageService.currentProfile?.name ?? 'VedAstro User';
+    final userName = StorageService.currentProfile?.name ?? 'Moksha User';
 
     final options = {
       'key': ApiConfig.razorpayKeyId,
       'amount': amount,
       'name': ApiConfig.razorpayCompanyName,
       'description': plan == 'yearly'
-          ? 'VedAstro Premium — Yearly'
-          : 'VedAstro Premium — Monthly',
+          ? 'Moksha Premium — Yearly'
+          : 'Moksha Premium — Monthly',
       'prefill': {
         'email': userEmail,
         'contact': '9999999999',

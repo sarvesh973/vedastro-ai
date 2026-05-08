@@ -15,7 +15,7 @@ class ApiConfig {
   static const String razorpayKeyId = 'rzp_live_SiqZ5RU6i3w3XV';
 
   /// Company/App name shown on Razorpay checkout
-  static const String razorpayCompanyName = 'VedAstro AI';
+  static const String razorpayCompanyName = 'Moksha';
 
   /// Legacy one-time payment prices (paise). Used by the old openCheckout()
   /// flow only. The new openSubscriptionCheckout() flow reads prices from

@@ -47,7 +47,7 @@ class PalmResultScreen extends ConsumerWidget {
                 onPressed: () {
                   // Build shareable summary of the palm reading
                   final buf = StringBuffer();
-                  buf.writeln('My VedAstro AI Palm Reading');
+                  buf.writeln('My Moksha Palm Reading');
                   buf.writeln('');
                   for (final line in result.allLines) {
                     buf.writeln('${line.emoji} ${line.title}');
@@ -58,10 +58,9 @@ class PalmResultScreen extends ConsumerWidget {
                     }
                     buf.writeln('');
                   }
-                  buf.writeln('Get yours at VedAstro AI:');
-                  buf.writeln('https://github.com/sarvesh973/vedastro-ai');
+                  buf.writeln('Get yours on Moksha.');
                   Share.share(buf.toString(),
-                      subject: 'My Palm Reading — VedAstro AI');
+                      subject: 'My Palm Reading — Moksha');
                 },
               ),
               const SizedBox(width: 8),

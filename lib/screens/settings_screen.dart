@@ -105,7 +105,7 @@ class SettingsScreen extends ConsumerWidget {
             _buildInfoTile(
               icon: Icons.share_outlined,
               title: 'Share App',
-              subtitle: 'Tell your friends about VedAstro AI',
+              subtitle: 'Tell your friends about Moksha',
               onTap: () => _handleShare(context),
             ).animate().fadeIn(duration: 500.ms, delay: 550.ms),
 
@@ -493,13 +493,13 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _handleShare(BuildContext context) async {
     // Once on Play Store, replace this URL with the actual Play Store link.
     const message =
-        'Check out VedAstro AI — a personalized Vedic astrology app with daily horoscope, palm reading, and AI guru chat.\n\nhttps://github.com/sarvesh973/vedastro-ai';
+        'Check out Moksha — a personalized Vedic astrology app with daily horoscope, palm reading, and AI guru chat.';
 
     try {
       final box = context.findRenderObject() as RenderBox?;
       await Share.share(
         message,
-        subject: 'VedAstro AI',
+        subject: 'Moksha',
         sharePositionOrigin: box != null
             ? box.localToGlobal(Offset.zero) & box.size
             : null,
