@@ -139,16 +139,26 @@ class PaymentService {
     _currentSubscriptionId = subscriptionId;
 
     // Step 2 — open Razorpay's payment sheet bound to that subscription_id
-    final options = {
+    //
+    // IMPORTANT: when subscription_id is set, do NOT also pass `recurring: 1`.
+    // Those are two different Razorpay products:
+    //   - subscription_id  → Subscriptions API (recurring with mandate)
+    //   - recurring: 1     → Recurring Payments API (saved-card future charges)
+    // Mixing them routes auth through the wrong code path and every mandate
+    // attempt fails at payment_authentication step, even on real working
+    // UPI/cards. Customer-side error reason: 'payment_cancelled'.
+    //
+    // Also: prefill.contact must be a real phone or omitted entirely; empty
+    // string triggers Razorpay validation oddities on UPI flows.
+    final options = <String, dynamic>{
       'key': ApiConfig.razorpayKeyId,
       'subscription_id': subscriptionId,
       'name': ApiConfig.razorpayCompanyName,
       'description': '${plan.displayName} — ${plan.priceLabel}',
       'prefill': {
         'email': userEmail.isNotEmpty ? userEmail : 'user@vedastro.ai',
-        'contact': '',
+        // contact intentionally omitted; Razorpay collects it in-checkout.
       },
-      'recurring': 1,
       'notes': {
         'plan': plan.id,
         'user': userName,
