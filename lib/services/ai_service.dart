@@ -99,7 +99,12 @@ class AiService {
                   : chatHistory,
             }),
           )
-          .timeout(const Duration(seconds: 20));
+          // Gemini can take 15–25s for the synthesis call when traffic
+          // is high, plus 1–3s for the embedding round-trip. A 20s ceiling
+          // was firing on every slow Gemini moment and showing the user
+          // a template fallback even though the server happily returned
+          // a real RAG answer at 22s. 60s gives generous headroom.
+          .timeout(const Duration(seconds: 60));
 
       print('[RAG] Status: ${response.statusCode}');
       if (response.statusCode == 200) {
