@@ -1,7 +1,17 @@
 name: Build APK + AAB
 
+# Triggers:
+#  - push to main          → builds signed release AAB + APK + debug symbols
+#                            (production artifact, what your publisher uploads)
+#  - pull_request to main  → builds DEBUG APK only, marked as PR_BUILD
+#                            (sideload-only artifact, for reviewing changes
+#                             before merging — keystore secrets are never
+#                             exposed to PR builds, so no signing risk)
+#  - workflow_dispatch     → manual trigger from Actions UI
 on:
   push:
+    branches: [ main ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -62,7 +72,12 @@ jobs:
           echo "=== Verifying admin emails are preserved ==="
           grep -A2 "adminEmails" lib/config/api_config.dart || echo "WARN: adminEmails not found"
 
+      # Skip keystore on pull_request runs — secrets are not (and should not
+      # be) available to PR builds. PR builds are debug-only and intended for
+      # sideload testing of the changes in the PR, never for distribution.
+      # The condition below also catches misconfigured forks gracefully.
       - name: Set up release keystore
+        if: github.event_name != 'pull_request'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -92,6 +107,12 @@ jobs:
             echo "WARNING: Keystore secrets not configured, will build debug APK"
             echo "RELEASE_BUILD=false" >> $GITHUB_ENV
           fi
+
+      # PR runs explicitly mark themselves as debug-only so downstream steps
+      # know not to try the signed release path.
+      - name: Mark PR build as debug-only
+        if: github.event_name == 'pull_request'
+        run: echo "RELEASE_BUILD=false" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: flutter pub get
@@ -157,8 +178,19 @@ jobs:
           path: build/symbols
           retention-days: 90
 
-      - name: Upload Debug APK
-        if: env.RELEASE_BUILD != 'true'
+      # Debug APK upload — name changes between PR and main runs so reviewers
+      # of a PR can find their build's APK on the run summary page without
+      # confusion.
+      - name: Upload Debug APK (PR review build)
+        if: env.RELEASE_BUILD != 'true' && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moksha-PR-${{ github.event.pull_request.number }}-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
+
+      - name: Upload Debug APK (non-PR debug)
+        if: env.RELEASE_BUILD != 'true' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: VedAstro-AI-debug-apk
