@@ -245,11 +245,17 @@ class PaymentService {
     required String subscriptionId,
     bool immediate = false,
   }) async {
+    // Calls the Firebase Function `subscriptionCancel` directly (deployed
+    // from functions/index.js). The Render server's /subscription/cancel
+    // endpoint was returning errors for paid users; this path is the
+    // canonical source of truth for cancellation in this repo.
     try {
       final headers = await _authHeaders();
+      final url = Uri.parse(
+          '${ApiConfig.firebaseFunctionsBaseUrl}/subscriptionCancel');
       final resp = await http
           .post(
-            Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/subscription/cancel'),
+            url,
             headers: headers,
             body: jsonEncode({
               'subscriptionId': subscriptionId,
@@ -257,8 +263,14 @@ class PaymentService {
             }),
           )
           .timeout(const Duration(seconds: 20));
-      return resp.statusCode == 200;
-    } catch (_) {
+      if (resp.statusCode == 200) return true;
+      // Surface the actual failure in logs so we can diagnose without
+      // a USB-attached debug session.
+      print('[CANCEL] Non-200 from Firebase Function: '
+          '${resp.statusCode} — body: ${resp.body}');
+      return false;
+    } catch (e) {
+      print('[CANCEL] Network/timeout error: $e');
       return false;
     }
   }
