@@ -313,20 +313,17 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       if (!mounted) return;
 
       final answer = response.text.trim();
-      // Treat responses with NO Vedic sources as failure. AiService
-      // falls back to hardcoded keyword-matched templates when the
-      // RAG /chat call fails (auth/rate-limit/network) — those
-      // canned strings are what the user called "pre-written texts".
-      // A real RAG response always carries source verses; if sources
-      // is empty, we got the template, not the reading. Show retry
-      // instead of pretending the canned text is real.
-      if (answer.isEmpty || response.sources.isEmpty) {
+      // Note: an earlier version of this check rejected responses with
+      // empty `sources` as "template fallbacks." That was wrong — the
+      // hardcoded templates in AiService are CLIENT-SIDE and only fire
+      // when the server call returns null. A 200 with empty sources is
+      // a real Gemini reading, just without matched Vedic verses. So
+      // we only reject genuinely empty answers here.
+      if (answer.isEmpty) {
         setState(() {
           _insightsLoading = false;
-          _insightsError = answer.isEmpty
-              ? 'Could not generate your reading right now. Please try again.'
-              : 'Reading service is busy or rate-limited. '
-                  'Tap retry in a moment.';
+          _insightsError =
+              'Could not generate your reading right now. Please try again.';
         });
         return;
       }
@@ -385,16 +382,10 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       );
       if (!mounted) return;
       final answer = response.text.trim();
-      // Empty sources = canned template fallback, not real RAG. Reject.
-      // See _loadInsights for the full rationale.
-      final isTemplate = answer.isNotEmpty && response.sources.isEmpty;
       setState(() {
         _navamshaLoading = false;
         if (answer.isEmpty) {
           _navamshaError = 'Could not generate Navamsha reading. Tap retry.';
-        } else if (isTemplate) {
-          _navamshaError = 'Reading service is busy or rate-limited. '
-              'Tap retry in a moment.';
         } else {
           _navamshaInsight = answer;
         }
@@ -440,14 +431,10 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       );
       if (!mounted) return;
       final answer = response.text.trim();
-      final isTemplate = answer.isNotEmpty && response.sources.isEmpty;
       setState(() {
         _careerLoading = false;
         if (answer.isEmpty) {
           _careerError = 'Could not generate career reading. Tap retry.';
-        } else if (isTemplate) {
-          _careerError = 'Reading service is busy or rate-limited. '
-              'Tap retry in a moment.';
         } else {
           _careerInsight = answer;
         }
