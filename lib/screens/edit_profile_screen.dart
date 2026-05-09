@@ -105,6 +105,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     await StorageService.saveProfile(updatedProfile);
     ref.read(userProfileProvider.notifier).state = updatedProfile;
+    // Refresh the family-profile list provider so the home screen's
+    // horizontal avatar switcher and any other consumers immediately
+    // reflect the edit (the in-place update mutates the list, so we
+    // re-emit it as a new list to trigger Riverpod rebuilds).
+    ref.read(familyProfilesProvider.notifier).state =
+        List<UserProfile>.from(StorageService.familyProfiles);
+    ref.read(activeProfileIndexProvider.notifier).state =
+        StorageService.activeProfileIndex;
     // Sync to cloud
     FirestoreService.syncProfile(updatedProfile);
 
