@@ -120,8 +120,18 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
       placeOfBirth: _placeController.text.trim(),
     );
 
-    // Save profile locally + cloud
-    await StorageService.saveProfile(profile);
+    // Save profile locally + cloud.
+    //  - First-time onboarding (no family entries yet) -> saveProfile
+    //    appends and points active at the new entry.
+    //  - "Add another profile" (already have at least one) -> use
+    //    addNewProfile so we never overwrite the active entry. Without
+    //    this, saveProfile's edit-in-place semantics would silently
+    //    replace whichever profile is currently selected.
+    if (StorageService.familyProfiles.isEmpty) {
+      await StorageService.saveProfile(profile);
+    } else {
+      await StorageService.addNewProfile(profile);
+    }
     ref.read(userProfileProvider.notifier).state = profile;
     ref.read(familyProfilesProvider.notifier).state =
         List.from(StorageService.familyProfiles);

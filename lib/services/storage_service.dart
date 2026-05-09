@@ -118,21 +118,60 @@ class StorageService {
   static UserProfile? get currentProfile => _currentProfile;
   static bool get hasProfile => _currentProfile != null;
 
+  /// Update the user's currently-active profile in place.
+  ///
+  /// Use for the "edit profile" path — replaces the entry at
+  /// activeProfileIndex with the new profile and writes it as the
+  /// current profile. Does NOT add a new family entry. If there is no
+  /// family entry yet (first-ever profile / cloud-restore), the profile
+  /// is appended.
+  ///
+  /// For the "add a new family profile" flow, call [addNewProfile]
+  /// instead — that one always appends and switches to the new entry.
   static Future<void> saveProfile(UserProfile profile) async {
     _currentProfile = profile;
     await _prefs?.setString(_keyProfile, profile.toJsonString());
-    // Also add to family profiles if not already there
-    final exists = _familyProfiles.any((p) =>
+
+    final activeIdx = activeProfileIndex;
+    if (activeIdx >= 0 && activeIdx < _familyProfiles.length) {
+      _familyProfiles[activeIdx] = profile;
+      await _saveFamilyProfiles();
+    } else {
+      // First save (no family entry yet) — append and point active at it.
+      _familyProfiles.add(profile);
+      await _saveFamilyProfiles();
+      await _prefs?.setInt(
+          _keyActiveProfileIndex, _familyProfiles.length - 1);
+    }
+
+    // Sync to cloud (Firestore) — tied to current Firebase UID (Google/phone/email)
+    // Fire-and-forget; local save is authoritative, cloud is backup.
+    FirestoreService.syncProfile(profile);
+    _saveFamilyToCloud();
+  }
+
+  /// Append a brand-new family profile and switch to it.
+  ///
+  /// Used for "Add another profile" flows (e.g. user_details_screen
+  /// when not in onboarding). If an identical profile (same name + DOB
+  /// + place) already exists, no duplicate is created — we just switch
+  /// to the existing entry.
+  static Future<void> addNewProfile(UserProfile profile) async {
+    final dupIdx = _familyProfiles.indexWhere((p) =>
         p.name == profile.name &&
         p.dateOfBirth == profile.dateOfBirth &&
         p.placeOfBirth == profile.placeOfBirth);
-    if (!exists) {
+
+    if (dupIdx >= 0) {
+      _familyProfiles[dupIdx] = profile;
+      await _saveFamilyProfiles();
+      await switchToProfile(dupIdx);
+    } else {
       _familyProfiles.add(profile);
       await _saveFamilyProfiles();
-      await _prefs?.setInt(_keyActiveProfileIndex, _familyProfiles.length - 1);
+      await switchToProfile(_familyProfiles.length - 1);
     }
-    // Sync to cloud (Firestore) — tied to current Firebase UID (Google/phone/email)
-    // Fire-and-forget; local save is authoritative, cloud is backup.
+
     FirestoreService.syncProfile(profile);
     _saveFamilyToCloud();
   }
