@@ -123,6 +123,7 @@ class PaymentService {
     // Special case: server detected admin email → no payment needed
     if (serverResp['admin'] == true) {
       await StorageService.upgradeToPremium();
+      await StorageService.setLastPurchasedPlan(plan.id);
       final uidForCloud = AuthService.currentUser?.uid;
       if (uidForCloud != null) {
         await FirestoreService.setPremium(uidForCloud, true);
@@ -279,6 +280,10 @@ class PaymentService {
 
     // Activate premium locally — webhook will also confirm server-side soon.
     await StorageService.upgradeToPremium();
+    // Record which plan was purchased so the Settings → Subscription screen
+    // shows the correct plan name (and correct upgrade options) until the
+    // webhook lands and the Firestore stream takes over.
+    await StorageService.setLastPurchasedPlan(planId);
 
     // Sync to Firestore
     final uid = AuthService.currentUser?.uid;
