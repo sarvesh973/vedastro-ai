@@ -126,21 +126,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
-  void _showPaywall() {
-    // Smart plan filtering based on user's current state:
-    //  - Free user (no isPremium) -> show Trial first (free 7d → ₹99/mo
-    //    autopay), then Standard + Premium. The trial removes friction
-    //    for users who just hit their 1 free chat — they can keep going
-    //    without paying anything today.
-    //  - Standard subscriber -> show only Premium (upgrade)
-    //  - Premium subscriber -> shouldn't reach here (unlimited chats)
-    final availablePlans = StorageService.isPremium
-        ? const [SubscriptionPlan.premium]
-        : const [
-            SubscriptionPlan.trial,
-            SubscriptionPlan.standard,
-            SubscriptionPlan.premium,
-          ];
+  Future<void> _showPaywall() async {
+    // Smart plan filtering based on the user's *actual* current plan
+    // (not the legacy isPremium boolean — that flag is true for trial,
+    // standard, AND premium, so it would skip the Standard upgrade for
+    // trial users). We read the real plan from Firestore and use the
+    // SubscriptionPlan.upgradeOptions helper to pick what to show:
+    //  - Free  -> [Trial, Standard, Premium]
+    //  - Trial -> [Standard, Premium]
+    //  - Standard -> [Premium]
+    //  - Premium -> [] (shouldn't reach here — unlimited chats)
+    final sub = await FirestoreService.loadCurrentSubscription();
+    if (!mounted) return;
+
+    var availablePlans = sub.plan.upgradeOptions;
+    // Fallback for accounts where Firestore hasn't synced yet but the
+    // legacy isPremium flag is set (just-paid, webhook in flight): treat
+    // them as Standard so they at least see a Premium upgrade option.
+    if (availablePlans.isEmpty && !StorageService.isPremium) {
+      availablePlans = SubscriptionPlan.free.upgradeOptions;
+    } else if (availablePlans.isEmpty) {
+      availablePlans = const [SubscriptionPlan.premium];
+    }
 
     Navigator.of(context).push(
       PageRouteBuilder(

@@ -192,6 +192,27 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
+  /// Plans the user can upgrade *to* from their current plan.
+  /// Empty list means there's nothing higher to sell.
+  /// Used by the paywall to hide irrelevant cards (e.g. a Trial user
+  /// shouldn't see the Trial card again, but should see Standard + Premium).
+  List<SubscriptionPlan> get upgradeOptions {
+    switch (this) {
+      case SubscriptionPlan.free:
+        return const [
+          SubscriptionPlan.trial,
+          SubscriptionPlan.standard,
+          SubscriptionPlan.premium,
+        ];
+      case SubscriptionPlan.trial:
+        return const [SubscriptionPlan.standard, SubscriptionPlan.premium];
+      case SubscriptionPlan.standard:
+        return const [SubscriptionPlan.premium];
+      case SubscriptionPlan.premium:
+        return const [];
+    }
+  }
+
   static SubscriptionPlan fromId(String? id) {
     switch (id) {
       case 'trial':

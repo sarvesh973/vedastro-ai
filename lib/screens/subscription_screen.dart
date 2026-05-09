@@ -209,87 +209,110 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           : '₹${sub.plan.recurringPaise ~/ 100}/month';
     }
 
+    // Upgrades: only offered when there's a higher tier AND the sub isn't
+    // already cancel-pending (we don't want to charge a new plan on top of
+    // a winding-down one — they should let it lapse first, then resubscribe).
+    final upgradeOptions = sub.plan.upgradeOptions;
+    final canUpgrade = !isCancelled && upgradeOptions.isNotEmpty;
+
+    final cardBody = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.gold.withValues(alpha: 0.18),
+            AppColors.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: AppColors.gold.withValues(alpha: 0.4), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.gold.withValues(alpha: 0.2),
+                ),
+                child: const Icon(Icons.workspace_premium,
+                    color: AppColors.goldLight, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headlineLabel,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      headlineSub,
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              if (canUpgrade)
+                const Icon(Icons.chevron_right,
+                    color: AppColors.goldLight, size: 22),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.background.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              isCancelled
+                  ? "Your subscription is already cancelled. You'll keep "
+                      "premium access until the end of your current paid "
+                      "period, then automatically move to the Free plan."
+                  : canUpgrade
+                      ? "Tap to upgrade your plan. You can cancel anytime — "
+                          "you'll keep your current plan's access until the "
+                          "end of the paid period."
+                      : "Manage your subscription below. You can cancel "
+                          "anytime — you'll keep premium access until the end "
+                          "of your current paid period.",
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.gold.withValues(alpha: 0.18),
-                AppColors.surface,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: canUpgrade ? () => _openUpgradePaywall(upgradeOptions) : null,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: AppColors.gold.withValues(alpha: 0.4), width: 1.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.gold.withValues(alpha: 0.2),
-                    ),
-                    child: const Icon(Icons.workspace_premium,
-                        color: AppColors.goldLight, size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          headlineLabel,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          headlineSub,
-                          style: const TextStyle(
-                              color: AppColors.textMuted, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.background.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  isCancelled
-                      ? "Your subscription is already cancelled. You'll keep "
-                          "premium access until the end of your current paid "
-                          "period, then automatically move to the Free plan."
-                      : "Manage your subscription below. You can cancel anytime — "
-                          "you'll keep premium access until the end of your current "
-                          "paid period.",
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
+            child: cardBody,
           ),
         )
             .animate()
@@ -527,6 +550,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─── Upgrade flow ───────────────────────────────────────────────
+
+  void _openUpgradePaywall(List<SubscriptionPlan> options) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PaywallScreen(availablePlans: options),
       ),
     );
   }
