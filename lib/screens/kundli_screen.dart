@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../config/api_config.dart';
 import '../providers/providers.dart';
@@ -99,6 +100,38 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
         _careerError == null) {
       _loadCareerInsight();
     }
+  }
+
+  // ─── Insight cache ────────────────────────────────────────────
+  // Once a reading lands, persist it per profile so re-opening the
+  // Kundli screen doesn't burn a /chat rate-limit slot. Each profile
+  // gets at most 3 chat-quota calls ever (D1 + D9 + D10), instead of
+  // 3 per chart-view. Cache key derives from birth details so editing
+  // the profile invalidates the old reading.
+  String _cacheKeyFor(UserProfile p, String section) {
+    final dob = p.dateOfBirth;
+    final iso = '${dob.year}-${dob.month}-${dob.day}';
+    return 'kundli_insight::${p.name}::$iso::${p.timeOfBirth ?? ""}'
+        '::${p.placeOfBirth}::$section';
+  }
+
+  Future<String?> _readCachedInsight(UserProfile p, String section) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKeyFor(p, section));
+      if (raw == null || raw.isEmpty) return null;
+      return raw;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCachedInsight(
+      UserProfile p, String section, String text) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKeyFor(p, section), text);
+    } catch (_) {}
   }
 
   Future<void> _loadChart() async {
@@ -298,9 +331,22 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     return sb.toString();
   }
 
-  Future<void> _loadInsights() async {
+  Future<void> _loadInsights({bool forceRefresh = false}) async {
     final profile = ref.read(userProfileProvider);
     if (profile == null || _chartData == null) return;
+
+    // Cache hit? Use it. Saves a /chat rate-limit slot.
+    if (!forceRefresh) {
+      final cached = await _readCachedInsight(profile, 'main');
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _insights = _parseInsights(cached);
+          _insightsLoading = false;
+          _insightsError = null;
+        });
+        return;
+      }
+    }
 
     setState(() {
       _insightsLoading = true;
@@ -390,6 +436,9 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
             ? 'Reading was empty. Tap retry to try again.'
             : null;
       });
+      if (parsed.isNotEmpty) {
+        _writeCachedInsight(profile, 'main', answer);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -404,9 +453,21 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
   /// the AI used different wording or skipped that section, the D9 tab
   /// was silent. A focused prompt with the actual D9 positions
   /// guarantees content and is far more chart-specific.
-  Future<void> _loadNavamshaInsight() async {
+  Future<void> _loadNavamshaInsight({bool forceRefresh = false}) async {
     final profile = ref.read(userProfileProvider);
     if (profile == null || _chartData == null) return;
+
+    if (!forceRefresh) {
+      final cached = await _readCachedInsight(profile, 'navamsha');
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _navamshaInsight = cached;
+          _navamshaLoading = false;
+          _navamshaError = null;
+        });
+        return;
+      }
+    }
 
     setState(() {
       _navamshaLoading = true;
@@ -454,6 +515,9 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
           _navamshaInsight = answer;
         }
       });
+      if (answer.isNotEmpty) {
+        _writeCachedInsight(profile, 'navamsha', answer);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -465,9 +529,21 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
 
   /// Dedicated D10 Dasamsa (career) reading — see _loadNavamshaInsight
   /// for why this is a separate fetch instead of parsing the main one.
-  Future<void> _loadCareerInsight() async {
+  Future<void> _loadCareerInsight({bool forceRefresh = false}) async {
     final profile = ref.read(userProfileProvider);
     if (profile == null || _chartData == null) return;
+
+    if (!forceRefresh) {
+      final cached = await _readCachedInsight(profile, 'career');
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _careerInsight = cached;
+          _careerLoading = false;
+          _careerError = null;
+        });
+        return;
+      }
+    }
 
     setState(() {
       _careerLoading = true;
@@ -517,6 +593,9 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
           _careerInsight = answer;
         }
       });
+      if (answer.isNotEmpty) {
+        _writeCachedInsight(profile, 'career', answer);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
