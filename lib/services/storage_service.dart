@@ -121,16 +121,36 @@ class StorageService {
   static Future<void> saveProfile(UserProfile profile) async {
     _currentProfile = profile;
     await _prefs?.setString(_keyProfile, profile.toJsonString());
-    // Also add to family profiles if not already there
-    final exists = _familyProfiles.any((p) =>
-        p.name == profile.name &&
-        p.dateOfBirth == profile.dateOfBirth &&
-        p.placeOfBirth == profile.placeOfBirth);
-    if (!exists) {
-      _familyProfiles.add(profile);
+
+    // Reconcile with the family-profile list. The active entry should
+    // point at this profile.
+    //   - If the active index already points at a family entry, REPLACE
+    //     that entry in place (this is the "edit" case — was previously
+    //     wrongly appending a duplicate whenever any field changed).
+    //   - Otherwise, treat this as a brand-new profile and append it.
+    final activeIdx = activeProfileIndex;
+    if (activeIdx >= 0 && activeIdx < _familyProfiles.length) {
+      _familyProfiles[activeIdx] = profile;
       await _saveFamilyProfiles();
-      await _prefs?.setInt(_keyActiveProfileIndex, _familyProfiles.length - 1);
+    } else {
+      // Avoid creating a duplicate entry if an identical profile is
+      // already in the list (e.g. cloud-restore path).
+      final dupIdx = _familyProfiles.indexWhere((p) =>
+          p.name == profile.name &&
+          p.dateOfBirth == profile.dateOfBirth &&
+          p.placeOfBirth == profile.placeOfBirth);
+      if (dupIdx >= 0) {
+        _familyProfiles[dupIdx] = profile;
+        await _saveFamilyProfiles();
+        await _prefs?.setInt(_keyActiveProfileIndex, dupIdx);
+      } else {
+        _familyProfiles.add(profile);
+        await _saveFamilyProfiles();
+        await _prefs?.setInt(
+            _keyActiveProfileIndex, _familyProfiles.length - 1);
+      }
     }
+
     // Sync to cloud (Firestore) — tied to current Firebase UID (Google/phone/email)
     // Fire-and-forget; local save is authoritative, cloud is backup.
     FirestoreService.syncProfile(profile);
