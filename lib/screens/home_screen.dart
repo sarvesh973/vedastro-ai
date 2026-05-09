@@ -14,6 +14,7 @@ import 'kundli_screen.dart';
 import 'settings_screen.dart';
 import 'horoscope_screen.dart';
 import 'paywall_screen.dart';
+import '../models/subscription_plan.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -823,14 +824,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  void _openUpgradePaywall(BuildContext context, List<SubscriptionPlan> options) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            PaywallScreen(availablePlans: options),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
+  }
+
   Widget _buildPremiumBanner(BuildContext context, WidgetRef ref) {
     final isPremium = ref.watch(isPremiumProvider);
     final chatsUsed = ref.watch(chatQuestionsUsedProvider);
     final palmsUsed = ref.watch(palmReadingsUsedProvider);
 
     if (isPremium) {
-      // Premium active badge
-      return Container(
+      // Active subscriber banner. If their plan still has higher tiers
+      // (Trial -> Standard/Premium, Standard -> Premium), the banner is
+      // tappable and opens the paywall pre-filtered to those tiers.
+      // Premium subscribers (no upgrades left) get the static check-circle
+      // affordance.
+      final localPlanId = StorageService.lastPurchasedPlan;
+      final localPlan = localPlanId == null
+          ? null
+          : SubscriptionPlanInfo.fromId(localPlanId);
+      final upgradeOptions = localPlan?.upgradeOptions ?? const [];
+      final canUpgrade = upgradeOptions.isNotEmpty;
+
+      final headlineText = (localPlan == null || localPlan == SubscriptionPlan.free)
+          ? 'Subscription Active'
+          : '${localPlan.displayName} — Active';
+      final subText = canUpgrade
+          ? 'Tap to upgrade your plan'
+          : 'Unlimited access to all features';
+
+      final activeBanner = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -857,28 +895,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: const Icon(Icons.workspace_premium, color: AppColors.goldLight, size: 22),
             ),
             const SizedBox(width: 14),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Premium Active',
-                    style: TextStyle(
+                    headlineText,
+                    style: const TextStyle(
                       color: AppColors.goldLight,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
-                    'Unlimited access to all features',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    subText,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.check_circle, color: AppColors.success, size: 22),
+            Icon(
+              canUpgrade ? Icons.chevron_right : Icons.check_circle,
+              color: canUpgrade ? AppColors.goldLight : AppColors.success,
+              size: 22,
+            ),
           ],
+        ),
+      );
+
+      if (!canUpgrade) return activeBanner;
+
+      return Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openUpgradePaywall(context, upgradeOptions),
+          child: activeBanner,
         ),
       );
     }
