@@ -216,6 +216,31 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     return KundliChart.signToIndex(ascSign);
   }
 
+  /// Helper: format a single planet's D1 position concisely.
+  /// Returns empty string if the planet isn't in the chart data.
+  String _planetLine(String planetName) {
+    final planets = _chartData?['planets'] as Map<String, dynamic>?;
+    final m = planets?[planetName] as Map<String, dynamic>?;
+    if (m == null) return '';
+    final retro = m['isRetrograde'] == true ? ' (R)' : '';
+    return '$planetName in ${m['sign']} (House ${m['house']}, '
+        '${m['nakshatra'] ?? '-'} nakshatra)$retro';
+  }
+
+  /// Helper: D9 sign for a planet, or empty if unavailable.
+  String _d9Line(String planetName) {
+    final d9 = _chartData?['d9Navamsha'] as Map<String, dynamic>?;
+    final sign = d9?[planetName]?.toString() ?? '';
+    return sign.isEmpty ? '' : '$planetName in $sign';
+  }
+
+  /// Helper: D10 sign for a planet.
+  String _d10Line(String planetName) {
+    final d10 = _chartData?['d10Dasamsa'] as Map<String, dynamic>?;
+    final sign = d10?[planetName]?.toString() ?? '';
+    return sign.isEmpty ? '' : '$planetName in $sign';
+  }
+
   /// Compact, AI-friendly summary of this user's actual computed chart.
   /// Without this in the prompt, the AI was producing generic readings
   /// from birthdate alone — the user called it "pre-written data."
@@ -282,31 +307,57 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       _insightsError = null;
     });
 
-    // Route through AiService.getAstrologyResponse — same path as chat,
-    // so auth + rate-limit + server errors all get the same friendly
-    // handling. Previously this called /chat directly and swallowed every
-    // error silently → user saw nothing in any tab when the call failed.
-    final chartContext = _buildChartContext();
-    final insightPrompt =
-        'Below is MY exact computed Vedic birth chart. Use these specific '
-        'positions — not generic templates — to give me a personalized '
-        'reading.\n\n'
-        '$chartContext\n'
-        'Now write a short reading covering these 5 areas in 2-3 lines each. '
-        'Reference the actual sign / house / nakshatra positions from above '
-        'so it is clearly MY chart, not a generic one.\n'
-        '1. PERSONALITY: based on my Lagna, Lagna lord and Moon position.\n'
-        '2. CAREER: based on my 10th house, its lord, and D10 Dasamsa.\n'
-        '3. RELATIONSHIPS: based on my 7th house, Venus, and D9 Navamsha.\n'
-        '4. STRENGTHS: standout yogas or well-placed planets in my chart.\n'
-        '5. CHALLENGES: weak/afflicted placements I should watch for.\n\n'
-        'Format each section starting with the label like "PERSONALITY:" etc. '
-        'Keep it warm, Hinglish, and specific to MY chart positions.';
+    // Focused, embedding-friendly prompt. The previous version sent a
+    // huge dump of every planet position alongside 5 different topics —
+    // the resulting embedding matched nothing well in the Vedic
+    // knowledge base, so RAG returned no source verses. This prompt
+    // leads with the topical question keywords (personality, career,
+    // marriage, strengths, challenges) and includes only the most
+    // chart-defining placements (Lagna, Moon, key houses' planets,
+    // current dasha) to keep the embedding focused on the topics
+    // actually being asked about.
+    final asc = _chartData?['ascendant'] as Map<String, dynamic>?;
+    final dasha = _chartData?['dasha'] as Map<String, dynamic>?;
+    final lagnaSign = asc?['sign']?.toString() ?? '';
+    final lagnaLord = asc?['lord']?.toString() ?? '';
+    final birthNak = _chartData?['birthNakshatra']?.toString() ?? '';
+
+    final insightPrompt = StringBuffer()
+      ..writeln('Personalized Vedic birth chart reading covering '
+          'personality, career, marriage and relationships, strengths, '
+          'and challenges.')
+      ..writeln()
+      ..writeln('My key placements:');
+    if (lagnaSign.isNotEmpty) {
+      insightPrompt.writeln(
+          '- Lagna (Ascendant): $lagnaSign, ruled by $lagnaLord.');
+    }
+    if (birthNak.isNotEmpty) {
+      insightPrompt.writeln('- Janma Nakshatra: $birthNak.');
+    }
+    for (final p in const ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter',
+      'Venus', 'Saturn', 'Rahu', 'Ketu']) {
+      final line = _planetLine(p);
+      if (line.isNotEmpty) insightPrompt.writeln('- $line.');
+    }
+    if (dasha != null && dasha.isNotEmpty) {
+      insightPrompt.writeln('- Current Mahadasha: ${dasha['mahadasha']}, '
+          'Antardasha: ${dasha['antardasha']}.');
+    }
+    insightPrompt
+      ..writeln()
+      ..writeln('Write a 2-3 line reading for each of these 5 sections, '
+          'referencing my actual placements above. Use Hinglish, warm tone.')
+      ..writeln('PERSONALITY: ')
+      ..writeln('CAREER: ')
+      ..writeln('RELATIONSHIPS: ')
+      ..writeln('STRENGTHS: ')
+      ..writeln('CHALLENGES: ');
 
     try {
       final response = await AiService.getAstrologyResponse(
         profile: profile,
-        userMessage: insightPrompt,
+        userMessage: insightPrompt.toString(),
         chatHistory: const [],
       );
 
@@ -362,22 +413,35 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       _navamshaError = null;
     });
 
-    final chartContext = _buildChartContext();
-    final prompt =
-        'Below is MY exact computed Vedic birth chart, including D9 Navamsha '
-        'positions. Use the actual D9 positions to give me a focused '
-        'Navamsha reading.\n\n'
-        '$chartContext\n'
-        'Write a 4-5 line Navamsha (D9) reading covering: '
-        'marriage / partnership style, dharma / soul purpose, and how the '
-        'D9 strengthens or weakens my Rashi (D1) chart. '
-        'Reference specific planets in their D9 signs from above. '
-        'Keep it warm, Hinglish, and specific to MY chart.';
+    // Focused D9 / Navamsha question — embedding-friendly so RAG
+    // matches verses on marriage, 7th house, Venus, Jupiter and dharma.
+    final d9Asc = (_chartData?['d9Navamsha']
+        as Map<String, dynamic>?)?['Ascendant']?.toString() ?? '';
+    final prompt = StringBuffer()
+      ..writeln('Navamsha D9 chart reading focused on marriage, '
+          'partnership, 7th house, Venus, and dharma / soul purpose.')
+      ..writeln()
+      ..writeln('My placements:');
+    final d1Venus = _planetLine('Venus');
+    final d1Jupiter = _planetLine('Jupiter');
+    if (d1Venus.isNotEmpty) prompt.writeln('- D1 $d1Venus.');
+    if (d1Jupiter.isNotEmpty) prompt.writeln('- D1 $d1Jupiter.');
+    if (d9Asc.isNotEmpty) prompt.writeln('- D9 Ascendant: $d9Asc.');
+    for (final p in const ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter',
+      'Venus', 'Saturn']) {
+      final line = _d9Line(p);
+      if (line.isNotEmpty) prompt.writeln('- D9 $line.');
+    }
+    prompt
+      ..writeln()
+      ..writeln('Write a 4-5 line reading covering my marriage and '
+          'partnership style, dharma / soul purpose, and how the D9 '
+          'strengthens or weakens my D1 chart. Hinglish, warm tone.');
 
     try {
       final response = await AiService.getAstrologyResponse(
         profile: profile,
-        userMessage: prompt,
+        userMessage: prompt.toString(),
         chatHistory: const [],
       );
       if (!mounted) return;
@@ -410,23 +474,37 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       _careerError = null;
     });
 
-    final chartContext = _buildChartContext();
-    final prompt =
-        'Below is MY exact computed Vedic birth chart, including D10 Dasamsa '
-        'positions. Use the actual D10 positions to give me a focused career '
-        'reading.\n\n'
-        '$chartContext\n'
-        'Write a 4-5 line Dasamsa (D10) reading covering: '
-        'natural career direction, professional strengths, likely areas of '
-        'achievement, and what to watch out for at work. '
-        'Reference specific planets in their D10 signs and the placement of '
-        'the 10th-house lord. Keep it warm, Hinglish, and specific to MY '
-        'chart.';
+    // Focused D10 / career question — embedding-friendly so RAG
+    // matches verses on career, profession, 10th house, Sun and Saturn.
+    final d10Asc = (_chartData?['d10Dasamsa']
+        as Map<String, dynamic>?)?['Ascendant']?.toString() ?? '';
+    final prompt = StringBuffer()
+      ..writeln('Dasamsa D10 chart reading focused on career, profession, '
+          'work, 10th house, Sun, and Saturn.')
+      ..writeln()
+      ..writeln('My placements:');
+    final d1Sun = _planetLine('Sun');
+    final d1Saturn = _planetLine('Saturn');
+    final d1Mercury = _planetLine('Mercury');
+    if (d1Sun.isNotEmpty) prompt.writeln('- D1 $d1Sun.');
+    if (d1Saturn.isNotEmpty) prompt.writeln('- D1 $d1Saturn.');
+    if (d1Mercury.isNotEmpty) prompt.writeln('- D1 $d1Mercury.');
+    if (d10Asc.isNotEmpty) prompt.writeln('- D10 Ascendant: $d10Asc.');
+    for (final p in const ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter',
+      'Venus', 'Saturn']) {
+      final line = _d10Line(p);
+      if (line.isNotEmpty) prompt.writeln('- D10 $line.');
+    }
+    prompt
+      ..writeln()
+      ..writeln('Write a 4-5 line reading on my natural career direction, '
+          'professional strengths, likely areas of achievement, and what '
+          'to watch out for at work. Hinglish, warm tone.');
 
     try {
       final response = await AiService.getAstrologyResponse(
         profile: profile,
-        userMessage: prompt,
+        userMessage: prompt.toString(),
         chatHistory: const [],
       );
       if (!mounted) return;
