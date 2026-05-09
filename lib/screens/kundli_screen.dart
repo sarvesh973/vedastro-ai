@@ -67,13 +67,38 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    // Lazy-load divisional-chart insights only when the user actually
+    // opens those tabs. Prevents burning rate-limit budget on tabs the
+    // user never visits — the previous build kicked off all three AI
+    // calls in parallel, which on free/trial plans was tripping the
+    // server's daily rate limit and causing the screen to fall back
+    // to canned template responses (the "pre-written text" complaint).
+    _tabController.addListener(_onTabChanged);
     _loadChart();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    if (_chartData == null) return;
+    final idx = _tabController.index;
+    if (idx == 1 &&
+        _navamshaInsight == null &&
+        !_navamshaLoading &&
+        _navamshaError == null) {
+      _loadNavamshaInsight();
+    } else if (idx == 2 &&
+        _careerInsight == null &&
+        !_careerLoading &&
+        _careerError == null) {
+      _loadCareerInsight();
+    }
   }
 
   Future<void> _loadChart() async {
@@ -110,12 +135,10 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
             _chartData = data;
             _isLoading = false;
           });
-          // Kick off the three reading fetches in parallel — each tab
-          // has its own loading state so users can interact with the
-          // chart while AI work happens in the background.
+          // Only kick off the D1 main reading on chart load. D9 and D10
+          // readings are lazy-loaded via _onTabChanged when the user
+          // actually opens those tabs.
           _loadInsights();
-          _loadNavamshaInsight();
-          _loadCareerInsight();
         }
       } else {
         if (mounted) {
@@ -290,11 +313,20 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       if (!mounted) return;
 
       final answer = response.text.trim();
-      if (answer.isEmpty) {
+      // Treat responses with NO Vedic sources as failure. AiService
+      // falls back to hardcoded keyword-matched templates when the
+      // RAG /chat call fails (auth/rate-limit/network) — those
+      // canned strings are what the user called "pre-written texts".
+      // A real RAG response always carries source verses; if sources
+      // is empty, we got the template, not the reading. Show retry
+      // instead of pretending the canned text is real.
+      if (answer.isEmpty || response.sources.isEmpty) {
         setState(() {
           _insightsLoading = false;
-          _insightsError =
-              'Could not generate your reading right now. Please try again.';
+          _insightsError = answer.isEmpty
+              ? 'Could not generate your reading right now. Please try again.'
+              : 'Reading service is busy or rate-limited. '
+                  'Tap retry in a moment.';
         });
         return;
       }
@@ -353,10 +385,16 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       );
       if (!mounted) return;
       final answer = response.text.trim();
+      // Empty sources = canned template fallback, not real RAG. Reject.
+      // See _loadInsights for the full rationale.
+      final isTemplate = answer.isNotEmpty && response.sources.isEmpty;
       setState(() {
         _navamshaLoading = false;
         if (answer.isEmpty) {
           _navamshaError = 'Could not generate Navamsha reading. Tap retry.';
+        } else if (isTemplate) {
+          _navamshaError = 'Reading service is busy or rate-limited. '
+              'Tap retry in a moment.';
         } else {
           _navamshaInsight = answer;
         }
@@ -402,10 +440,14 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       );
       if (!mounted) return;
       final answer = response.text.trim();
+      final isTemplate = answer.isNotEmpty && response.sources.isEmpty;
       setState(() {
         _careerLoading = false;
         if (answer.isEmpty) {
           _careerError = 'Could not generate career reading. Tap retry.';
+        } else if (isTemplate) {
+          _careerError = 'Reading service is busy or rate-limited. '
+              'Tap retry in a moment.';
         } else {
           _careerInsight = answer;
         }
