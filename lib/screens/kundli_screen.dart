@@ -174,17 +174,35 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
           _loadInsights();
         }
       } else {
+        // Surface the actual server response so issues like rate-limit
+        // (429), auth (401), bad-input (400) and server errors (5xx)
+        // are diagnosable without USB-attached debug. The previous
+        // "Could not calculate chart" message hid all of these.
+        String detail = '${response.statusCode}';
+        try {
+          final body = jsonDecode(response.body) as Map<String, dynamic>;
+          final err = body['error']?.toString();
+          if (err != null && err.isNotEmpty) detail = '$detail: $err';
+        } catch (_) {
+          // Body wasn't JSON — include first chunk of raw body.
+          final raw = response.body;
+          if (raw.isNotEmpty) {
+            detail = '$detail: ${raw.length > 120 ? raw.substring(0, 120) : raw}';
+          }
+        }
+        print('[CHART] Non-200 from /chart — $detail');
         if (mounted) {
           setState(() {
-            _error = 'Could not calculate chart';
+            _error = 'Could not calculate chart ($detail)';
             _isLoading = false;
           });
         }
       }
     } catch (e) {
+      print('[CHART] Network/timeout: $e');
       if (mounted) {
         setState(() {
-          _error = 'Connection error. Please try again.';
+          _error = 'Connection error: $e';
           _isLoading = false;
         });
       }
