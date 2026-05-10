@@ -47,6 +47,7 @@ flutter:
   assets:
     - assets/
     - assets/icon/
+    - assets/legal/
 
 # ─── App Icon Config ──────────────────────────
 flutter_launcher_icons:
