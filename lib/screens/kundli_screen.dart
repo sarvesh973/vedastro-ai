@@ -115,7 +115,7 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     // cached readings (which were template fallbacks from when the
     // prompt exceeded MAX_QUESTION_LEN=500) won't be served. Bump again
     // any time the prompt structure changes meaningfully.
-    return 'kundli_insight_v2::${p.name}::$iso::${p.timeOfBirth ?? ""}'
+    return 'kundli_insight_v3::${p.name}::$iso::${p.timeOfBirth ?? ""}'
         '::${p.placeOfBirth}::$section';
   }
 
@@ -565,31 +565,48 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
 
   Map<String, String> _parseInsights(String text) {
     final Map<String, String> result = {};
-    final sections = ['PERSONALITY', 'CAREER', 'RELATIONSHIPS', 'STRENGTHS', 'CHALLENGES'];
+    final sections = const [
+      'PERSONALITY', 'CAREER', 'RELATIONSHIPS', 'STRENGTHS', 'CHALLENGES'
+    ];
+
+    // Match a section header strictly: optional markdown bold around the
+    // UPPERCASE label, REQUIRED colon. Case-sensitive so the lowercase
+    // mentions Gemini sprinkles into intro prose ("personality, career,
+    // marriage and...") don't match — that was the bug producing "Career:
+    // marriage and" cards.
+    RegExp headerFor(String key) =>
+        RegExp(r'\*{0,2}' + key + r'\*{0,2}\s*:\s*\*{0,2}');
+    // Strip markdown bold tokens that the AI sometimes leaves at the
+    // end of a section (e.g. closing **) so the cards render cleanly.
+    String clean(String s) =>
+        s.replaceAll(RegExp(r'^\s*\*+\s*'), '')
+         .replaceAll(RegExp(r'\s*\*+\s*$'), '')
+         .trim();
 
     for (int i = 0; i < sections.length; i++) {
       final key = sections[i];
-      final pattern = RegExp('${key}[:\\s]*', caseSensitive: false);
-      final match = pattern.firstMatch(text);
-      if (match != null) {
-        final startPos = match.end;
-        // Find the next section or end of text
-        int endPos = text.length;
-        for (int j = i + 1; j < sections.length; j++) {
-          final nextPattern = RegExp('${sections[j]}[:\\s]*', caseSensitive: false);
-          final nextMatch = nextPattern.firstMatch(text.substring(startPos));
-          if (nextMatch != null) {
-            endPos = startPos + nextMatch.start;
-            break;
-          }
+      final match = headerFor(key).firstMatch(text);
+      if (match == null) continue;
+
+      final startPos = match.end;
+      int endPos = text.length;
+      // Find the *next* section header that appears AFTER this one,
+      // searching by absolute position so we don't get fooled by
+      // lowercase prose mentions earlier in the response.
+      for (int j = 0; j < sections.length; j++) {
+        if (j == i) continue;
+        final next = headerFor(sections[j]).firstMatch(text);
+        if (next != null && next.start > match.end && next.start < endPos) {
+          endPos = next.start;
         }
-        result[key] = text.substring(startPos, endPos).trim();
       }
+      result[key] = clean(text.substring(startPos, endPos));
     }
 
-    // If parsing failed, just put the whole response as personality
+    // Parser failed to find any explicit section header — dump the
+    // whole reading into Personality so the user still sees something.
     if (result.isEmpty && text.isNotEmpty) {
-      result['PERSONALITY'] = text;
+      result['PERSONALITY'] = clean(text);
     }
 
     return result;
