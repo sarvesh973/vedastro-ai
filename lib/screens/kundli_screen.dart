@@ -12,6 +12,7 @@ import '../widgets/kundli_chart.dart';
 import '../models/user_profile.dart';
 import '../services/ai_service.dart';
 import 'user_details_screen.dart';
+import '../theme/m_page_route.dart';
 
 /// Build Firebase-authed headers for the kundli/chart API.
 /// Server's `/chart` endpoint now requires a Bearer token (security backport)
@@ -1634,7 +1635,7 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const UserDetailsScreen()),
+                  MPageRoute(page: const UserDetailsScreen(), transition: MTransition.modal),
                 );
               },
               child: const Text('Enter Details'),

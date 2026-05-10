@@ -10,6 +10,8 @@ import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'subscription_screen.dart';
 import 'delete_account_screen.dart';
+import '../theme/m_page_route.dart';
+import '../widgets/cosmic_background.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -23,20 +25,24 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      // Transparent appbar lets the cosmic background bleed through —
+      // brand carries from Home into Settings instead of falling off
+      // a cliff onto a flat dark surface.
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Settings'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.divider),
-        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      body: CosmicBackground(
+        intensity: CosmicIntensity.subtle,
+        seed: 'settings',
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -80,7 +86,7 @@ class SettingsScreen extends ConsumerWidget {
               // Build marker bumped per-change so we can tell at a
               // glance which APK is on the device when debugging.
               // Increment when shipping a noticeable behavioural fix.
-              subtitle: 'v1.1.0 (build k8)',
+              subtitle: 'v1.1.0 (build k9)',
               onTap: null,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
 
@@ -123,8 +129,10 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: 'View plan, cancel anytime',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const SubscriptionScreen()),
+                  MPageRoute(
+                    page: const SubscriptionScreen(),
+                    transition: MTransition.push,
+                  ),
                 );
               },
             ).animate().fadeIn(duration: 500.ms, delay: 600.ms),
@@ -140,8 +148,10 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: 'Permanently delete your data',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const DeleteAccountScreen()),
+                  MPageRoute(
+                    page: const DeleteAccountScreen(),
+                    transition: MTransition.push,
+                  ),
                 );
               },
             ).animate().fadeIn(duration: 500.ms, delay: 650.ms),
@@ -172,6 +182,8 @@ class SettingsScreen extends ConsumerWidget {
 
             const SizedBox(height: 40),
           ],
+        ),
+          ),
         ),
       ),
     );
@@ -281,8 +293,9 @@ class SettingsScreen extends ConsumerWidget {
             child: OutlinedButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => EditProfileScreen(profile: profile),
+                  MPageRoute(
+                    page: EditProfileScreen(profile: profile),
+                    transition: MTransition.modal,
                   ),
                 );
               },
@@ -547,7 +560,10 @@ class SettingsScreen extends ConsumerWidget {
               ref.read(chatMessagesProvider.notifier).clear();
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  MPageRoute(
+                    page: const LoginScreen(),
+                    transition: MTransition.fade,
+                  ),
                   (_) => false,
                 );
               }

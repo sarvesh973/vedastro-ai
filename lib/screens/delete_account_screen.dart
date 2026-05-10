@@ -6,6 +6,7 @@ import '../providers/providers.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import 'login_screen.dart';
+import '../theme/m_page_route.dart';
 
 /// Settings → Delete Account screen.
 ///
@@ -391,7 +392,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       ref.read(chatMessagesProvider.notifier).clear();
 
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MPageRoute(page: const LoginScreen(), transition: MTransition.fade),
         (_) => false,
       );
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import 'legal_document_screen.dart';
+import '../theme/m_page_route.dart';
+import '../widgets/cosmic_background.dart';
 
 /// Hub screen reachable from the hamburger drawer's "Legal" entry.
 /// Lists the three policy documents the app is required to surface
@@ -20,19 +22,20 @@ class LegalScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Legal'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.divider),
-        ),
       ),
-      body: ListView(
+      body: CosmicBackground(
+        intensity: CosmicIntensity.whisper,
+        seed: 'legal',
+        child: SafeArea(
+          child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           const SizedBox(height: 4),
@@ -98,6 +101,8 @@ class LegalScreen extends StatelessWidget {
           const SizedBox(height: 24),
         ],
       ),
+        ),
+      ),
     );
   }
 }
@@ -126,11 +131,9 @@ class _LegalTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => LegalDocumentScreen(
-                title: title,
-                assetPath: assetPath,
-              ),
+            MPageRoute(
+              page: LegalDocumentScreen(title: title, assetPath: assetPath),
+              transition: MTransition.push,
             ),
           );
         },

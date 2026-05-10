@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
@@ -16,6 +17,7 @@ import 'horoscope_screen.dart';
 import 'paywall_screen.dart';
 import 'legal_screen.dart';
 import '../models/subscription_plan.dart';
+import '../theme/m_page_route.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -744,7 +746,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           fontWeight: FontWeight.w500,
         ),
       ),
-      onTap: onTap,
+      // Subtle selection-click on every drawer tap so the menu feels
+      // physical. ~5ms haptic, no UX cost on devices that don't support
+      // haptics (Android skips it silently).
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       contentPadding: const EdgeInsets.symmetric(horizontal: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
@@ -1180,24 +1188,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             delay: Duration(milliseconds: delay));
   }
 
-  PageRouteBuilder _buildPageRoute(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity:
-              CurvedAnimation(parent: animation, curve: Curves.easeInOut),
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.05, 0),
-              end: Offset.zero,
-            ).animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeOut)),
-            child: child,
-          ),
-        );
-      },
-      transitionDuration: const Duration(milliseconds: 400),
-    );
-  }
+  // Now delegates to the shared MPageRoute so all drawer + feature
+  // navigation gets the same theme transitions as the rest of the app.
+  PageRoute _buildPageRoute(Widget page) =>
+      MPageRoute(page: page, transition: MTransition.push);
 }

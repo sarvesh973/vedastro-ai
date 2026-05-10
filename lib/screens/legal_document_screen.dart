@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../theme/app_theme.dart';
+import '../widgets/cosmic_background.dart';
+import '../widgets/m_states.dart';
 
 /// Renders a single legal document loaded from `assets/legal/*.md`.
 ///
@@ -55,38 +57,31 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(widget.title),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.divider),
-        ),
       ),
-      body: _content == null
-          ? Center(
-              child: _error != null
-                  ? Text(
-                      _error!,
-                      style: const TextStyle(color: AppColors.textMuted),
-                    )
-                  : const CircularProgressIndicator(
-                      color: AppColors.purpleLight,
-                      strokeWidth: 2.5,
-                    ),
-            )
-          : SafeArea(
-              child: Scrollbar(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-                  children: _renderMarkdown(_content!),
+      body: CosmicBackground(
+        intensity: CosmicIntensity.whisper,
+        seed: widget.assetPath,
+        child: _content == null
+            ? (_error != null
+                ? MErrorState(message: _error!, onRetry: _load)
+                : const MLoadingState(title: 'Loading document...'))
+            : SafeArea(
+                child: Scrollbar(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                    children: _renderMarkdown(_content!),
+                  ),
                 ),
               ),
-            ),
+      ),
     );
   }
 
