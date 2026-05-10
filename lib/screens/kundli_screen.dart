@@ -115,7 +115,7 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     // cached readings (which were template fallbacks from when the
     // prompt exceeded MAX_QUESTION_LEN=500) won't be served. Bump again
     // any time the prompt structure changes meaningfully.
-    return 'kundli_insight_v3::${p.name}::$iso::${p.timeOfBirth ?? ""}'
+    return 'kundli_insight_v4::${p.name}::$iso::${p.timeOfBirth ?? ""}'
         '::${p.placeOfBirth}::$section';
   }
 
@@ -384,13 +384,18 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     // the 500-char limit, returning 400 from the server, falling back to
     // the hardcoded keyword templates in AiService — exactly the
     // "pre-written texts" complaint.
+    //
+    // "Hinglish" alone made Gemini default to Hindi in Devanagari script
+    // ("आप मेष लग्न के हैं..."). We explicitly demand ROMAN script — Hindi
+    // words spelled phonetically in English letters, mixed with English.
     const insightPrompt =
         'From my birth chart, give me a personalized Vedic reading '
         'covering personality, career, marriage and relationships, '
         'strengths, and challenges. Format with PERSONALITY:, CAREER:, '
         'RELATIONSHIPS:, STRENGTHS:, CHALLENGES: labels — 2-3 lines '
-        'each section. Hinglish, warm tone, reference my actual '
-        'lagna, planets and current dasha.';
+        'each section. Reply in HINGLISH using ROMAN ENGLISH SCRIPT '
+        'ONLY (e.g. "Aap Mesh lagna ke hain"). DO NOT use Devanagari '
+        'script. Reference my actual lagna, planets and current dasha.';
 
     try {
       final response = await AiService.getAstrologyResponse(
@@ -473,8 +478,9 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     const prompt =
         'Give me a Navamsha (D9) reading focused on marriage, '
         'partnership, 7th house, Venus, Jupiter, and dharma / soul '
-        'purpose. Reference my actual D9 placements. 4-5 lines, '
-        'Hinglish, warm tone.';
+        'purpose. Reference my actual D9 placements. 4-5 lines. '
+        'Reply in HINGLISH using ROMAN ENGLISH SCRIPT ONLY (e.g. '
+        '"Aap Mesh lagna ke hain"). DO NOT use Devanagari script.';
 
     try {
       final response = await AiService.getAstrologyResponse(
@@ -532,8 +538,9 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
         'Give me a Dasamsa (D10) career reading focused on profession, '
         'work, 10th house, Sun, Saturn. Cover natural career direction, '
         'professional strengths, areas of achievement, and what to watch '
-        'out for at work. Reference my actual D10 placements. 4-5 lines, '
-        'Hinglish, warm tone.';
+        'out for at work. Reference my actual D10 placements. 4-5 lines. '
+        'Reply in HINGLISH using ROMAN ENGLISH SCRIPT ONLY (e.g. '
+        '"Aap Mesh lagna ke hain"). DO NOT use Devanagari script.';
 
     try {
       final response = await AiService.getAstrologyResponse(
