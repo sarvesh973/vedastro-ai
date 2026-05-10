@@ -17,6 +17,7 @@ import 'horoscope_screen.dart';
 import 'paywall_screen.dart';
 import 'legal_screen.dart';
 import '../models/subscription_plan.dart';
+import '../models/user_profile.dart';
 import '../theme/m_page_route.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -45,6 +46,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       key: _scaffoldKey,
       drawer: _buildDrawer(context),
+      // Fixed bottom rail — primary feature destinations (Kundli /
+      // Palm / Horoscope) reachable from anywhere in the home flow.
+      bottomNavigationBar: _buildBottomNav(context),
+      extendBody: true,
       body: StarfieldBackground(
         child: SafeArea(
           child: Stack(
@@ -268,86 +273,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           .fadeIn(duration: 500.ms, delay: 500.ms),
                     ],
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
-                    // Feature buttons grid
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildFeatureCard(
-                            context: context,
-                            icon: Icons.chat_bubble_outline_rounded,
-                            label: 'Astrology\nChat',
-                            color: AppColors.purpleAccent,
-                            delay: 600,
-                            onTap: () {
-                              if (profile != null) {
-                                Navigator.of(context).push(
-                                  _buildPageRoute(const ChatScreen()),
-                                );
-                              } else {
-                                Navigator.of(context).push(
-                                  _buildPageRoute(const UserDetailsScreen()),
-                                );
-                              }
-                            },
-                          ),
+                    // Hero "Astrology Chat" bar — the headline action,
+                    // gets the premium purple→gold gradient treatment.
+                    // Replaces the old 2x2 grid; Kundli / Palm /
+                    // Horoscope now live in the fixed bottom nav.
+                    _buildChatHeroBar(context, profile)
+                        .animate()
+                        .fadeIn(duration: 600.ms, delay: 600.ms)
+                        .slideY(
+                          begin: 0.15,
+                          end: 0,
+                          duration: 600.ms,
+                          delay: 600.ms,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildFeatureCard(
-                            context: context,
-                            icon: Icons.back_hand_outlined,
-                            label: 'Palm\nReading',
-                            color: AppColors.purpleSoft,
-                            delay: 700,
-                            onTap: () {
-                              Navigator.of(context).push(
-                                _buildPageRoute(const PalmUploadScreen()),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildFeatureCard(
-                            context: context,
-                            icon: Icons.auto_awesome_mosaic_outlined,
-                            label: 'Kundli\nChart',
-                            color: AppColors.gold,
-                            delay: 800,
-                            onTap: () {
-                              Navigator.of(context).push(
-                                _buildPageRoute(const KundliScreen()),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildFeatureCard(
-                            context: context,
-                            icon: Icons.stars_outlined,
-                            label: 'Daily\nHoroscope',
-                            color: const Color(0xFFD4A574),
-                            delay: 900,
-                            onTap: () {
-                              Navigator.of(context).push(
-                                _buildPageRoute(const HoroscopeScreen()),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
 
                     // Premium banner
                     _buildPremiumBanner(context, ref)
@@ -1125,6 +1067,215 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (hour < 12) return 'Good Morning';
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
+  }
+
+  /// Full-width "Astrology Chat" hero bar that sits under the rashi
+  /// badge. Two-color gradient (purple → gold) so the headline action
+  /// reads as premium even at a glance. Tapping it navigates to
+  /// chat (after enforcing profile completion).
+  Widget _buildChatHeroBar(BuildContext context, UserProfile? profile) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        splashColor: AppColors.gold.withValues(alpha: 0.15),
+        highlightColor: AppColors.purpleAccent.withValues(alpha: 0.05),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          if (profile != null) {
+            Navigator.of(context)
+                .push(_buildPageRoute(const ChatScreen()));
+          } else {
+            Navigator.of(context)
+                .push(_buildPageRoute(const UserDetailsScreen()));
+          }
+        },
+        child: Container(
+          height: 88,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Color(0xFF6D28D9), // purple-soft (left)
+                Color(0xFF7C3AED), // purple-accent (mid)
+                Color(0xFFD4A574), // gold (right)
+              ],
+              stops: [0.0, 0.55, 1.0],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.purpleAccent.withValues(alpha: 0.35),
+                blurRadius: 22,
+                spreadRadius: 1,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: AppColors.gold.withValues(alpha: 0.18),
+                blurRadius: 26,
+                spreadRadius: 1,
+                offset: const Offset(6, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Icon medallion with frosted white tint over the gradient
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.18),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.32), width: 1),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: Colors.white,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Astrology Chat',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Ask anything about your chart',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.22),
+                ),
+                child: const Icon(Icons.arrow_forward_rounded,
+                    color: Colors.white, size: 18),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Fixed bottom navigation bar pinned to the home Scaffold. Three
+  /// destinations: Kundli, Palm, Horoscope. These were the lower three
+  /// tiles of the old 2×2 grid — promoting them to the bottom rail
+  /// makes them reachable from anywhere in the home flow with one
+  /// thumb tap.
+  Widget _buildBottomNav(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        height: 72,
+        decoration: BoxDecoration(
+          color: AppColors.surface.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: AppColors.purpleAccent.withValues(alpha: 0.25),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.purpleAccent.withValues(alpha: 0.12),
+              blurRadius: 18,
+              spreadRadius: 1,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _bottomNavItem(
+              icon: Icons.auto_awesome_mosaic_outlined,
+              label: 'Kundli',
+              tone: AppColors.goldLight,
+              onTap: () => Navigator.of(context)
+                  .push(_buildPageRoute(const KundliScreen())),
+            ),
+            _bottomNavItem(
+              icon: Icons.back_hand_outlined,
+              label: 'Palm',
+              tone: AppColors.purpleLight,
+              onTap: () => Navigator.of(context)
+                  .push(_buildPageRoute(const PalmUploadScreen())),
+            ),
+            _bottomNavItem(
+              icon: Icons.stars_outlined,
+              label: 'Horoscope',
+              tone: AppColors.gold,
+              onTap: () => Navigator.of(context)
+                  .push(_buildPageRoute(const HoroscopeScreen())),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomNavItem({
+    required IconData icon,
+    required String label,
+    required Color tone,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          splashColor: tone.withValues(alpha: 0.18),
+          highlightColor: tone.withValues(alpha: 0.06),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: tone, size: 22),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: tone,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildFeatureCard({
