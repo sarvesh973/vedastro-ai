@@ -14,6 +14,7 @@ import 'kundli_screen.dart';
 import 'settings_screen.dart';
 import 'horoscope_screen.dart';
 import 'paywall_screen.dart';
+import 'legal_screen.dart';
 import '../models/subscription_plan.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -693,6 +694,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Navigator.pop(context);
                 Navigator.of(context).push(
                   _buildPageRoute(const SettingsScreen()),
+                );
+              },
+            ),
+
+            _buildDrawerItem(
+              icon: Icons.shield_outlined,
+              label: 'Legal',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  _buildPageRoute(const LegalScreen()),
                 );
               },
             ),
