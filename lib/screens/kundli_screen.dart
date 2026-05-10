@@ -111,7 +111,11 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
   String _cacheKeyFor(UserProfile p, String section) {
     final dob = p.dateOfBirth;
     final iso = '${dob.year}-${dob.month}-${dob.day}';
-    return 'kundli_insight::${p.name}::$iso::${p.timeOfBirth ?? ""}'
+    // Version suffix bumped (v2) when the prompt strategy changes — old
+    // cached readings (which were template fallbacks from when the
+    // prompt exceeded MAX_QUESTION_LEN=500) won't be served. Bump again
+    // any time the prompt structure changes meaningfully.
+    return 'kundli_insight_v2::${p.name}::$iso::${p.timeOfBirth ?? ""}'
         '::${p.placeOfBirth}::$section';
   }
 
@@ -371,57 +375,27 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       _insightsError = null;
     });
 
-    // Focused, embedding-friendly prompt. The previous version sent a
-    // huge dump of every planet position alongside 5 different topics —
-    // the resulting embedding matched nothing well in the Vedic
-    // knowledge base, so RAG returned no source verses. This prompt
-    // leads with the topical question keywords (personality, career,
-    // marriage, strengths, challenges) and includes only the most
-    // chart-defining placements (Lagna, Moon, key houses' planets,
-    // current dasha) to keep the embedding focused on the topics
-    // actually being asked about.
-    final asc = _chartData?['ascendant'] as Map<String, dynamic>?;
-    final dasha = _chartData?['dasha'] as Map<String, dynamic>?;
-    final lagnaSign = asc?['sign']?.toString() ?? '';
-    final lagnaLord = asc?['lord']?.toString() ?? '';
-    final birthNak = _chartData?['birthNakshatra']?.toString() ?? '';
-
-    final insightPrompt = StringBuffer()
-      ..writeln('Personalized Vedic birth chart reading covering '
-          'personality, career, marriage and relationships, strengths, '
-          'and challenges.')
-      ..writeln()
-      ..writeln('My key placements:');
-    if (lagnaSign.isNotEmpty) {
-      insightPrompt.writeln(
-          '- Lagna (Ascendant): $lagnaSign, ruled by $lagnaLord.');
-    }
-    if (birthNak.isNotEmpty) {
-      insightPrompt.writeln('- Janma Nakshatra: $birthNak.');
-    }
-    for (final p in const ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter',
-      'Venus', 'Saturn', 'Rahu', 'Ketu']) {
-      final line = _planetLine(p);
-      if (line.isNotEmpty) insightPrompt.writeln('- $line.');
-    }
-    if (dasha != null && dasha.isNotEmpty) {
-      insightPrompt.writeln('- Current Mahadasha: ${dasha['mahadasha']}, '
-          'Antardasha: ${dasha['antardasha']}.');
-    }
-    insightPrompt
-      ..writeln()
-      ..writeln('Write a 2-3 line reading for each of these 5 sections, '
-          'referencing my actual placements above. Use Hinglish, warm tone.')
-      ..writeln('PERSONALITY: ')
-      ..writeln('CAREER: ')
-      ..writeln('RELATIONSHIPS: ')
-      ..writeln('STRENGTHS: ')
-      ..writeln('CHALLENGES: ');
+    // SHORT topical prompt — under the server's MAX_QUESTION_LEN=500
+    // hard cap. Critical lesson: the rag-server's /chat endpoint already
+    // computes the chart from the birthDate/birthTime/place fields the
+    // app sends, augments the embedding with planet/lagna/dasha context,
+    // and includes the chart in the Gemini prompt. Stuffing chart
+    // positions into `question` ourselves was redundant AND pushed past
+    // the 500-char limit, returning 400 from the server, falling back to
+    // the hardcoded keyword templates in AiService — exactly the
+    // "pre-written texts" complaint.
+    const insightPrompt =
+        'From my birth chart, give me a personalized Vedic reading '
+        'covering personality, career, marriage and relationships, '
+        'strengths, and challenges. Format with PERSONALITY:, CAREER:, '
+        'RELATIONSHIPS:, STRENGTHS:, CHALLENGES: labels — 2-3 lines '
+        'each section. Hinglish, warm tone, reference my actual '
+        'lagna, planets and current dasha.';
 
     try {
       final response = await AiService.getAstrologyResponse(
         profile: profile,
-        userMessage: insightPrompt.toString(),
+        userMessage: insightPrompt,
         chatHistory: const [],
       );
 
@@ -492,35 +466,20 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       _navamshaError = null;
     });
 
-    // Focused D9 / Navamsha question — embedding-friendly so RAG
-    // matches verses on marriage, 7th house, Venus, Jupiter and dharma.
-    final d9Asc = (_chartData?['d9Navamsha']
-        as Map<String, dynamic>?)?['Ascendant']?.toString() ?? '';
-    final prompt = StringBuffer()
-      ..writeln('Navamsha D9 chart reading focused on marriage, '
-          'partnership, 7th house, Venus, and dharma / soul purpose.')
-      ..writeln()
-      ..writeln('My placements:');
-    final d1Venus = _planetLine('Venus');
-    final d1Jupiter = _planetLine('Jupiter');
-    if (d1Venus.isNotEmpty) prompt.writeln('- D1 $d1Venus.');
-    if (d1Jupiter.isNotEmpty) prompt.writeln('- D1 $d1Jupiter.');
-    if (d9Asc.isNotEmpty) prompt.writeln('- D9 Ascendant: $d9Asc.');
-    for (final p in const ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter',
-      'Venus', 'Saturn']) {
-      final line = _d9Line(p);
-      if (line.isNotEmpty) prompt.writeln('- D9 $line.');
-    }
-    prompt
-      ..writeln()
-      ..writeln('Write a 4-5 line reading covering my marriage and '
-          'partnership style, dharma / soul purpose, and how the D9 '
-          'strengthens or weakens my D1 chart. Hinglish, warm tone.');
+    // SHORT topical prompt — server already augments with chart data
+    // from the birthDate/birthTime/place we pass in. See _loadInsights
+    // for full rationale on why client-side chart-context-stuffing was
+    // breaking RAG (MAX_QUESTION_LEN=500 on the server).
+    const prompt =
+        'Give me a Navamsha (D9) reading focused on marriage, '
+        'partnership, 7th house, Venus, Jupiter, and dharma / soul '
+        'purpose. Reference my actual D9 placements. 4-5 lines, '
+        'Hinglish, warm tone.';
 
     try {
       final response = await AiService.getAstrologyResponse(
         profile: profile,
-        userMessage: prompt.toString(),
+        userMessage: prompt,
         chatHistory: const [],
       );
       if (!mounted) return;
@@ -568,37 +527,18 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       _careerError = null;
     });
 
-    // Focused D10 / career question — embedding-friendly so RAG
-    // matches verses on career, profession, 10th house, Sun and Saturn.
-    final d10Asc = (_chartData?['d10Dasamsa']
-        as Map<String, dynamic>?)?['Ascendant']?.toString() ?? '';
-    final prompt = StringBuffer()
-      ..writeln('Dasamsa D10 chart reading focused on career, profession, '
-          'work, 10th house, Sun, and Saturn.')
-      ..writeln()
-      ..writeln('My placements:');
-    final d1Sun = _planetLine('Sun');
-    final d1Saturn = _planetLine('Saturn');
-    final d1Mercury = _planetLine('Mercury');
-    if (d1Sun.isNotEmpty) prompt.writeln('- D1 $d1Sun.');
-    if (d1Saturn.isNotEmpty) prompt.writeln('- D1 $d1Saturn.');
-    if (d1Mercury.isNotEmpty) prompt.writeln('- D1 $d1Mercury.');
-    if (d10Asc.isNotEmpty) prompt.writeln('- D10 Ascendant: $d10Asc.');
-    for (final p in const ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter',
-      'Venus', 'Saturn']) {
-      final line = _d10Line(p);
-      if (line.isNotEmpty) prompt.writeln('- D10 $line.');
-    }
-    prompt
-      ..writeln()
-      ..writeln('Write a 4-5 line reading on my natural career direction, '
-          'professional strengths, likely areas of achievement, and what '
-          'to watch out for at work. Hinglish, warm tone.');
+    // SHORT topical prompt — server augments with chart automatically.
+    const prompt =
+        'Give me a Dasamsa (D10) career reading focused on profession, '
+        'work, 10th house, Sun, Saturn. Cover natural career direction, '
+        'professional strengths, areas of achievement, and what to watch '
+        'out for at work. Reference my actual D10 placements. 4-5 lines, '
+        'Hinglish, warm tone.';
 
     try {
       final response = await AiService.getAstrologyResponse(
         profile: profile,
-        userMessage: prompt.toString(),
+        userMessage: prompt,
         chatHistory: const [],
       );
       if (!mounted) return;
