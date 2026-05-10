@@ -19,6 +19,7 @@ import 'legal_screen.dart';
 import '../models/subscription_plan.dart';
 import '../models/user_profile.dart';
 import '../theme/m_page_route.dart';
+import '../widgets/moksha_wordmark.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -209,36 +210,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                     const SizedBox(height: 24),
 
-                    Text(
-                      'Moksha',
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                            letterSpacing: 1,
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    )
+                    // Stylised "moksha" wordmark — shirorekha (top bar)
+                    // + gold dots + tagline ("align with dharma, awaken
+                    // the soul"), built in code via Eczar (a Latin /
+                    // Devanagari harmonised font) instead of a flat
+                    // Text widget. The custom widget handles its own
+                    // tagline, so the previous "Your personal Vedic
+                    // astrologer" subtitle is no longer needed.
+                    const MokshaWordmark(height: 92)
                         .animate()
-                        .fadeIn(duration: 600.ms, delay: 200.ms)
+                        .fadeIn(duration: 700.ms, delay: 200.ms)
                         .slideY(
                           begin: 0.2,
                           end: 0,
-                          duration: 600.ms,
+                          duration: 700.ms,
                           delay: 200.ms,
                         ),
-
-                    const SizedBox(height: 8),
-
-                    Text(
-                      'Your personal Vedic astrologer',
-                      style:
-                          Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textMuted,
-                                fontSize: 15,
-                                letterSpacing: 0.3,
-                              ),
-                    )
-                        .animate()
-                        .fadeIn(duration: 600.ms, delay: 400.ms),
 
                     // Sun sign badge (if profile exists)
                     if (profile != null) ...[
