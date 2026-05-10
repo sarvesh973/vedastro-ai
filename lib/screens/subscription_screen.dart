@@ -97,66 +97,102 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   ///  - Webhook delivery failure (rare but possible)
   /// Either way, don't show "No subscription" — explain + offer support.
   Widget _buildPremiumNoRecordCard() {
+    // Try to recover the plan the user actually purchased from local
+    // storage — set immediately on Razorpay success. Without this we'd
+    // hardcode "Premium Active" which is wrong for Trial / Standard
+    // buyers and hides the upgrade path entirely (the original bug).
+    //
+    // Legacy users (purchased before this field existed) won't have
+    // lastPurchasedPlan set. For them we keep the neutral "Subscription
+    // Active" headline and no upgrade tap — the webhook-driven Firestore
+    // record will populate the real plan name on next launch / pull.
+    final localPlanId = StorageService.lastPurchasedPlan;
+    final localPlan = localPlanId == null
+        ? null
+        : SubscriptionPlanInfo.fromId(localPlanId);
+    final headline = (localPlan == null || localPlan == SubscriptionPlan.free)
+        ? 'Subscription Active'
+        : '${localPlan.displayName} — Active';
+    final upgradeOptions = localPlan?.upgradeOptions ?? const [];
+    final canUpgrade = upgradeOptions.isNotEmpty;
+
+    final cardBody = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: AppColors.gold.withValues(alpha: 0.3), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.workspace_premium,
+                  color: AppColors.goldLight, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  headline,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (canUpgrade)
+                const Icon(Icons.chevron_right,
+                    color: AppColors.goldLight, size: 22),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            canUpgrade
+                ? "Your subscription is active. We're still syncing details "
+                    "— tap here to upgrade your plan, or pull to refresh in "
+                    "a moment to see the cancel option."
+                : "Your subscription is active. We're still syncing your "
+                    "details — pull to refresh in a moment to see plan info "
+                    "and the cancel option.",
+            style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.5),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.background.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              "Need to cancel right now? Email support@vedastro.ai "
+              "with your registered email and we'll cancel within "
+              "24 hours.",
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12.5,
+                  height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: canUpgrade ? () => _openUpgradePaywall(upgradeOptions) : null,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: AppColors.gold.withValues(alpha: 0.3), width: 1.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.workspace_premium,
-                      color: AppColors.goldLight, size: 22),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Premium Active',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                "Your premium features are unlocked. We're still syncing "
-                "your subscription details — pull to refresh in a moment "
-                "to see plan info and the cancel option.",
-                style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    height: 1.5),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.background.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  "Need to cancel right now? Email support@vedastro.ai "
-                  "with your registered email and we'll cancel within "
-                  "24 hours.",
-                  style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 12.5,
-                      height: 1.5),
-                ),
-              ),
-            ],
+            child: cardBody,
           ),
         ).animate().fadeIn(duration: 400.ms),
       ],
@@ -209,87 +245,110 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           : '₹${sub.plan.recurringPaise ~/ 100}/month';
     }
 
+    // Upgrades: only offered when there's a higher tier AND the sub isn't
+    // already cancel-pending (we don't want to charge a new plan on top of
+    // a winding-down one — they should let it lapse first, then resubscribe).
+    final upgradeOptions = sub.plan.upgradeOptions;
+    final canUpgrade = !isCancelled && upgradeOptions.isNotEmpty;
+
+    final cardBody = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.gold.withValues(alpha: 0.18),
+            AppColors.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: AppColors.gold.withValues(alpha: 0.4), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.gold.withValues(alpha: 0.2),
+                ),
+                child: const Icon(Icons.workspace_premium,
+                    color: AppColors.goldLight, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headlineLabel,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      headlineSub,
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              if (canUpgrade)
+                const Icon(Icons.chevron_right,
+                    color: AppColors.goldLight, size: 22),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.background.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              isCancelled
+                  ? "Your subscription is already cancelled. You'll keep "
+                      "premium access until the end of your current paid "
+                      "period, then automatically move to the Free plan."
+                  : canUpgrade
+                      ? "Tap to upgrade your plan. You can cancel anytime — "
+                          "you'll keep your current plan's access until the "
+                          "end of the paid period."
+                      : "Manage your subscription below. You can cancel "
+                          "anytime — you'll keep premium access until the end "
+                          "of your current paid period.",
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.gold.withValues(alpha: 0.18),
-                AppColors.surface,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: canUpgrade ? () => _openUpgradePaywall(upgradeOptions) : null,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: AppColors.gold.withValues(alpha: 0.4), width: 1.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.gold.withValues(alpha: 0.2),
-                    ),
-                    child: const Icon(Icons.workspace_premium,
-                        color: AppColors.goldLight, size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          headlineLabel,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          headlineSub,
-                          style: const TextStyle(
-                              color: AppColors.textMuted, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.background.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  isCancelled
-                      ? "Your subscription is already cancelled. You'll keep "
-                          "premium access until the end of your current paid "
-                          "period, then automatically move to the Free plan."
-                      : "Manage your subscription below. You can cancel anytime — "
-                          "you'll keep premium access until the end of your current "
-                          "paid period.",
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
+            child: cardBody,
           ),
         )
             .animate()
@@ -527,6 +586,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─── Upgrade flow ───────────────────────────────────────────────
+
+  void _openUpgradePaywall(List<SubscriptionPlan> options) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PaywallScreen(availablePlans: options),
       ),
     );
   }

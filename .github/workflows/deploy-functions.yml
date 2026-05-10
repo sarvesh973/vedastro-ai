@@ -64,10 +64,17 @@ jobs:
             echo "⚠ knowledge_base.json missing — /chat will return 503 until KB is generated"
           fi
 
-      - name: Deploy Cloud Functions + Firestore Rules
+      - name: Deploy Cloud Functions
+        # Dropped `firestore:rules` from --only because the rules deploy
+        # invokes serviceusage.googleapis.com to verify firestore is
+        # enabled, which requires Service Usage Admin on the service
+        # account. The current FIREBASE_SERVICE_ACCOUNT lacks that role
+        # and has been failing every deploy with HTTP 403. Functions
+        # alone don't hit that API. Rules can be deployed manually with
+        # `firebase deploy --only firestore:rules` after IAM is fixed.
         run: |
           firebase deploy \
-            --only functions,firestore:rules \
+            --only functions \
             --project vedastro-ai \
             --non-interactive \
             --force

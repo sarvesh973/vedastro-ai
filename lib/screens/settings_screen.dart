@@ -77,7 +77,10 @@ class SettingsScreen extends ConsumerWidget {
             _buildInfoTile(
               icon: Icons.info_outline,
               title: 'App Version',
-              subtitle: 'v1.1.0',
+              // Build marker bumped per-change so we can tell at a
+              // glance which APK is on the device when debugging.
+              // Increment when shipping a noticeable behavioural fix.
+              subtitle: 'v1.1.0 (build k7)',
               onTap: null,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
 

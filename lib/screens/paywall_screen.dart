@@ -420,7 +420,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     if (!plans.contains(SubscriptionPlan.trial) &&
         plans.contains(SubscriptionPlan.standard) &&
         plans.contains(SubscriptionPlan.premium)) {
-      return "Your free chats are over. Pick a plan to keep going.";
+      return "Upgrade your plan for more chats and palm readings.";
     }
     return 'Pick the plan that suits your journey';
   }

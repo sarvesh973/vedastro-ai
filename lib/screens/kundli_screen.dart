@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../config/api_config.dart';
 import '../providers/providers.dart';
@@ -43,22 +44,98 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
   bool _isLoading = true;
   String? _error;
 
-  // Personalized insights
+  // Personalized insights — main D1 reading split into 5 sections.
   Map<String, String> _insights = {};
   bool _insightsLoading = false;
   String? _insightsError;
+
+  // Dedicated D9 (Navamsha) and D10 (Career) readings.
+  // The previous build reused the main D1 response and parsed it for
+  // RELATIONSHIPS / CAREER sections. When the AI used different headings
+  // or skipped a section, those tabs were empty. Fetching them
+  // independently with chart-specific prompts guarantees content even
+  // when the main parse fails, AND gives the AI Navamsha/Dasamsa
+  // positions to actually reason about.
+  String? _navamshaInsight;
+  bool _navamshaLoading = false;
+  String? _navamshaError;
+
+  String? _careerInsight;
+  bool _careerLoading = false;
+  String? _careerError;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    // Lazy-load divisional-chart insights only when the user actually
+    // opens those tabs. Prevents burning rate-limit budget on tabs the
+    // user never visits — the previous build kicked off all three AI
+    // calls in parallel, which on free/trial plans was tripping the
+    // server's daily rate limit and causing the screen to fall back
+    // to canned template responses (the "pre-written text" complaint).
+    _tabController.addListener(_onTabChanged);
     _loadChart();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    if (_chartData == null) return;
+    final idx = _tabController.index;
+    if (idx == 1 &&
+        _navamshaInsight == null &&
+        !_navamshaLoading &&
+        _navamshaError == null) {
+      _loadNavamshaInsight();
+    } else if (idx == 2 &&
+        _careerInsight == null &&
+        !_careerLoading &&
+        _careerError == null) {
+      _loadCareerInsight();
+    }
+  }
+
+  // ─── Insight cache ────────────────────────────────────────────
+  // Once a reading lands, persist it per profile so re-opening the
+  // Kundli screen doesn't burn a /chat rate-limit slot. Each profile
+  // gets at most 3 chat-quota calls ever (D1 + D9 + D10), instead of
+  // 3 per chart-view. Cache key derives from birth details so editing
+  // the profile invalidates the old reading.
+  String _cacheKeyFor(UserProfile p, String section) {
+    final dob = p.dateOfBirth;
+    final iso = '${dob.year}-${dob.month}-${dob.day}';
+    // Version suffix bumped (v2) when the prompt strategy changes — old
+    // cached readings (which were template fallbacks from when the
+    // prompt exceeded MAX_QUESTION_LEN=500) won't be served. Bump again
+    // any time the prompt structure changes meaningfully.
+    return 'kundli_insight_v4::${p.name}::$iso::${p.timeOfBirth ?? ""}'
+        '::${p.placeOfBirth}::$section';
+  }
+
+  Future<String?> _readCachedInsight(UserProfile p, String section) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKeyFor(p, section));
+      if (raw == null || raw.isEmpty) return null;
+      return raw;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCachedInsight(
+      UserProfile p, String section, String text) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKeyFor(p, section), text);
+    } catch (_) {}
   }
 
   Future<void> _loadChart() async {
@@ -95,21 +172,41 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
             _chartData = data;
             _isLoading = false;
           });
-          // Auto-fetch personalized insights
+          // Only kick off the D1 main reading on chart load. D9 and D10
+          // readings are lazy-loaded via _onTabChanged when the user
+          // actually opens those tabs.
           _loadInsights();
         }
       } else {
+        // Surface the actual server response so issues like rate-limit
+        // (429), auth (401), bad-input (400) and server errors (5xx)
+        // are diagnosable without USB-attached debug. The previous
+        // "Could not calculate chart" message hid all of these.
+        String detail = '${response.statusCode}';
+        try {
+          final body = jsonDecode(response.body) as Map<String, dynamic>;
+          final err = body['error']?.toString();
+          if (err != null && err.isNotEmpty) detail = '$detail: $err';
+        } catch (_) {
+          // Body wasn't JSON — include first chunk of raw body.
+          final raw = response.body;
+          if (raw.isNotEmpty) {
+            detail = '$detail: ${raw.length > 120 ? raw.substring(0, 120) : raw}';
+          }
+        }
+        print('[CHART] Non-200 from /chart — $detail');
         if (mounted) {
           setState(() {
-            _error = 'Could not calculate chart';
+            _error = 'Could not calculate chart ($detail)';
             _isLoading = false;
           });
         }
       }
     } catch (e) {
+      print('[CHART] Network/timeout: $e');
       if (mounted) {
         setState(() {
-          _error = 'Connection error. Please try again.';
+          _error = 'Connection error: $e';
           _isLoading = false;
         });
       }
@@ -174,29 +271,131 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     return KundliChart.signToIndex(ascSign);
   }
 
-  Future<void> _loadInsights() async {
+  /// Helper: format a single planet's D1 position concisely.
+  /// Returns empty string if the planet isn't in the chart data.
+  String _planetLine(String planetName) {
+    final planets = _chartData?['planets'] as Map<String, dynamic>?;
+    final m = planets?[planetName] as Map<String, dynamic>?;
+    if (m == null) return '';
+    final retro = m['isRetrograde'] == true ? ' (R)' : '';
+    return '$planetName in ${m['sign']} (House ${m['house']}, '
+        '${m['nakshatra'] ?? '-'} nakshatra)$retro';
+  }
+
+  /// Helper: D9 sign for a planet, or empty if unavailable.
+  String _d9Line(String planetName) {
+    final d9 = _chartData?['d9Navamsha'] as Map<String, dynamic>?;
+    final sign = d9?[planetName]?.toString() ?? '';
+    return sign.isEmpty ? '' : '$planetName in $sign';
+  }
+
+  /// Helper: D10 sign for a planet.
+  String _d10Line(String planetName) {
+    final d10 = _chartData?['d10Dasamsa'] as Map<String, dynamic>?;
+    final sign = d10?[planetName]?.toString() ?? '';
+    return sign.isEmpty ? '' : '$planetName in $sign';
+  }
+
+  /// Compact, AI-friendly summary of this user's actual computed chart.
+  /// Without this in the prompt, the AI was producing generic readings
+  /// from birthdate alone — the user called it "pre-written data."
+  String _buildChartContext() {
+    final sb = StringBuffer();
+    final asc = _chartData?['ascendant'] as Map<String, dynamic>?;
+    if (asc != null) {
+      final degree = asc['degree']?.toString() ?? '';
+      sb.writeln('Ascendant (Lagna): ${asc['sign']}'
+          '${degree.isNotEmpty ? ' at $degree°' : ''}'
+          ', Nakshatra: ${asc['nakshatra'] ?? '-'}'
+          ', Lord: ${asc['lord'] ?? '-'}.');
+    }
+    final birthNak = _chartData?['birthNakshatra']?.toString();
+    if (birthNak != null && birthNak.isNotEmpty) {
+      sb.writeln('Birth Nakshatra (Moon): $birthNak.');
+    }
+
+    final planets = _chartData?['planets'] as Map<String, dynamic>?;
+    if (planets != null && planets.isNotEmpty) {
+      sb.writeln('\nD1 Rashi (Birth Chart) Planet Positions:');
+      planets.forEach((name, raw) {
+        final m = raw as Map<String, dynamic>;
+        final retro = m['isRetrograde'] == true ? ' (Retrograde)' : '';
+        sb.writeln('  $name: ${m['sign']}, House ${m['house']}, '
+            'Nakshatra ${m['nakshatra'] ?? '-'}$retro.');
+      });
+    }
+
+    final dasha = _chartData?['dasha'] as Map<String, dynamic>?;
+    if (dasha != null && dasha.isNotEmpty) {
+      sb.writeln('\nCurrent Vimshottari Dasha:');
+      sb.writeln('  Mahadasha: ${dasha['mahadasha']}'
+          ' (until ${dasha['mahadashaEnd'] ?? '-'}).');
+      sb.writeln('  Antardasha: ${dasha['antardasha']}'
+          ' (until ${dasha['antardashaEnd'] ?? '-'}).');
+      final pratyantar = dasha['pratyantar']?.toString();
+      if (pratyantar != null && pratyantar.isNotEmpty) {
+        sb.writeln('  Pratyantar: $pratyantar.');
+      }
+    }
+
+    final d9 = _chartData?['d9Navamsha'] as Map<String, dynamic>?;
+    if (d9 != null && d9.isNotEmpty) {
+      sb.writeln('\nD9 Navamsha (Marriage / Dharma) Positions:');
+      d9.forEach((planet, sign) => sb.writeln('  $planet: $sign.'));
+    }
+
+    final d10 = _chartData?['d10Dasamsa'] as Map<String, dynamic>?;
+    if (d10 != null && d10.isNotEmpty) {
+      sb.writeln('\nD10 Dasamsa (Career) Positions:');
+      d10.forEach((planet, sign) => sb.writeln('  $planet: $sign.'));
+    }
+
+    return sb.toString();
+  }
+
+  Future<void> _loadInsights({bool forceRefresh = false}) async {
     final profile = ref.read(userProfileProvider);
     if (profile == null || _chartData == null) return;
+
+    // Cache hit? Use it. Saves a /chat rate-limit slot.
+    if (!forceRefresh) {
+      final cached = await _readCachedInsight(profile, 'main');
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _insights = _parseInsights(cached);
+          _insightsLoading = false;
+          _insightsError = null;
+        });
+        return;
+      }
+    }
 
     setState(() {
       _insightsLoading = true;
       _insightsError = null;
     });
 
-    // Route through AiService.getAstrologyResponse — same path as chat,
-    // so auth + rate-limit + server errors all get the same friendly
-    // handling. Previously this called /chat directly and swallowed every
-    // error silently → user saw nothing in any tab when the call failed.
+    // SHORT topical prompt — under the server's MAX_QUESTION_LEN=500
+    // hard cap. Critical lesson: the rag-server's /chat endpoint already
+    // computes the chart from the birthDate/birthTime/place fields the
+    // app sends, augments the embedding with planet/lagna/dasha context,
+    // and includes the chart in the Gemini prompt. Stuffing chart
+    // positions into `question` ourselves was redundant AND pushed past
+    // the 500-char limit, returning 400 from the server, falling back to
+    // the hardcoded keyword templates in AiService — exactly the
+    // "pre-written texts" complaint.
+    //
+    // "Hinglish" alone made Gemini default to Hindi in Devanagari script
+    // ("आप मेष लग्न के हैं..."). We explicitly demand ROMAN script — Hindi
+    // words spelled phonetically in English letters, mixed with English.
     const insightPrompt =
-        'Based on my complete birth chart, give me a brief personalized reading. '
-        'Cover these 5 areas in 2-3 lines each: '
-        '1. PERSONALITY: What kind of person am I based on my lagna and planets? '
-        '2. CAREER: What career paths suit me based on 10th house and D10? '
-        '3. RELATIONSHIPS: What is my love/marriage life like based on 7th house and D9? '
-        '4. STRENGTHS: What are my biggest strengths from this chart? '
-        '5. CHALLENGES: What should I be careful about? '
-        'Format each section starting with the label like "PERSONALITY:" etc. '
-        'Keep it warm, Hinglish, and specific to MY chart positions.';
+        'From my birth chart, give me a personalized Vedic reading '
+        'covering personality, career, marriage and relationships, '
+        'strengths, and challenges. Format with PERSONALITY:, CAREER:, '
+        'RELATIONSHIPS:, STRENGTHS:, CHALLENGES: labels — 2-3 lines '
+        'each section. Reply in HINGLISH using ROMAN ENGLISH SCRIPT '
+        'ONLY (e.g. "Aap Mesh lagna ke hain"). DO NOT use Devanagari '
+        'script. Reference my actual lagna, planets and current dasha.';
 
     try {
       final response = await AiService.getAstrologyResponse(
@@ -208,6 +407,12 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
       if (!mounted) return;
 
       final answer = response.text.trim();
+      // Note: an earlier version of this check rejected responses with
+      // empty `sources` as "template fallbacks." That was wrong — the
+      // hardcoded templates in AiService are CLIENT-SIDE and only fire
+      // when the server call returns null. A 200 with empty sources is
+      // a real Gemini reading, just without matched Vedic verses. So
+      // we only reject genuinely empty answers here.
       if (answer.isEmpty) {
         setState(() {
           _insightsLoading = false;
@@ -228,6 +433,9 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
             ? 'Reading was empty. Tap retry to try again.'
             : null;
       });
+      if (parsed.isNotEmpty) {
+        _writeCachedInsight(profile, 'main', answer);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -237,33 +445,175 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     }
   }
 
-  Map<String, String> _parseInsights(String text) {
-    final Map<String, String> result = {};
-    final sections = ['PERSONALITY', 'CAREER', 'RELATIONSHIPS', 'STRENGTHS', 'CHALLENGES'];
+  /// Dedicated D9 Navamsha reading. The previous build pulled this out
+  /// of the main response by parsing the "RELATIONSHIPS:" section — when
+  /// the AI used different wording or skipped that section, the D9 tab
+  /// was silent. A focused prompt with the actual D9 positions
+  /// guarantees content and is far more chart-specific.
+  Future<void> _loadNavamshaInsight({bool forceRefresh = false}) async {
+    final profile = ref.read(userProfileProvider);
+    if (profile == null || _chartData == null) return;
 
-    for (int i = 0; i < sections.length; i++) {
-      final key = sections[i];
-      final pattern = RegExp('${key}[:\\s]*', caseSensitive: false);
-      final match = pattern.firstMatch(text);
-      if (match != null) {
-        final startPos = match.end;
-        // Find the next section or end of text
-        int endPos = text.length;
-        for (int j = i + 1; j < sections.length; j++) {
-          final nextPattern = RegExp('${sections[j]}[:\\s]*', caseSensitive: false);
-          final nextMatch = nextPattern.firstMatch(text.substring(startPos));
-          if (nextMatch != null) {
-            endPos = startPos + nextMatch.start;
-            break;
-          }
-        }
-        result[key] = text.substring(startPos, endPos).trim();
+    if (!forceRefresh) {
+      final cached = await _readCachedInsight(profile, 'navamsha');
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _navamshaInsight = cached;
+          _navamshaLoading = false;
+          _navamshaError = null;
+        });
+        return;
       }
     }
 
-    // If parsing failed, just put the whole response as personality
+    setState(() {
+      _navamshaLoading = true;
+      _navamshaError = null;
+    });
+
+    // SHORT topical prompt — server already augments with chart data
+    // from the birthDate/birthTime/place we pass in. See _loadInsights
+    // for full rationale on why client-side chart-context-stuffing was
+    // breaking RAG (MAX_QUESTION_LEN=500 on the server).
+    const prompt =
+        'Give me a Navamsha (D9) reading focused on marriage, '
+        'partnership, 7th house, Venus, Jupiter, and dharma / soul '
+        'purpose. Reference my actual D9 placements. 4-5 lines. '
+        'Reply in HINGLISH using ROMAN ENGLISH SCRIPT ONLY (e.g. '
+        '"Aap Mesh lagna ke hain"). DO NOT use Devanagari script.';
+
+    try {
+      final response = await AiService.getAstrologyResponse(
+        profile: profile,
+        userMessage: prompt,
+        chatHistory: const [],
+      );
+      if (!mounted) return;
+      final answer = response.text.trim();
+      setState(() {
+        _navamshaLoading = false;
+        if (answer.isEmpty) {
+          _navamshaError = 'Could not generate Navamsha reading. Tap retry.';
+        } else {
+          _navamshaInsight = answer;
+        }
+      });
+      if (answer.isNotEmpty) {
+        _writeCachedInsight(profile, 'navamsha', answer);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _navamshaLoading = false;
+        _navamshaError = 'Connection issue. Tap retry to load Navamsha.';
+      });
+    }
+  }
+
+  /// Dedicated D10 Dasamsa (career) reading — see _loadNavamshaInsight
+  /// for why this is a separate fetch instead of parsing the main one.
+  Future<void> _loadCareerInsight({bool forceRefresh = false}) async {
+    final profile = ref.read(userProfileProvider);
+    if (profile == null || _chartData == null) return;
+
+    if (!forceRefresh) {
+      final cached = await _readCachedInsight(profile, 'career');
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _careerInsight = cached;
+          _careerLoading = false;
+          _careerError = null;
+        });
+        return;
+      }
+    }
+
+    setState(() {
+      _careerLoading = true;
+      _careerError = null;
+    });
+
+    // SHORT topical prompt — server augments with chart automatically.
+    const prompt =
+        'Give me a Dasamsa (D10) career reading focused on profession, '
+        'work, 10th house, Sun, Saturn. Cover natural career direction, '
+        'professional strengths, areas of achievement, and what to watch '
+        'out for at work. Reference my actual D10 placements. 4-5 lines. '
+        'Reply in HINGLISH using ROMAN ENGLISH SCRIPT ONLY (e.g. '
+        '"Aap Mesh lagna ke hain"). DO NOT use Devanagari script.';
+
+    try {
+      final response = await AiService.getAstrologyResponse(
+        profile: profile,
+        userMessage: prompt,
+        chatHistory: const [],
+      );
+      if (!mounted) return;
+      final answer = response.text.trim();
+      setState(() {
+        _careerLoading = false;
+        if (answer.isEmpty) {
+          _careerError = 'Could not generate career reading. Tap retry.';
+        } else {
+          _careerInsight = answer;
+        }
+      });
+      if (answer.isNotEmpty) {
+        _writeCachedInsight(profile, 'career', answer);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _careerLoading = false;
+        _careerError = 'Connection issue. Tap retry to load career reading.';
+      });
+    }
+  }
+
+  Map<String, String> _parseInsights(String text) {
+    final Map<String, String> result = {};
+    final sections = const [
+      'PERSONALITY', 'CAREER', 'RELATIONSHIPS', 'STRENGTHS', 'CHALLENGES'
+    ];
+
+    // Match a section header strictly: optional markdown bold around the
+    // UPPERCASE label, REQUIRED colon. Case-sensitive so the lowercase
+    // mentions Gemini sprinkles into intro prose ("personality, career,
+    // marriage and...") don't match — that was the bug producing "Career:
+    // marriage and" cards.
+    RegExp headerFor(String key) =>
+        RegExp(r'\*{0,2}' + key + r'\*{0,2}\s*:\s*\*{0,2}');
+    // Strip markdown bold tokens that the AI sometimes leaves at the
+    // end of a section (e.g. closing **) so the cards render cleanly.
+    String clean(String s) =>
+        s.replaceAll(RegExp(r'^\s*\*+\s*'), '')
+         .replaceAll(RegExp(r'\s*\*+\s*$'), '')
+         .trim();
+
+    for (int i = 0; i < sections.length; i++) {
+      final key = sections[i];
+      final match = headerFor(key).firstMatch(text);
+      if (match == null) continue;
+
+      final startPos = match.end;
+      int endPos = text.length;
+      // Find the *next* section header that appears AFTER this one,
+      // searching by absolute position so we don't get fooled by
+      // lowercase prose mentions earlier in the response.
+      for (int j = 0; j < sections.length; j++) {
+        if (j == i) continue;
+        final next = headerFor(sections[j]).firstMatch(text);
+        if (next != null && next.start > match.end && next.start < endPos) {
+          endPos = next.start;
+        }
+      }
+      result[key] = clean(text.substring(startPos, endPos));
+    }
+
+    // Parser failed to find any explicit section header — dump the
+    // whole reading into Personality so the user still sees something.
     if (result.isEmpty && text.isNotEmpty) {
-      result['PERSONALITY'] = text;
+      result['PERSONALITY'] = clean(text);
     }
 
     return result;
@@ -447,34 +797,15 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
               Icons.favorite_outline,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
             const SizedBox(height: 12),
-            // Show relationship insight from parsed data
-            if (_insights.containsKey('RELATIONSHIPS'))
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE91E63).withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.auto_awesome, color: Color(0xFFE91E63), size: 16),
-                        SizedBox(width: 8),
-                        Text('Your Relationship Reading', style: TextStyle(color: Color(0xFFE91E63), fontSize: 14, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _insights['RELATIONSHIPS']!,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.6),
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
+            _buildDivisionalReadingCard(
+              title: 'Your Navamsha Reading',
+              icon: Icons.auto_awesome,
+              accent: const Color(0xFFE91E63),
+              insight: _navamshaInsight,
+              loading: _navamshaLoading,
+              error: _navamshaError,
+              onRetry: _loadNavamshaInsight,
+            ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
             const SizedBox(height: 32),
           ],
 
@@ -485,34 +816,15 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
               Icons.work_outline,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
             const SizedBox(height: 12),
-            // Show career insight from parsed data
-            if (_insights.containsKey('CAREER'))
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.goldLight.withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.auto_awesome, color: AppColors.goldLight, size: 16),
-                        SizedBox(width: 8),
-                        Text('Your Career Reading', style: TextStyle(color: AppColors.goldLight, fontSize: 14, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _insights['CAREER']!,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.6),
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
+            _buildDivisionalReadingCard(
+              title: 'Your Career Reading',
+              icon: Icons.auto_awesome,
+              accent: AppColors.goldLight,
+              insight: _careerInsight,
+              loading: _careerLoading,
+              error: _careerError,
+              onRetry: _loadCareerInsight,
+            ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
             const SizedBox(height: 32),
           ],
         ],
@@ -1144,6 +1456,105 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.6),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Reading card for D9 / D10 tabs. Renders one of: spinner while
+  /// loading, error + Retry button on failure, or the actual reading
+  /// text. Shared between Navamsha and Career tabs to keep their
+  /// behaviour identical.
+  Widget _buildDivisionalReadingCard({
+    required String title,
+    required IconData icon,
+    required Color accent,
+    required String? insight,
+    required bool loading,
+    required String? error,
+    required VoidCallback onRetry,
+  }) {
+    Widget body;
+    if (loading) {
+      body = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Reading your chart...',
+              style: TextStyle(
+                  color: AppColors.textMuted.withOpacity(0.8), fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    } else if (insight != null && insight.isNotEmpty) {
+      body = Text(
+        insight,
+        style: const TextStyle(
+            color: AppColors.textSecondary, fontSize: 13, height: 1.6),
+      );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            error ?? 'Reading not available yet.',
+            style: TextStyle(
+                color: AppColors.textMuted.withOpacity(0.9),
+                fontSize: 13,
+                height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 34,
+            child: ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 14),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: accent, size: 16),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: TextStyle(
+                      color: accent,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          body,
         ],
       ),
     );

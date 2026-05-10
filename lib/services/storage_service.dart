@@ -23,6 +23,13 @@ class StorageService {
   static const String _keyChatUsed = 'chat_questions_used';
   static const String _keyPalmUsed = 'palm_readings_used';
   static const String _keyIsPremium = 'is_premium';
+  // Plan ID (free/trial/standard/premium) of the user's most recent
+  // purchase. Set immediately on Razorpay success so the UI can show the
+  // correct plan name and the correct upgrade options BEFORE the webhook
+  // writes the canonical Firestore record. The Firestore stream takes over
+  // once the webhook lands; this is just the fallback for those few seconds
+  // (or longer if the webhook fails).
+  static const String _keyLastPurchasedPlan = 'last_purchased_plan';
 
   /// Initialize SharedPreferences (call once at app start)
   static Future<void> init() async {
@@ -257,6 +264,15 @@ class StorageService {
     await _prefs?.setBool(_keyIsPremium, true);
   }
 
+  /// The plan ID the user most recently purchased (e.g. "trial", "standard").
+  /// Returns null if none recorded yet (free user, or pre-feature install).
+  static String? get lastPurchasedPlan =>
+      _prefs?.getString(_keyLastPurchasedPlan);
+
+  static Future<void> setLastPurchasedPlan(String planId) async {
+    await _prefs?.setString(_keyLastPurchasedPlan, planId);
+  }
+
   // ─── Reset ──────────────────────────────────────
   static Future<void> reset() async {
     _currentProfile = null;
@@ -281,5 +297,6 @@ class StorageService {
     await _prefs?.remove(_keyChatUsed);
     await _prefs?.remove(_keyPalmUsed);
     await _prefs?.remove(_keyIsPremium);
+    await _prefs?.remove(_keyLastPurchasedPlan);
   }
 }

@@ -601,10 +601,40 @@ exports.subscriptionCancel = functions
         const { subscriptionId, immediate = false } = req.body || {};
         if (!subscriptionId) return res.status(400).json({ error: 'subscriptionId required' });
 
-        // Verify the subscription belongs to this user
-        const subDoc = await admin.firestore().doc(`subscriptions/${subscriptionId}`).get();
-        if (!subDoc.exists || subDoc.data().userId !== auth.uid) {
-          return res.status(403).json({ error: 'Subscription not found or not yours' });
+        // Verify the subscription belongs to this user. We have to support
+        // BOTH data shapes that exist in this project's Firestore:
+        //
+        //  (a) subscriptions/{subId} — written by subscriptionCreate
+        //      (Firebase Function path).
+        //  (b) users/{uid}/subscription/current — written by the Render
+        //      RAG server's webhook, with field razorpaySubscriptionId.
+        //      Many existing paying users only have (b).
+        //
+        // We accept ownership if EITHER path proves it. Otherwise reject.
+        let owned = false;
+        const subDoc = await admin
+          .firestore()
+          .doc(`subscriptions/${subscriptionId}`)
+          .get();
+        if (subDoc.exists && subDoc.data().userId === auth.uid) {
+          owned = true;
+        }
+        if (!owned) {
+          const userSubDoc = await admin
+            .firestore()
+            .doc(`users/${auth.uid}/subscription/current`)
+            .get();
+          if (
+            userSubDoc.exists &&
+            userSubDoc.data().razorpaySubscriptionId === subscriptionId
+          ) {
+            owned = true;
+          }
+        }
+        if (!owned) {
+          return res
+            .status(403)
+            .json({ error: 'Subscription not found or not yours' });
         }
 
         const razorpay = getRazorpay();
@@ -613,17 +643,37 @@ exports.subscriptionCancel = functions
           immediate ? false : true,
         );
 
-        await admin.firestore().doc(`subscriptions/${subscriptionId}`).set({
-          status: result.status,
-          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-          cancelImmediate: immediate,
-        }, { merge: true });
+        // Update whichever document(s) exist. Use merge:true so we don't
+        // overwrite fields written by other paths (e.g. Render webhook).
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        await admin
+          .firestore()
+          .doc(`subscriptions/${subscriptionId}`)
+          .set(
+            {
+              status: result.status,
+              cancelledAt: now,
+              cancelImmediate: immediate,
+            },
+            { merge: true },
+          );
+        await admin
+          .firestore()
+          .doc(`users/${auth.uid}/subscription/current`)
+          .set(
+            {
+              state: immediate ? 'expired' : 'cancelledPending',
+              cancelledAt: now,
+              razorpaySubscriptionId: subscriptionId,
+            },
+            { merge: true },
+          );
 
         if (immediate) {
           await admin.firestore().doc(`usage/${auth.uid}`).set({
             isPremium: false,
             plan: 'free',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: now,
           }, { merge: true });
         }
 

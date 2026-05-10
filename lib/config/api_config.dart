@@ -9,6 +9,14 @@ class ApiConfig {
   static const String cloudFunctionBaseUrl =
       'https://vedastro-rag-server.onrender.com';
 
+  /// Firebase Cloud Functions base URL — used for subscription
+  /// management endpoints that the Render server doesn't handle
+  /// (e.g. /subscriptionCancel). The Render server is the primary
+  /// for chat/horoscope/palm; Firebase functions are used directly
+  /// where they're the source of truth (functions/index.js).
+  static const String firebaseFunctionsBaseUrl =
+      'https://us-central1-vedastro-ai.cloudfunctions.net';
+
   /// Razorpay LIVE API Key — REAL MONEY mode.
   /// Subscriptions opened with this key WILL CHARGE the user's card.
   /// Get your keys from: https://dashboard.razorpay.com/app/keys
