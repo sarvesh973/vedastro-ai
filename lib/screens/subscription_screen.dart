@@ -11,6 +11,8 @@ import '../services/firestore_service.dart';
 import '../services/payment_service.dart';
 import '../services/storage_service.dart';
 import 'paywall_screen.dart';
+import '../theme/m_page_route.dart';
+import '../widgets/cosmic_background.dart';
 
 /// Settings → Subscription management screen.
 ///
@@ -35,20 +37,21 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Subscription'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.divider),
-        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      body: CosmicBackground(
+        intensity: CosmicIntensity.subtle,
+        seed: 'subscription',
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -85,6 +88,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             // Always show — answers common cancellation questions
             _buildFAQ(),
           ],
+        ),
+          ),
         ),
       ),
     );
@@ -454,7 +459,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           child: ElevatedButton(
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                MPageRoute(
+                  page: const PaywallScreen(),
+                  transition: MTransition.modal,
+                ),
               );
             },
             style: ElevatedButton.styleFrom(
@@ -594,8 +602,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
   void _openUpgradePaywall(List<SubscriptionPlan> options) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PaywallScreen(availablePlans: options),
+      MPageRoute(
+        page: PaywallScreen(availablePlans: options),
+        transition: MTransition.modal,
       ),
     );
   }
