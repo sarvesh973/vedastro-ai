@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/payment_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/autopay_confirm_sheet.dart';
+import '../widgets/plan_activated_sheet.dart';
 
 /// Paywall with up to three plans: Free 7-Day Trial, Standard (₹199/mo),
 /// Premium (₹499/mo).
@@ -467,25 +468,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         ref.read(isPremiumProvider.notifier).state =
             StorageService.isPremium;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.workspace_premium,
-                    color: AppColors.goldLight, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                    child: Text(
-                        'Premium activated! Enjoy your subscription.')),
-              ],
-            ),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-        Navigator.pop(context);
+        // Show the polished plan-activated sheet instead of a toast.
+        // Tells the user EXACTLY which plan they got, lists features,
+        // and offers one-tap upgrades to higher tiers (no upsell on
+        // premium since it's the highest).
+        _showPlanActivatedSheet(_selectedPlan);
       },
       onFailure: (message) {
         if (!mounted) return;
@@ -500,6 +487,37 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Push the success sheet over the paywall. Continue closes both;
+  /// upgrade taps re-open the paywall preselected on the higher plan.
+  void _showPlanActivatedSheet(SubscriptionPlan activated) {
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black54,
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (ctx, _, __) => PlanActivatedSheet(
+          activatedPlan: activated,
+          onContinue: () => Navigator.of(ctx).pop(),
+          onUpgrade: (newPlan) {
+            // Replace this screen with a fresh paywall narrowed to the
+            // chosen upgrade. Empty list means "show only this one plan"
+            // — keeps the upgrade flow focused.
+            Navigator.of(ctx).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) =>
+                    PaywallScreen(availablePlans: [newPlan]),
+              ),
+            );
+          },
+        ),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          child: child,
+        ),
+      ),
     );
   }
 
