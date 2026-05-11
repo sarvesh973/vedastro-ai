@@ -598,8 +598,41 @@ exports.subscriptionCancel = functions
       if (!auth) return;
 
       try {
-        const { subscriptionId, immediate = false } = req.body || {};
-        if (!subscriptionId) return res.status(400).json({ error: 'subscriptionId required' });
+        const { immediate = false } = req.body || {};
+        let { subscriptionId } = req.body || {};
+
+        // Self-healing: if the client doesn't have the subscription ID
+        // (e.g. the user's canonical doc was never populated by the old
+        // Render webhook), look it up from `subscriptions/` by userId.
+        // Pick the most recent non-cancelled record. This avoids forcing
+        // every legacy paying user through a support email.
+        if (!subscriptionId) {
+          const candidates = await admin
+            .firestore()
+            .collection('subscriptions')
+            .where('userId', '==', auth.uid)
+            .get();
+          let best = null;
+          candidates.forEach((doc) => {
+            const d = doc.data();
+            const status = d.status;
+            if (status === 'cancelled' || status === 'completed') return;
+            if (!best || (d.createdAt && best.createdAt &&
+                d.createdAt.toMillis() > best.createdAt.toMillis())) {
+              best = d;
+            }
+          });
+          if (best && best.subscriptionId) {
+            subscriptionId = best.subscriptionId;
+            console.log(`[CANCEL] Resolved subscriptionId for ${auth.uid}: ${subscriptionId}`);
+          }
+        }
+
+        if (!subscriptionId) {
+          return res
+            .status(404)
+            .json({ error: 'No active subscription found for this user' });
+        }
 
         // Verify the subscription belongs to this user. We have to support
         // BOTH data shapes that exist in this project's Firestore:
@@ -744,6 +777,39 @@ exports.razorpayWebhook = functions
       const userId = subDoc.data().userId;
       const plan = subDoc.data().plan;
 
+      // Razorpay sends epoch-seconds; the Flutter model expects ISO strings
+      // OR Firestore Timestamps. Use Timestamps so Firestore range queries
+      // also work (e.g. "subs ending this week").
+      const tsFromEpoch = (s) =>
+        typeof s === 'number' && s > 0
+          ? admin.firestore.Timestamp.fromMillis(s * 1000)
+          : null;
+      const currentPeriodEndsAt =
+        tsFromEpoch(sub && sub.current_end) ||
+        tsFromEpoch(sub && sub.end_at);
+      const trialEndsAt =
+        plan === 'trial' ? tsFromEpoch(sub && sub.start_at) : null;
+
+      // The canonical doc the Flutter app reads. Always write
+      // `razorpaySubscriptionId` so the Cancel button has what it needs.
+      // `state` mirrors SubscriptionState in lib/models/subscription_status.dart.
+      const userSubRef = admin
+        .firestore()
+        .doc(`users/${userId}/subscription/current`);
+
+      const setCanonical = (patch) =>
+        userSubRef.set(
+          {
+            plan,
+            razorpaySubscriptionId: subscriptionId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...(currentPeriodEndsAt ? { currentPeriodEndsAt } : {}),
+            ...(trialEndsAt ? { trialEndsAt } : {}),
+            ...patch,
+          },
+          { merge: true },
+        );
+
       switch (event) {
         case 'subscription.charged':
           await admin.firestore().doc(`usage/${userId}`).set({
@@ -755,23 +821,53 @@ exports.razorpayWebhook = functions
             status: 'active',
             lastChargedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
+          // A renewal charge means the trial (if any) has converted —
+          // state goes to `active`, regardless of previous state.
+          await setCanonical({ state: 'active' });
           break;
 
-        case 'subscription.activated':
+        case 'subscription.activated': {
           await admin.firestore().doc(`usage/${userId}`).set({
             isPremium: true, plan,
             mandateActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
+          // For trial plans, activation only registers the mandate — the
+          // ₹99 charge happens at start_at (7 days later). Stay `trialing`
+          // until subscription.charged fires.
+          const startAt = sub && sub.start_at;
+          const isStillInTrial =
+            plan === 'trial' &&
+            typeof startAt === 'number' &&
+            startAt * 1000 > Date.now();
+          await setCanonical({
+            state: isStillInTrial ? 'trialing' : 'active',
+          });
           break;
+        }
 
         case 'subscription.cancelled':
+          // User-initiated cancellation (or admin via dashboard). They keep
+          // access until currentPeriodEndsAt — don't flip isPremium yet.
+          await admin.firestore().doc(`subscriptions/${subscriptionId}`).set({
+            status: 'cancelled',
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          await setCanonical({
+            state: 'cancelledPending',
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          break;
+
         case 'subscription.completed':
+          // Subscription's run has ended (either cancelled period elapsed
+          // or total_count was reached). Now they actually drop to free.
           await admin.firestore().doc(`usage/${userId}`).set({
             isPremium: false, plan: 'free',
             cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
+          await setCanonical({ state: 'expired' });
           break;
 
         case 'subscription.halted':
@@ -780,6 +876,7 @@ exports.razorpayWebhook = functions
             lastFailedAt: admin.firestore.FieldValue.serverTimestamp(),
             status: event === 'subscription.halted' ? 'halted' : 'payment_failed',
           }, { merge: true });
+          await setCanonical({ state: 'paymentFailed' });
           break;
 
         default:

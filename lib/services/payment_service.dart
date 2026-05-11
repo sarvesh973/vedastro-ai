@@ -241,8 +241,12 @@ class PaymentService {
   /// Default behavior: cancel at end of current billing period (user keeps
   /// access until their paid period ends — this is RBI-compliant).
   /// Pass [immediate]=true to cut access right now (rare; used for refunds).
+  /// [subscriptionId] is optional now — the server will resolve it from
+  /// the user's `subscriptions/` collection if omitted. This is the
+  /// recovery path for users whose `users/{uid}/subscription/current`
+  /// doc was never populated (legacy Render-webhook users).
   static Future<bool> cancelSubscription({
-    required String subscriptionId,
+    String? subscriptionId,
     bool immediate = false,
   }) async {
     // Calls the Firebase Function `subscriptionCancel` directly (deployed
@@ -258,7 +262,8 @@ class PaymentService {
             url,
             headers: headers,
             body: jsonEncode({
-              'subscriptionId': subscriptionId,
+              if (subscriptionId != null && subscriptionId.isNotEmpty)
+                'subscriptionId': subscriptionId,
               'immediate': immediate,
             }),
           )

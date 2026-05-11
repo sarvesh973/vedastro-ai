@@ -157,31 +157,46 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           Text(
             canUpgrade
                 ? "Your subscription is active. We're still syncing details "
-                    "— tap here to upgrade your plan, or pull to refresh in "
-                    "a moment to see the cancel option."
-                : "Your subscription is active. We're still syncing your "
-                    "details — pull to refresh in a moment to see plan info "
-                    "and the cancel option.",
+                    "— tap here to upgrade your plan, or use the Cancel "
+                    "button below."
+                : "Your subscription is active. Use the Cancel button below "
+                    "if you'd like to end auto-renewal.",
             style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
                 height: 1.5),
           ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.background.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Text(
-              "Need to cancel right now? Email support@vedastro.ai "
-              "with your registered email and we'll cancel within "
-              "24 hours.",
-              style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12.5,
-                  height: 1.5),
+          const SizedBox(height: 16),
+          // Inline Cancel button — the server-side resolver looks up the
+          // user's subscription from `subscriptions/` if the canonical
+          // doc doesn't yet hold the ID, so we no longer need to defer
+          // these users to email support.
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton.icon(
+              onPressed: _isCancelling ? null : () => _confirmCancel(null),
+              icon: _isCancelling
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.error),
+                    )
+                  : const Icon(Icons.cancel_outlined,
+                      color: AppColors.error, size: 18),
+              label: Text(
+                _isCancelling ? 'Cancelling…' : 'Cancel Subscription',
+                style: const TextStyle(
+                    color: AppColors.error,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.error),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
         ],
@@ -677,15 +692,11 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   void _executeCancel(String? subscriptionId) async {
     setState(() => _isCancelling = true);
 
-    // The subscription ID comes from Firestore (synced by webhook on
-    // subscription.activated). If for some reason it's not yet present
-    // (e.g. webhook hasn't fired), fall back to email-based contact.
-    if (subscriptionId == null || subscriptionId.isEmpty) {
-      setState(() => _isCancelling = false);
-      _showSupportFallback();
-      return;
-    }
-
+    // Subscription ID normally comes from Firestore (written by the
+    // razorpayWebhook on subscription.activated). If it's missing we
+    // still attempt the call — the server resolves it from the user's
+    // `subscriptions/` collection. Email-fallback only kicks in if the
+    // server itself can't locate any active subscription.
     final ok = await PaymentService.cancelSubscription(
       subscriptionId: subscriptionId,
     );
