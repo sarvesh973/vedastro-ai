@@ -238,7 +238,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           0, 0, 0, 1, 0,
                         ]),
                         child: Image.asset(
-                          'assets/icon/moksh_logo-text-bg.png',
+                          'assets/icon/moksha_wordmark.png',
                           width: wordmarkWidth,
                           fit: BoxFit.contain,
                         ),
