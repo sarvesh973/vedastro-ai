@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shimmer/shimmer.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
+import '../widgets/moksha_wordmark_image.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
@@ -94,55 +94,23 @@ class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen> {
                     color: AppColors.goldLight.withOpacity(0.35),
                   ),
 
-              const SizedBox(height: 36),
+              const SizedBox(height: 18),
 
-              // ─── "moksha" wordmark ───────────────────────────────
-              // Fades up + holds a shimmer sweep so it feels alive.
-              Shimmer.fromColors(
-                baseColor: AppColors.textPrimary,
-                highlightColor: AppColors.goldLight,
-                period: const Duration(milliseconds: 2400),
-                child: const Text(
-                  'Moksha',
-                  style: TextStyle(
-                    fontSize: 44,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                    letterSpacing: 1.5,
-                    height: 1.0,
-                  ),
-                ),
-              )
+              // ─── moksha wordmark + tagline (single asset) ───────
+              // Same widget the home screen uses, so the brand
+              // continuity from splash → home reads as a single
+              // continuous shot. The asset bakes the wordmark and
+              // tagline together; cropped + colour-inverted to read
+              // on the dark cosmic background.
+              const MokshaWordmarkImage(widthFactor: 0.78)
                   .animate()
                   .fadeIn(duration: 800.ms, delay: 400.ms)
                   .slideY(
-                    begin: 0.4,
+                    begin: 0.3,
                     end: 0,
                     duration: 800.ms,
                     delay: 400.ms,
                     curve: Curves.easeOutCubic,
-                  ),
-
-              const SizedBox(height: 12),
-
-              // ─── Tagline ─────────────────────────────────────────
-              const Text(
-                'align with dharma, awaken the soul',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textMuted,
-                  letterSpacing: 0.6,
-                  fontWeight: FontWeight.w400,
-                ),
-              )
-                  .animate()
-                  .fadeIn(duration: 700.ms, delay: 1100.ms)
-                  .slideY(
-                    begin: 0.5,
-                    end: 0,
-                    duration: 700.ms,
-                    delay: 1100.ms,
-                    curve: Curves.easeOut,
                   ),
             ],
           ),

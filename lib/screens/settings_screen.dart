@@ -86,7 +86,7 @@ class SettingsScreen extends ConsumerWidget {
               // Build marker bumped per-change so we can tell at a
               // glance which APK is on the device when debugging.
               // Increment when shipping a noticeable behavioural fix.
-              subtitle: 'v1.1.0 (build k13)',
+              subtitle: 'v1.1.0 (build k14)',
               onTap: null,
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
 

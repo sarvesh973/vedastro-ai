@@ -19,6 +19,7 @@ import 'legal_screen.dart';
 import '../models/subscription_plan.dart';
 import '../models/user_profile.dart';
 import '../theme/m_page_route.dart';
+import '../widgets/moksha_wordmark_image.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -207,43 +208,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           curve: Curves.easeOut,
                         ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 6),
 
-                    // Stylised "moksha" wordmark sourced from
-                    // assets/icon/moksha_wordmark.png. The asset has
-                    // dark navy text on transparent — invisible on
-                    // our dark cosmic background — so we wrap it in a
-                    // ColorFilter.matrix(invert) at runtime: dark navy
-                    // becomes cream, the gold dots invert to a cool
-                    // blue that reads as deliberately cosmic. Avoids
-                    // having to re-export a light version of the asset.
-                    //
-                    // Width is responsive: 78% of the screen width
-                    // clamped to [240, 460] px so the wordmark scales
-                    // on phones (≈300px wide) and tablets (≈460px max)
-                    // without going edge-to-edge.
-                    Builder(builder: (context) {
-                      final screenWidth = MediaQuery.of(context).size.width;
-                      final wordmarkWidth =
-                          (screenWidth * 0.78).clamp(240.0, 460.0);
-                      return ColorFiltered(
-                        // Standard 5-row colour-matrix invert. Each
-                        // RGB row negates and adds 255 to flip the
-                        // value; alpha row is identity so transparency
-                        // is preserved.
-                        colorFilter: const ColorFilter.matrix(<double>[
-                          -1, 0, 0, 0, 255, //
-                          0, -1, 0, 0, 255, //
-                          0, 0, -1, 0, 255, //
-                          0, 0, 0, 1, 0,
-                        ]),
-                        child: Image.asset(
-                          'assets/icon/moksha_wordmark.png',
-                          width: wordmarkWidth,
-                          fit: BoxFit.contain,
-                        ),
-                      );
-                    })
+                    // Stylised "moksha" wordmark — see widget below for
+                    // colour invert + crop rationale. Pulled into a
+                    // shared widget so the same treatment renders on
+                    // the splash screen too.
+                    const MokshaWordmarkImage(widthFactor: 0.78)
                         .animate()
                         .fadeIn(duration: 700.ms, delay: 200.ms)
                         .slideY(
