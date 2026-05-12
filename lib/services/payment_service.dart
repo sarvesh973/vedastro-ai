@@ -245,28 +245,29 @@ class PaymentService {
     required String subscriptionId,
     bool immediate = false,
   }) async {
-    // Calls the Firebase Function `subscriptionCancel` directly (deployed
-    // from functions/index.js). The Render server's /subscription/cancel
-    // endpoint was returning errors for paid users; this path is the
-    // canonical source of truth for cancellation in this repo.
+    // Calls Render's /subscription/cancel — same server that creates the
+    // subscription and handles the Razorpay webhook. The Firebase Function
+    // path that used to live here was never deployed, so cancel was
+    // silently 404ing for every user.
     try {
       final headers = await _authHeaders();
       final url = Uri.parse(
-          '${ApiConfig.firebaseFunctionsBaseUrl}/subscriptionCancel');
+          '${ApiConfig.cloudFunctionBaseUrl}/subscription/cancel');
       final resp = await http
           .post(
             url,
             headers: headers,
             body: jsonEncode({
               'subscriptionId': subscriptionId,
-              'immediate': immediate,
+              // Render flag is the inverse of `immediate`: cancelAtCycleEnd
+              // = false means cancel right now (keep `true` for the default
+              // RBI-compliant "lapse at period end" behaviour).
+              'cancelAtCycleEnd': !immediate,
             }),
           )
           .timeout(const Duration(seconds: 20));
       if (resp.statusCode == 200) return true;
-      // Surface the actual failure in logs so we can diagnose without
-      // a USB-attached debug session.
-      print('[CANCEL] Non-200 from Firebase Function: '
+      print('[CANCEL] Non-200 from Render: '
           '${resp.statusCode} — body: ${resp.body}');
       return false;
     } catch (e) {
