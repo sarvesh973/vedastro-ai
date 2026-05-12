@@ -16,6 +16,7 @@ import 'settings_screen.dart';
 import 'horoscope_screen.dart';
 import 'paywall_screen.dart';
 import 'legal_screen.dart';
+import 'subscription_screen.dart';
 import '../models/subscription_plan.dart';
 import '../models/user_profile.dart';
 import '../theme/m_page_route.dart';
@@ -579,30 +580,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(height: 8),
 
             // Menu items
-            _buildDrawerItem(
-              icon: Icons.workspace_premium,
-              label: StorageService.isPremium ? 'Premium (Active)' : 'Upgrade to Premium',
-              color: AppColors.goldLight,
-              onTap: () {
-                Navigator.pop(context);
-                if (!StorageService.isPremium) {
-                  Navigator.of(context).push(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) =>
-                          const PaywallScreen(),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        return SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, 1),
-                            end: Offset.zero,
-                          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
-                          child: child,
-                        );
-                      },
-                      transitionDuration: const Duration(milliseconds: 400),
-                    ),
-                  );
+            //
+            // Plan-aware premium row. Mirrors the home banner's logic so the
+            // user always sees their specific tier (Trial / Standard / Premium)
+            // and can tap to upgrade if a higher tier exists. Premium users
+            // (no upgrades left) are routed to the Subscription screen so
+            // they can manage / cancel.
+            Builder(
+              builder: (context) {
+                final isPremium = StorageService.isPremium;
+                final localPlanId = StorageService.lastPurchasedPlan;
+                final localPlan = localPlanId == null
+                    ? null
+                    : SubscriptionPlanInfo.fromId(localPlanId);
+                final upgradeOptions = localPlan?.upgradeOptions ?? const [];
+                final canUpgrade = isPremium && upgradeOptions.isNotEmpty;
+
+                String label;
+                if (!isPremium) {
+                  label = 'Upgrade to Premium';
+                } else if (localPlan == null || localPlan == SubscriptionPlan.free) {
+                  label = 'Subscription Active';
+                } else {
+                  label = '${localPlan.displayName} — Active';
                 }
+
+                return _buildDrawerItem(
+                  icon: Icons.workspace_premium,
+                  label: label,
+                  color: AppColors.goldLight,
+                  onTap: () {
+                    Navigator.pop(context);
+                    if (!isPremium) {
+                      Navigator.of(context).push(
+                        _buildPageRoute(const PaywallScreen()),
+                      );
+                    } else if (canUpgrade) {
+                      _openUpgradePaywall(context, upgradeOptions);
+                    } else {
+                      Navigator.of(context).push(
+                        _buildPageRoute(const SubscriptionScreen()),
+                      );
+                    }
+                  },
+                );
               },
             ),
 

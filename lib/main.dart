@@ -112,6 +112,12 @@ void _syncCloudData() async {
       final cloudSub = await FirestoreService.loadCurrentSubscription();
       if (cloudSub.isActive) {
         await StorageService.upgradeToPremium();
+        // Persist plan ID so the home banner / drawer can render the
+        // specific tier (Trial / Standard / Premium) and offer the
+        // right upgrade path. Without this the UI falls back to the
+        // generic "Subscription Active" label and the upgrade tap is
+        // disabled.
+        await StorageService.setLastPurchasedPlan(cloudSub.plan.id);
       }
     }
 
