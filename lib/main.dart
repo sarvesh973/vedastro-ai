@@ -14,6 +14,7 @@ import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/analytics_service.dart';
 import 'screens/animated_splash_screen.dart';
+import 'models/subscription_plan.dart';
 
 void main() async {
   // Wrap the entire app in a Zone so any uncaught async errors are
