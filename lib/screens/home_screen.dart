@@ -1090,12 +1090,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final localPlan = localPlanId == null
               ? null
               : SubscriptionPlanInfo.fromId(localPlanId);
-          // No upgrade pitch once cancellation is in motion — they
-          // should let it lapse before resubscribing (mirrors the
-          // Subscription screen behaviour).
-          final upgradeOptions = isCancelled
-              ? const <SubscriptionPlan>[]
-              : (localPlan?.upgradeOptions ?? const []);
+          // Upgrade options are based on the user's plan tier — not
+          // suppressed by cancellation. A cancelled-trial user who taps
+          // the banner clearly wants to upgrade/resubscribe, not be
+          // routed to a passive management screen.
+          final upgradeOptions = localPlan?.upgradeOptions ?? const [];
           final canUpgrade = upgradeOptions.isNotEmpty;
 
           final String headlineText;
