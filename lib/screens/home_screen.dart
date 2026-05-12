@@ -35,6 +35,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   double _overscrollAmount = 0.0;
 
+  // Rotates daily by day-of-year. Same fact for the full 24h so users
+  // who reopen the app don't see it shuffle on every launch.
+  static const List<String> _astroFacts = [
+    'The 12 zodiac signs originated from Babylonian astronomers around 500 BCE.',
+    'Vedic astrology uses 27 nakshatras (lunar mansions) instead of just 12 signs.',
+    'Your Vedic Moon sign is often considered more revealing than your Sun sign.',
+    'Brihat Parashara Hora Shastra is the foundational text of Vedic astrology.',
+    "Mercury 'retrograde' is an optical illusion — the planet only appears to move backward.",
+    'Saturn (Shani) takes ~29.5 years to orbit the Sun — once per "Saturn return".',
+    'Jupiter expands wherever it sits in your chart — career, love, knowledge.',
+    'A nakshatra is 13°20\' of the zodiac — the Moon transits one each day.',
+    "Rahu and Ketu are 'shadow planets' — lunar nodes where eclipses occur.",
+    'Mangal Dosha is a Mars placement believed to affect marriage compatibility.',
+    'The word "zodiac" comes from the Greek "zōidiakos" — "circle of little animals".',
+    "Your rising sign (Lagna) changes every ~2 hours — that's why birth time matters.",
+    'Sade Sati is Saturn\'s 7.5-year transit affecting your Moon — a major life chapter.',
+    'Venus rules both Taurus and Libra — earth grounding + air harmony.',
+    'The Sun spends about 30 days in each tropical zodiac sign.',
+    'Vedic charts use the sidereal zodiac, ~23° offset from the Western tropical one.',
+    'Dasha periods (planetary time cycles) span up to 20 years for a single planet.',
+    'A perfect "Raj Yoga" placement is said to confer royal-level success and fame.',
+    'The Moon governs the mind in Vedic astrology — emotions, instincts, mother.',
+    "Mars in the 7th house in Vedic tradition is 'Manglik' — often discussed in matchmaking.",
+    'Astronomy and astrology were the same science until ~17th-century Europe.',
+    'Each nakshatra has a ruling deity, planet, and symbol shaping its meaning.',
+    "Ashlesha nakshatra is known as 'the entwiner' — intensity, intuition, transformation.",
+    'The full Moon amplifies emotions because it fully reflects solar energy.',
+    'Vedic astrology classifies you into one of 9 planetary "mahadashas" at birth.',
+    'A solar return chart maps the year ahead from your exact birthday moment.',
+    'The Lunar New Year aligns with the Sun-Moon conjunction in your birth nakshatra.',
+    'Kuja (Mars) gives drive; Shukra (Venus) gives charm — both shape relationships.',
+    'Your 10th house describes career; the 4th house describes home and roots.',
+    'Eclipses in Vedic tradition mark karmic turning points — never to be ignored.',
+    'The 7-day week mirrors the 7 visible "planets" of antiquity, each ruling a day.',
+    'Brihaspati (Jupiter) is the guru of the gods — he teaches the cosmic order.',
+    'Your Janma Nakshatra is the constellation the Moon was in when you were born.',
+    'Aries to Pisces forms an arc from raw initiation to spiritual completion.',
+    'Vedic gemstones are prescribed to strengthen weak or supportive planets.',
+    'A "kundli" is your full natal chart — planets mapped to 12 houses at birth.',
+    'Pluto wasn\'t known until 1930 — Vedic astrology was complete without it.',
+    'Each planet rules a body part — Sun: heart; Moon: lungs; Mars: blood; etc.',
+    'Saturn rewards patience and discipline more than any other planet.',
+    'Your strongest planet (atmakaraka) reveals your soul\'s deepest mission.',
+  ];
+
+  String _factOfTheDay() {
+    final now = DateTime.now();
+    final dayOfYear =
+        now.difference(DateTime(now.year, 1, 1)).inDays;
+    return _astroFacts[dayOfYear % _astroFacts.length];
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
@@ -280,6 +332,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
 
                     const SizedBox(height: 18),
+
+                    // Daily astrology fact. Rotates once a day so the
+                    // home screen always has fresh content but doesn't
+                    // shuffle on every app open.
+                    _buildDidYouKnowCard(),
 
                     // Email verification banner — only renders for
                     // email/password users with unverified addresses.
@@ -820,6 +877,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// "Did You Know?" daily astrology fact. Sits between the chat bar
+  /// and the subscription banner — visible to all users, free or paid,
+  /// every day. Picked by day-of-year so it stays stable across the
+  /// day but feels fresh on a new visit.
+  Widget _buildDidYouKnowCard() {
+    final fact = _factOfTheDay();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.purpleAccent.withOpacity(0.16),
+              AppColors.gold.withOpacity(0.10),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.gold.withOpacity(0.28)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.goldLight.withOpacity(0.18),
+                  ),
+                  child: const Icon(Icons.lightbulb_outline,
+                      color: AppColors.goldLight, size: 16),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Did You Know?',
+                  style: TextStyle(
+                    color: AppColors.goldLight,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Daily fact',
+                  style: TextStyle(
+                    color: AppColors.textMuted.withOpacity(0.7),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              fact,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13.5,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ).animate().fadeIn(duration: 600.ms, delay: 850.ms).slideY(
+            begin: 0.12,
+            end: 0,
+            duration: 600.ms,
+            delay: 850.ms,
+          ),
+    );
+  }
+
   /// Soft-gate banner shown to email/password users until they click
   /// the verification link. Tappable to resend; updates in place when
   /// the user reports having verified.
@@ -1344,22 +1481,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// makes them reachable from anywhere in the home flow with one
   /// thumb tap.
   Widget _buildBottomNav(BuildContext context) {
+    // Single accent (goldLight) shared across all three actions — the
+    // three are peer features, no hierarchy between them. Each icon
+    // sits inside a tinted chip so the buttons read as solid, tappable
+    // surfaces rather than thin glyphs.
     return SafeArea(
       top: false,
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        height: 72,
+        height: 82,
         decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(22),
+          color: AppColors.surface.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: AppColors.purpleAccent.withValues(alpha: 0.25),
+            color: AppColors.gold.withValues(alpha: 0.28),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.purpleAccent.withValues(alpha: 0.12),
-              blurRadius: 18,
+              color: AppColors.gold.withValues(alpha: 0.16),
+              blurRadius: 22,
               spreadRadius: 1,
               offset: const Offset(0, -2),
             ),
@@ -1370,21 +1511,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _bottomNavItem(
               icon: Icons.auto_awesome_mosaic_outlined,
               label: 'Kundli',
-              tone: AppColors.goldLight,
               onTap: () => Navigator.of(context)
                   .push(_buildPageRoute(const KundliScreen())),
             ),
             _bottomNavItem(
               icon: Icons.back_hand_outlined,
               label: 'Palm',
-              tone: AppColors.purpleLight,
               onTap: () => Navigator.of(context)
                   .push(_buildPageRoute(const PalmUploadScreen())),
             ),
             _bottomNavItem(
               icon: Icons.stars_outlined,
               label: 'Horoscope',
-              tone: AppColors.gold,
               onTap: () => Navigator.of(context)
                   .push(_buildPageRoute(const HoroscopeScreen())),
             ),
@@ -1397,9 +1535,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _bottomNavItem({
     required IconData icon,
     required String label,
-    required Color tone,
     required VoidCallback onTap,
   }) {
+    const tone = AppColors.goldLight;
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -1407,7 +1545,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           splashColor: tone.withValues(alpha: 0.18),
-          highlightColor: tone.withValues(alpha: 0.06),
+          highlightColor: tone.withValues(alpha: 0.08),
           onTap: () {
             HapticFeedback.selectionClick();
             onTap();
@@ -1415,11 +1553,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: tone, size: 22),
-              const SizedBox(height: 4),
+              // Icon chip — gives each item visual weight without
+              // overloading the bar. Subtle border, gold tint inside.
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tone.withValues(alpha: 0.14),
+                  border: Border.all(color: tone.withValues(alpha: 0.35)),
+                ),
+                child: Icon(icon, color: tone, size: 20),
+              ),
+              const SizedBox(height: 5),
               Text(
                 label,
-                style: TextStyle(
+                style: const TextStyle(
                   color: tone,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
