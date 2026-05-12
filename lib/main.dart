@@ -119,6 +119,15 @@ void _syncCloudData() async {
         // disabled.
         await StorageService.setLastPurchasedPlan(cloudSub.plan.id);
       }
+    } else if (StorageService.lastPurchasedPlan == null) {
+      // Already premium locally but missing the plan tag — happens for
+      // users who paid on an older app version that didn't write the
+      // field. Pull from Firestore so the home banner / drawer get the
+      // specific tier name and the right upgrade target.
+      final cloudSub = await FirestoreService.loadCurrentSubscription();
+      if (cloudSub.plan != SubscriptionPlan.free) {
+        await StorageService.setLastPurchasedPlan(cloudSub.plan.id);
+      }
     }
 
     // Sync local usage stats to cloud
