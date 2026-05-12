@@ -177,12 +177,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         .animate()
                         .fadeIn(duration: 500.ms),
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 16),
 
-                    // Logo / Icon
+                    // Brand hero cluster — AI logo + Moksha wordmark +
+                    // sun-sign chip read as one unit. Gaps deliberately
+                    // tight so they don't feel like separate components.
                     Container(
-                      width: 100,
-                      height: 100,
+                      width: 88,
+                      height: 88,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
@@ -199,7 +201,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: const Icon(
                         Icons.auto_awesome,
                         color: AppColors.goldLight,
-                        size: 44,
+                        size: 40,
                       ),
                     )
                         .animate()
@@ -211,13 +213,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           curve: Curves.easeOut,
                         ),
 
-                    const SizedBox(height: 6),
-
-                    // Stylised "moksha" wordmark — see widget below for
-                    // colour invert + crop rationale. Pulled into a
-                    // shared widget so the same treatment renders on
-                    // the splash screen too.
-                    const MokshaWordmarkImage(widthFactor: 0.78)
+                    // Wordmark sits flush against the logo. Crop bumped
+                    // tighter so the asset's transparent margin doesn't
+                    // reintroduce phantom whitespace.
+                    const MokshaWordmarkImage(
+                      widthFactor: 0.72,
+                      crop: 0.34,
+                    )
                         .animate()
                         .fadeIn(duration: 700.ms, delay: 200.ms)
                         .slideY(
@@ -227,9 +229,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           delay: 200.ms,
                         ),
 
-                    // Sun sign badge (if profile exists)
+                    // Sun-sign chip locked to the wordmark — no breathing
+                    // room, deliberate (it's part of the identity block).
                     if (profile != null) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
@@ -260,7 +263,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           .fadeIn(duration: 500.ms, delay: 500.ms),
                     ],
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 18),
 
                     // Hero "Astrology Chat" bar — the headline action,
                     // gets the premium purple→gold gradient treatment.
