@@ -36,6 +36,56 @@ class AuthService {
   /// Auth state changes stream
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  // ─── Email verification ───────────────────────────
+  // Only email/password signups need this. Google sign-in already
+  // delivers a verified email; phone sign-in doesn't carry one.
+
+  /// True when the current user authenticated with email+password and
+  /// has not yet clicked the verification link.
+  /// Always false for Google / Phone users, and false when signed out.
+  static bool get needsEmailVerification {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    final hasPassword =
+        user.providerData.any((p) => p.providerId == 'password');
+    if (!hasPassword) return false;
+    return !user.emailVerified;
+  }
+
+  /// Re-send the verification mail. Firebase rate-limits this server-side
+  /// (one per ~minute per user) and surfaces the throttle as an error.
+  static Future<AuthResult> sendVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return AuthResult(success: false, error: 'Not signed in');
+    }
+    if (user.emailVerified) {
+      return AuthResult(success: true, user: user);
+    }
+    try {
+      await user.sendEmailVerification();
+      return AuthResult(success: true, user: user);
+    } on FirebaseAuthException catch (e) {
+      return AuthResult(success: false, error: _getErrorMessage(e.code));
+    } catch (e) {
+      return AuthResult(success: false, error: 'Could not send: $e');
+    }
+  }
+
+  /// Pull fresh user state from Firebase — used after the user reports
+  /// they clicked the link, so the app can flip `needsEmailVerification`
+  /// without forcing a sign-out / sign-in.
+  static Future<bool> refreshEmailVerificationStatus() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    try {
+      await user.reload();
+      return _auth.currentUser?.emailVerified ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ─── Email & Password ────────────────────────────
 
   /// Sign up with email and password
@@ -53,6 +103,17 @@ class AuthService {
       // Set display name if provided
       if (displayName != null && displayName.isNotEmpty) {
         await credential.user?.updateDisplayName(displayName);
+      }
+
+      // Fire-and-forget verification email. Doesn't block the signup
+      // flow — soft gate, so the user proceeds into the app while
+      // verification is pending. Paid features check
+      // `needsEmailVerification` before opening checkout.
+      try {
+        await credential.user?.sendEmailVerification();
+      } catch (_) {
+        // Throttling or transient failure — user can resend from the
+        // home-screen banner.
       }
 
       // Analytics: track signup + associate with UID

@@ -94,6 +94,16 @@ class PaymentService {
       return;
     }
 
+    // Email/password users must verify their email before paying. This
+    // protects them (receipts go to a real inbox) and us (refund
+    // disputes can be tied to a recoverable identity). Google / Phone
+    // users skip this — their email is implicitly verified or absent.
+    if (AuthService.needsEmailVerification) {
+      onFailure('Please verify your email before subscribing. '
+          'Check your inbox or tap the banner on the home screen to resend.');
+      return;
+    }
+
     // Step 1 — ask our server to create a Razorpay subscription
     final Map<String, dynamic> serverResp;
     try {

@@ -7,6 +7,7 @@ import '../widgets/starfield_background.dart';
 import '../widgets/shooting_star_overlay.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
+import '../services/auth_service.dart';
 import '../providers/providers.dart';
 import 'user_details_screen.dart';
 import 'chat_screen.dart';
@@ -276,6 +277,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
 
                     const SizedBox(height: 18),
+
+                    // Email verification banner — only renders for
+                    // email/password users with unverified addresses.
+                    // No-op widget otherwise (zero layout impact).
+                    _buildEmailVerificationBanner(context),
 
                     // Premium banner
                     _buildPremiumBanner(context, ref)
@@ -807,6 +813,117 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           );
         },
         transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
+  }
+
+  /// Soft-gate banner shown to email/password users until they click
+  /// the verification link. Tappable to resend; updates in place when
+  /// the user reports having verified.
+  Widget _buildEmailVerificationBanner(BuildContext context) {
+    if (!AuthService.needsEmailVerification) return const SizedBox.shrink();
+
+    Future<void> handleResend() async {
+      final result = await AuthService.sendVerificationEmail();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.success
+              ? 'Verification email sent — check your inbox.'
+              : (result.error ?? 'Could not send.')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    Future<void> handleVerified() async {
+      final verified = await AuthService.refreshEmailVerificationStatus();
+      if (!context.mounted) return;
+      if (verified) {
+        // Force a rebuild — the banner's own visibility check will
+        // remove it now that needsEmailVerification is false.
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email verified — thanks!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                "We still don't see a verification. Tap the link in the email, then try again."),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.gold.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.mark_email_unread_outlined,
+                    color: AppColors.goldLight, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Verify your email',
+                    style: const TextStyle(
+                      color: AppColors.goldLight,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "We sent a link to ${AuthService.userEmail ?? 'your inbox'}. "
+              "You need to verify before you can subscribe.",
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 12.5, height: 1.4),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: handleVerified,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    minimumSize: const Size(0, 32),
+                  ),
+                  child: const Text("I've verified",
+                      style: TextStyle(
+                          color: AppColors.goldLight, fontSize: 13)),
+                ),
+                TextButton(
+                  onPressed: handleResend,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    minimumSize: const Size(0, 32),
+                  ),
+                  child: const Text('Resend',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13)),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
