@@ -18,6 +18,7 @@ import 'paywall_screen.dart';
 import 'legal_screen.dart';
 import 'subscription_screen.dart';
 import '../models/subscription_plan.dart';
+import '../models/subscription_status.dart';
 import '../models/user_profile.dart';
 import '../theme/m_page_route.dart';
 import '../widgets/moksha_wordmark_image.dart';
@@ -816,24 +817,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final palmsUsed = ref.watch(palmReadingsUsedProvider);
 
     if (isPremium) {
-      // Active subscriber banner. If their plan still has higher tiers
-      // (Trial -> Standard/Premium, Standard -> Premium), the banner is
-      // tappable and opens the paywall pre-filtered to those tiers.
-      // Premium subscribers (no upgrades left) get the static check-circle
-      // affordance.
-      final localPlanId = StorageService.lastPurchasedPlan;
-      final localPlan = localPlanId == null
-          ? null
-          : SubscriptionPlanInfo.fromId(localPlanId);
-      final upgradeOptions = localPlan?.upgradeOptions ?? const [];
-      final canUpgrade = upgradeOptions.isNotEmpty;
+      // Active subscriber banner. Wrapped in a StreamBuilder so the
+      // banner reflects state changes in real time — in particular the
+      // 'cancelledPending' flip needs to land on Home immediately, even
+      // though isPremium stays true through the paid-up period.
+      return StreamBuilder<SubscriptionStatus>(
+        stream: FirestoreService.subscriptionStream(),
+        builder: (context, snap) {
+          final sub = snap.data;
+          final isCancelled =
+              sub?.state == SubscriptionState.cancelledPending;
+          final periodEnds = sub?.currentPeriodEndsAt;
 
-      final headlineText = (localPlan == null || localPlan == SubscriptionPlan.free)
-          ? 'Subscription Active'
-          : '${localPlan.displayName} — Active';
-      final subText = canUpgrade
-          ? 'Tap to upgrade your plan'
-          : 'Unlimited access to all features';
+          final localPlanId = StorageService.lastPurchasedPlan;
+          final localPlan = localPlanId == null
+              ? null
+              : SubscriptionPlanInfo.fromId(localPlanId);
+          // No upgrade pitch once cancellation is in motion — they
+          // should let it lapse before resubscribing (mirrors the
+          // Subscription screen behaviour).
+          final upgradeOptions = isCancelled
+              ? const <SubscriptionPlan>[]
+              : (localPlan?.upgradeOptions ?? const []);
+          final canUpgrade = upgradeOptions.isNotEmpty;
+
+          final String headlineText;
+          if (isCancelled) {
+            headlineText = (localPlan != null && localPlan != SubscriptionPlan.free)
+                ? '${localPlan.displayName} — Cancelled'
+                : 'Subscription Cancelled';
+          } else if (localPlan == null || localPlan == SubscriptionPlan.free) {
+            headlineText = 'Subscription Active';
+          } else {
+            headlineText = '${localPlan.displayName} — Active';
+          }
+
+          final String subText;
+          if (isCancelled) {
+            subText = periodEnds != null
+                ? 'Access until ${periodEnds.day}/${periodEnds.month}/${periodEnds.year}'
+                : 'Access until your paid period ends';
+          } else if (canUpgrade) {
+            subText = 'Tap to upgrade your plan';
+          } else {
+            subText = 'Unlimited access to all features';
+          }
 
       final activeBanner = Container(
         width: double.infinity,
@@ -901,6 +929,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onTap: () => _openUpgradePaywall(context, upgradeOptions),
           child: activeBanner,
         ),
+      );
+        },
       );
     }
 
