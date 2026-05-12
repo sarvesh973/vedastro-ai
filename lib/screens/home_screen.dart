@@ -1176,14 +1176,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       );
 
-      if (!canUpgrade) return activeBanner;
+      // Banner is always tappable. Where it leads depends on state:
+      //  - canUpgrade (e.g. Trial / Standard with higher tiers available)
+      //    -> Paywall pre-filtered to those tiers
+      //  - cancelled OR top-tier active -> Subscription screen so the
+      //    user can manage / cancel / see the cancellation timeline.
+      final VoidCallback onTap = canUpgrade
+          ? () => _openUpgradePaywall(context, upgradeOptions)
+          : () => Navigator.of(context).push(
+                _buildPageRoute(const SubscriptionScreen()),
+              );
 
       return Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _openUpgradePaywall(context, upgradeOptions),
+          onTap: onTap,
           child: activeBanner,
         ),
       );
