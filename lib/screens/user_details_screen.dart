@@ -7,6 +7,7 @@ import '../models/user_profile.dart';
 import '../providers/providers.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/location_autocomplete_field.dart';
 import 'home_screen.dart';
 
 class UserDetailsScreen extends ConsumerStatefulWidget {
@@ -308,19 +309,17 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
 
               const SizedBox(height: 24),
 
-              // Place of Birth (required)
+              // Place of Birth (required) — uses OSM Nominatim suggestions
+              // so users get a "type-ahead" experience like Uber/Swiggy.
+              // Picking a suggestion also captures lat/lon for future
+              // timezone-correct chart calculations.
               _buildLabel('Place of Birth', optional: false)
                   .animate()
                   .fadeIn(duration: 400.ms, delay: 500.ms),
               const SizedBox(height: 8),
-              TextField(
+              LocationAutocompleteField(
                 controller: _placeController,
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
-                decoration: const InputDecoration(
-                  hintText: 'Enter city or town',
-                  prefixIcon: Icon(Icons.location_on_outlined,
-                      color: AppColors.textMuted, size: 20),
-                ),
+                hintText: 'Search city, town or village',
               )
                   .animate()
                   .fadeIn(duration: 400.ms, delay: 550.ms),

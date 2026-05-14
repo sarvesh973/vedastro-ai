@@ -6,6 +6,7 @@ import '../models/user_profile.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import '../providers/providers.dart';
+import '../widgets/location_autocomplete_field.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   final UserProfile profile;
@@ -95,6 +96,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Place is no longer a FormField (the autocomplete widget wraps a
+    // plain TextField), so its emptiness can't be caught by form
+    // validators. Surface a snackbar instead.
+    if (_placeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter your place of birth'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     final updatedProfile = UserProfile(
       name: _nameController.text.trim(),
@@ -235,14 +249,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
               const SizedBox(height: 20),
 
-              // Place of Birth
+              // Place of Birth — same Nominatim autocomplete as onboarding.
+              // No FormField validation wrapper here — validation falls back
+              // to the manual check in _saveProfile (checks placeController
+              // is non-empty before submit).
               const Text('Place of Birth', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
               const SizedBox(height: 8),
-              TextFormField(
+              LocationAutocompleteField(
                 controller: _placeController,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: const InputDecoration(hintText: 'City, State'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Enter your place of birth' : null,
+                hintText: 'Search city, town or village',
               ),
 
               const SizedBox(height: 36),
