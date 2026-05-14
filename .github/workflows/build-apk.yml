@@ -72,12 +72,15 @@ jobs:
           echo "=== Verifying admin emails are preserved ==="
           grep -A2 "adminEmails" lib/config/api_config.dart || echo "WARN: adminEmails not found"
 
-      # Skip keystore on pull_request runs — secrets are not (and should not
-      # be) available to PR builds. PR builds are debug-only and intended for
-      # sideload testing of the changes in the PR, never for distribution.
-      # The condition below also catches misconfigured forks gracefully.
+      # Keystore is set up for BOTH push-to-main and pull_request runs.
+      # PR builds are signed with the production keystore so Google
+      # Sign-In works during PR review (otherwise the runner-generated
+      # debug keystore's SHA isn't registered in Firebase → ApiException 10).
+      # Safe because this is a private repo; only the owner can open PRs.
+      # If the repo ever takes external contributors, re-enable a
+      # `github.event.pull_request.head.repo.full_name == github.repository`
+      # guard to skip the keystore step for fork PRs.
       - name: Set up release keystore
-        if: github.event_name != 'pull_request'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -108,11 +111,10 @@ jobs:
             echo "RELEASE_BUILD=false" >> $GITHUB_ENV
           fi
 
-      # PR runs explicitly mark themselves as debug-only so downstream steps
-      # know not to try the signed release path.
-      - name: Mark PR build as debug-only
-        if: github.event_name == 'pull_request'
-        run: echo "RELEASE_BUILD=false" >> $GITHUB_ENV
+      # PRs build the SAME release path as main now (signed, obfuscated,
+      # R8-minified) so the resulting APK behaves identically to what
+      # ships — including Google Sign-In, which fails on debug builds
+      # signed by the runner's auto-generated keystore.
 
       - name: Install dependencies
         run: flutter pub get
@@ -152,8 +154,17 @@ jobs:
             --split-debug-info=build/symbols
           ls -lh build/app/outputs/bundle/release/
 
-      - name: Upload Release APK
-        if: env.RELEASE_BUILD == 'true'
+      # Two upload paths so PR reviewers know exactly which APK is theirs.
+      - name: Upload Release APK (PR review build)
+        if: env.RELEASE_BUILD == 'true' && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moksha-PR-${{ github.event.pull_request.number }}-signed-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
+
+      - name: Upload Release APK (main)
+        if: env.RELEASE_BUILD == 'true' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: VedAstro-AI-release-apk
@@ -178,21 +189,14 @@ jobs:
           path: build/symbols
           retention-days: 90
 
-      # Debug APK upload — name changes between PR and main runs so reviewers
-      # of a PR can find their build's APK on the run summary page without
-      # confusion.
-      - name: Upload Debug APK (PR review build)
-        if: env.RELEASE_BUILD != 'true' && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Moksha-PR-${{ github.event.pull_request.number }}-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 14
-
-      - name: Upload Debug APK (non-PR debug)
-        if: env.RELEASE_BUILD != 'true' && github.event_name != 'pull_request'
+      # Fallback debug-APK upload only fires if the keystore secrets aren't
+      # configured at all (RELEASE_BUILD ended up false). Normally never
+      # hits — kept as a safety net so the workflow doesn't produce zero
+      # artifacts in misconfigured environments.
+      - name: Upload Debug APK (fallback when keystore missing)
+        if: env.RELEASE_BUILD != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: VedAstro-AI-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 30
+          retention-days: 14
