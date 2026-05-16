@@ -261,11 +261,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         );
                       }
                       final msg = messages[index];
-                      final isLastAi = msg.isAi &&
-                          index == messages.length - 1 &&
-                          _isTypewriterActive;
+                      final isLastMessage =
+                          index == messages.length - 1;
+                      final isLastAi =
+                          msg.isAi && isLastMessage && _isTypewriterActive;
 
-                      return ChatBubble(
+                      final bubble = ChatBubble(
                         message: msg,
                         animate: index >= messages.length - 2,
                         isLatestAiMessage: isLastAi,
@@ -275,6 +276,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           }
                         },
                       );
+
+                      // Follow-up suggestion chips appear below the latest
+                      // AI answer once it has fully rendered (typewriter
+                      // done) and the AI isn't mid-response. Tapping a chip
+                      // sends it as a fresh question — keeps the user in
+                      // conversation (e.g. asking for remedies).
+                      final showFollowUps = msg.isAi &&
+                          isLastMessage &&
+                          !_isTypewriterActive &&
+                          !isTyping;
+
+                      if (showFollowUps) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            bubble,
+                            _buildAnswerFollowUps(),
+                          ],
+                        );
+                      }
+                      return bubble;
                     },
                   ),
           ),
@@ -327,6 +349,114 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         },
       ),
     ).animate().fadeIn(duration: 500.ms, delay: 500.ms);
+  }
+
+  /// Follow-up suggestion chips shown below the latest AI answer once it
+  /// finishes rendering. Tapping one sends it as a new question — keeps
+  /// the conversation going. The remedy chip is primary (gold) since the
+  /// reading itself no longer ends with a forced remedy; remedies are now
+  /// an explicit opt-in step.
+  Widget _buildAnswerFollowUps() {
+    // (label, icon, message-that-gets-sent, isPrimary)
+    final followUps = <(String, IconData, String, bool)>[
+      (
+        'Remedies & upay',
+        Icons.spa_outlined,
+        'Iske liye remedies aur upay bataiye — mantra ke saath saath '
+            'real-life practical solutions bhi (habits, lifestyle, '
+            'career ya finance steps).',
+        true,
+      ),
+      (
+        'Explain in more detail',
+        Icons.unfold_more_rounded,
+        'Iske baare mein thoda aur detail mein samjhaiye.',
+        false,
+      ),
+      (
+        'What should I focus on?',
+        Icons.center_focus_strong_outlined,
+        'Mujhe abhi kis cheez par sabse zyada dhyaan dena chahiye?',
+        false,
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, right: 8, top: 2, bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Text(
+              'CONTINUE THE CONVERSATION',
+              style: TextStyle(
+                color: AppColors.textMuted.withOpacity(0.7),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (label, icon, message, isPrimary) in followUps)
+                GestureDetector(
+                  onTap: () {
+                    _messageController.text = message;
+                    _sendMessage();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isPrimary
+                          ? AppColors.goldLight.withOpacity(0.14)
+                          : AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isPrimary
+                            ? AppColors.goldLight.withOpacity(0.5)
+                            : AppColors.purpleAccent.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 14,
+                          color: isPrimary
+                              ? AppColors.goldLight
+                              : AppColors.purpleLight,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: isPrimary
+                                ? AppColors.goldLight
+                                : AppColors.purpleLight,
+                            fontSize: 12,
+                            fontWeight: isPrimary
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 350.ms, delay: 150.ms)
+        .slideY(begin: 0.15, end: 0, duration: 350.ms, delay: 150.ms);
   }
 
   Widget _buildEmptyState() {
