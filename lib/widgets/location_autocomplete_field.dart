@@ -195,6 +195,24 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
 
   void _onSuggestionTapped(LocationSuggestion s) {
     _suppressNextFetch = true;
+
+    // Cancel any pending/in-flight search. Without this, a network
+    // request started by earlier typing can complete a moment AFTER the
+    // tap and call _showOverlay() again — re-opening the dropdown so the
+    // selection looks like it "didn't take" and the user has to leave the
+    // screen to dismiss it.
+    //   - cancel the debounce timer (kills a not-yet-fired fetch)
+    //   - set _lastQuery to the selected text so any ALREADY in-flight
+    //     fetch fails its `query != _lastQuery` staleness check on return
+    //   - clear suggestions + loading so the focus-regain path can't
+    //     repopulate the overlay either
+    _debounce?.cancel();
+    _lastQuery = s.primary;
+    setState(() {
+      _suggestions = [];
+      _loading = false;
+    });
+
     widget.controller.text = s.primary;
     widget.controller.selection = TextSelection.fromPosition(
       TextPosition(offset: s.primary.length),
