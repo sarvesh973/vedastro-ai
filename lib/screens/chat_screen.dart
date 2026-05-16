@@ -282,8 +282,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       // done) and the AI isn't mid-response. Tapping a chip
                       // sends it as a fresh question — keeps the user in
                       // conversation (e.g. asking for remedies).
+                      //
+                      // followsUserQuestion: the AI message must be a REPLY
+                      // to a user question, not the auto-generated welcome
+                      // message at index 0. Without this the chips wrongly
+                      // appear under the welcome line before the user has
+                      // asked anything.
+                      final followsUserQuestion =
+                          index > 0 && messages[index - 1].isUser;
                       final showFollowUps = msg.isAi &&
                           isLastMessage &&
+                          followsUserQuestion &&
                           !_isTypewriterActive &&
                           !isTyping;
 
