@@ -8,6 +8,7 @@ import '../services/ai_service.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/chapter_detail_card.dart';
 import '../widgets/contextual_loader.dart';
 import '../models/subscription_plan.dart';
 import 'paywall_screen.dart';
@@ -103,6 +104,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       role: MessageRole.ai,
       timestamp: DateTime.now(),
       sources: aiResponse.sources,
+      details: aiResponse.details,
     ));
     // Sync AI response to cloud
     FirestoreService.syncChatMessage(aiResponse.text, 'ai');
@@ -296,12 +298,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           !_isTypewriterActive &&
                           !isTyping;
 
-                      if (showFollowUps) {
+                      // Tappable chapter cards under an AI answer. For the
+                      // latest message they appear only once the typewriter
+                      // has finished, so they don't pop in mid-render;
+                      // older answers (typewriter long done) show them
+                      // immediately.
+                      final showChapters = msg.isAi &&
+                          msg.hasDetails &&
+                          (!isLastMessage || !_isTypewriterActive);
+
+                      if (showFollowUps || showChapters) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             bubble,
-                            _buildAnswerFollowUps(),
+                            if (showChapters)
+                              _buildChapterCards(msg.details),
+                            if (showFollowUps) _buildAnswerFollowUps(),
                           ],
                         );
                       }
@@ -466,6 +479,51 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .animate()
         .fadeIn(duration: 350.ms, delay: 150.ms)
         .slideY(begin: 0.15, end: 0, duration: 350.ms, delay: 150.ms);
+  }
+
+  /// Tappable chapter-reference cards rendered under an AI answer — one
+  /// per summary bullet. Collapsed by default; tap to expand the full
+  /// astrological explanation for that point.
+  Widget _buildChapterCards(List<ChapterDetail> details) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, right: 8, top: 4, bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Row(
+              children: [
+                Icon(Icons.menu_book_outlined,
+                    size: 13, color: AppColors.textMuted.withOpacity(0.8)),
+                const SizedBox(width: 6),
+                Text(
+                  'TAP A CHAPTER FOR THE FULL EXPLANATION',
+                  style: TextStyle(
+                    color: AppColors.textMuted.withOpacity(0.8),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 0; i < details.length; i++)
+            ChapterDetailCard(
+              key: ValueKey('chapter_${details[i].chapter}_$i'),
+              pointNumber: i + 1,
+              chapter: details[i].chapter.isNotEmpty
+                  ? details[i].chapter
+                  : 'Classical reference',
+              explanation: details[i].explanation,
+            ),
+        ],
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 350.ms, delay: 100.ms)
+        .slideY(begin: 0.1, end: 0, duration: 350.ms, delay: 100.ms);
   }
 
   Widget _buildEmptyState() {

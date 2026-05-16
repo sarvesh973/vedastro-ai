@@ -30,10 +30,19 @@ Future<Map<String, String>> _authHeaders() async {
 
 /// Response from AI service, including text and optional Vedic sources
 class AiResponse {
+  /// Bulleted summary text shown in the chat bubble (each line a "• point").
   final String text;
   final List<VedicSource> sources;
 
-  const AiResponse({required this.text, this.sources = const []});
+  /// Per-point chapter deep-dives — rendered as tappable cards under the
+  /// bubble. Parallel to the summary bullets in [text].
+  final List<ChapterDetail> details;
+
+  const AiResponse({
+    required this.text,
+    this.sources = const [],
+    this.details = const [],
+  });
 }
 
 class AiService {
@@ -109,7 +118,20 @@ class AiService {
       print('[RAG] Status: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final answer = data['answer'] as String? ?? '';
+
+        // Structured response: `summary` (short bullets) + `details`
+        // (per-point chapter deep-dives). The server also still sends
+        // `answer` (a bulleted join) for backward-compat — we prefer
+        // `summary` when present, fall back to `answer` otherwise.
+        final summaryJson = data['summary'] as List<dynamic>?;
+        String answer;
+        if (summaryJson != null && summaryJson.isNotEmpty) {
+          answer = summaryJson
+              .map((p) => '• ${p.toString().trim()}')
+              .join('\n');
+        } else {
+          answer = data['answer'] as String? ?? '';
+        }
         if (answer.isEmpty) {
           _lastError = 'RAG returned empty answer';
           return null;
@@ -120,8 +142,16 @@ class AiService {
             .map((s) => VedicSource.fromJson(s as Map<String, dynamic>))
             .toList();
 
-        print('[RAG] Success! chartUsed=${data['chartUsed']}, sources=${sources.length}');
-        return AiResponse(text: answer, sources: sources);
+        final detailsJson = data['details'] as List<dynamic>? ?? [];
+        final details = detailsJson
+            .whereType<Map<String, dynamic>>()
+            .map((d) => ChapterDetail.fromJson(d))
+            .where((d) => d.chapter.isNotEmpty || d.explanation.isNotEmpty)
+            .toList();
+
+        print('[RAG] Success! chartUsed=${data['chartUsed']}, '
+            'sources=${sources.length}, details=${details.length}');
+        return AiResponse(text: answer, sources: sources, details: details);
       } else if (response.statusCode == 401) {
         // Token expired or invalid — surface user-friendly message and signal re-login
         _lastError = 'AUTH_EXPIRED';
