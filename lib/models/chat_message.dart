@@ -23,20 +23,48 @@ class VedicSource {
   }
 }
 
+/// One expandable "chapter" behind a summary point. The chat bubble shows
+/// short summary bullets; each bullet has a matching ChapterDetail rendered
+/// as a tappable card below the bubble — tap to reveal the full reasoning.
+class ChapterDetail {
+  /// Classical text + chapter/topic, e.g.
+  /// "Brihat Parashara Hora Shastra — 10th House of Karma".
+  final String chapter;
+
+  /// Full Hinglish reasoning behind the matching summary point.
+  final String explanation;
+
+  const ChapterDetail({required this.chapter, required this.explanation});
+
+  factory ChapterDetail.fromJson(Map<String, dynamic> json) {
+    return ChapterDetail(
+      chapter: json['chapter']?.toString() ?? '',
+      explanation: json['explanation']?.toString() ?? '',
+    );
+  }
+}
+
 class ChatMessage {
   final String text;
   final MessageRole role;
   final DateTime timestamp;
   final List<VedicSource> sources;
 
+  /// Tappable chapter cards shown under an AI answer — one per summary
+  /// bullet, same order. Empty for user messages and for AI answers that
+  /// came back without structured details.
+  final List<ChapterDetail> details;
+
   const ChatMessage({
     required this.text,
     required this.role,
     required this.timestamp,
     this.sources = const [],
+    this.details = const [],
   });
 
   bool get isUser => role == MessageRole.user;
   bool get isAi => role == MessageRole.ai;
   bool get hasSources => sources.isNotEmpty;
+  bool get hasDetails => details.isNotEmpty;
 }
