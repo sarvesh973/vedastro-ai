@@ -6,22 +6,18 @@ import '../theme/app_theme.dart';
 
 /// Text field that suggests real-world places as the user types — like
 /// Uber / Ola / Swiggy. Uses the OpenStreetMap Nominatim API (free, no
-/// API key, ~1 req/sec limit per IP — we debounce client-side so we
-/// stay well under).
+/// API key, ~1 req/sec — we debounce client-side so we stay well under).
 ///
-/// Why Nominatim:
-///   • No API key, no billing setup, no quota tier games
-///   • Decent coverage of small Indian towns (Gopalganj, Muzaffarpur,
-///     Phalodi, etc.) — better than Google Places' free tier for
-///     remote villages
-///   • OSM Foundation policy: max 1 request per second, descriptive
-///     User-Agent required, attribution recommended
+/// IMPLEMENTATION NOTE — inline list, NOT a floating overlay.
+/// An earlier version rendered the dropdown in an `OverlayEntry`. That
+/// caused a stubborn bug: tapping a suggestion filled the field but the
+/// dropdown wouldn't dismiss (overlay lifecycle races). This version
+/// renders the suggestion list as an ordinary widget directly below the
+/// text field. The list is purely a function of the `_suggestions` array:
+/// clear the array + setState and it is gone — "dropdown won't close" is
+/// structurally impossible.
 ///
-/// Callback contract:
-///   onChanged(text)             — text mutated (typing or selection)
-///   onSelected(suggestion)      — user picked one of the dropdown rows;
-///                                 caller can read .lat/.lon/.displayName
-///                                 to short-circuit server-side geocoding
+/// Public API is unchanged, so the screens that embed it need no edits.
 class LocationAutocompleteField extends StatefulWidget {
   final TextEditingController controller;
   final String hintText;
@@ -44,22 +40,28 @@ class LocationAutocompleteField extends StatefulWidget {
 }
 
 class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
-  final _layerLink = LayerLink();
   final _focusNode = FocusNode();
-  OverlayEntry? _overlayEntry;
   Timer? _debounce;
+
   List<LocationSuggestion> _suggestions = [];
   bool _loading = false;
+  bool _noResults = false; // last search completed with zero matches
 
-  // Last query we sent to Nominatim. Used to discard out-of-order responses
-  // (e.g. user types "del", "delh", "delhi" rapidly and the "del" response
-  // comes back last — we don't want it overwriting suggestions for "delhi").
-  String _lastQuery = '';
+  // Monotonic search id. Every new search AND every suggestion-selection
+  // bumps it; a _fetch captures the id at schedule time and discards its
+  // own result if the id has since moved on. This is collision-proof —
+  // unlike comparing query strings, which silently failed when the typed
+  // text equalled the picked place name (e.g. type "Khatauli", pick
+  // "Khatauli" — the in-flight response wasn't recognised as stale and
+  // re-opened the dropdown right after it had closed).
+  int _fetchSeq = 0;
 
-  // Suppress fetching once when the user just picked a suggestion. Without
-  // this, programmatically writing the selected text back into the
-  // controller would re-trigger a search and re-open the dropdown.
+  // Set true right before we programmatically write the selected place
+  // back into the controller, so the controller listener doesn't treat
+  // that write as the user typing and kick off a fresh search.
   bool _suppressNextFetch = false;
+
+  bool get _panelVisible => _loading || _suggestions.isNotEmpty || _noResults;
 
   @override
   void initState() {
@@ -74,7 +76,6 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
     _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
     _debounce?.cancel();
-    _hideOverlay();
     super.dispose();
   }
 
@@ -88,156 +89,175 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
     }
 
     _debounce?.cancel();
+
     if (text.trim().length < 3) {
-      setState(() {
-        _suggestions = [];
-        _loading = false;
-      });
-      _hideOverlay();
+      if (_panelVisible) {
+        setState(() {
+          _suggestions = [];
+          _loading = false;
+          _noResults = false;
+        });
+      }
       return;
     }
 
-    setState(() => _loading = true);
-    _showOverlay(); // show loading state immediately
+    setState(() {
+      _loading = true;
+      _noResults = false;
+    });
 
-    // 400ms debounce — fast enough to feel responsive, slow enough to
-    // skip every keystroke.
-    _debounce = Timer(const Duration(milliseconds: 400), () => _fetch(text));
+    // New search → new id. _fetch captures it and bails if it's superseded.
+    final seq = ++_fetchSeq;
+
+    // 400ms debounce — responsive but skips every keystroke.
+    _debounce = Timer(
+      const Duration(milliseconds: 400),
+      () => _fetch(text.trim(), seq),
+    );
   }
 
   void _onFocusChanged() {
+    // When the field loses focus, tidy the panel away — but only after a
+    // short delay so a tap currently landing on a suggestion still
+    // registers first. (With an inline list the tap would register
+    // anyway, but the delay keeps the panel from flickering shut under
+    // the user's finger.)
     if (!_focusNode.hasFocus) {
-      // Defer so a tap on a dropdown row registers before the overlay closes.
-      Future.delayed(const Duration(milliseconds: 150), _hideOverlay);
-    } else if (_suggestions.isNotEmpty || _loading) {
-      _showOverlay();
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (!mounted || _focusNode.hasFocus) return;
+        if (_panelVisible) {
+          setState(() {
+            _suggestions = [];
+            _loading = false;
+            _noResults = false;
+          });
+        }
+      });
     }
   }
 
-  Future<void> _fetch(String query) async {
-    _lastQuery = query;
+  Future<void> _fetch(String query, int seq) async {
     try {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search'
         '?q=${Uri.encodeQueryComponent(query)}'
-        '&format=json'
-        '&addressdetails=1'
-        '&limit=6',
+        '&format=json&addressdetails=1&limit=6',
       );
-
       final resp = await http.get(
         uri,
         // Nominatim usage policy: a descriptive User-Agent is mandatory.
         headers: {'User-Agent': 'MokshaApp/1.0 (vedic astrology)'},
       ).timeout(const Duration(seconds: 8));
 
-      if (query != _lastQuery || !mounted) return; // stale, skip
+      // Superseded by a newer search OR by a selection — discard.
+      if (seq != _fetchSeq || !mounted) return;
 
       if (resp.statusCode != 200) {
         setState(() {
           _suggestions = [];
           _loading = false;
+          _noResults = true;
         });
-        _showOverlay();
         return;
       }
 
-      final List<dynamic> raw = jsonDecode(resp.body) as List<dynamic>;
+      final raw = jsonDecode(resp.body) as List<dynamic>;
       final list = raw
-          .map((j) => LocationSuggestion.fromNominatim(j as Map<String, dynamic>))
+          .map((j) =>
+              LocationSuggestion.fromNominatim(j as Map<String, dynamic>))
           .where((s) => s.primary.isNotEmpty)
           .toList();
 
       setState(() {
         _suggestions = list;
         _loading = false;
+        _noResults = list.isEmpty;
       });
-      _showOverlay();
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || seq != _fetchSeq) return;
       setState(() {
         _suggestions = [];
         _loading = false;
+        _noResults = true;
       });
-      _showOverlay();
     }
   }
 
-  void _showOverlay() {
-    _hideOverlay();
-    final overlay = Overlay.of(context);
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-    final size = renderBox.size;
-
-    _overlayEntry = OverlayEntry(
-      builder: (ctx) => Positioned(
-        width: size.width,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          offset: Offset(0, size.height + 4),
-          child: Material(
-            elevation: 12,
-            color: Colors.transparent,
-            child: _buildDropdown(),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_overlayEntry!);
-  }
-
-  void _hideOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
   void _onSuggestionTapped(LocationSuggestion s) {
-    _suppressNextFetch = true;
-
-    // Cancel any pending/in-flight search. Without this, a network
-    // request started by earlier typing can complete a moment AFTER the
-    // tap and call _showOverlay() again — re-opening the dropdown so the
-    // selection looks like it "didn't take" and the user has to leave the
-    // screen to dismiss it.
-    //   - cancel the debounce timer (kills a not-yet-fired fetch)
-    //   - set _lastQuery to the selected text so any ALREADY in-flight
-    //     fetch fails its `query != _lastQuery` staleness check on return
-    //   - clear suggestions + loading so the focus-regain path can't
-    //     repopulate the overlay either
     _debounce?.cancel();
-    _lastQuery = s.primary;
+    _suppressNextFetch = true;
+    // Bump the search id so ANY fetch already in flight is recognised as
+    // stale on return and does not re-open the dropdown.
+    _fetchSeq++;
+
+    // Set text AND cursor position in ONE controller update. Assigning
+    // `.text` and then `.selection` separately fires the controller's
+    // listener TWICE — and `_suppressNextFetch` only swallows the first.
+    // The second (selection) change therefore slips through and kicks
+    // off a brand-new search for the place that was just picked, which
+    // re-opens the dropdown a moment after it closed. A single
+    // `.value` assignment fires the listener exactly once.
+    widget.controller.value = TextEditingValue(
+      text: s.primary,
+      selection: TextSelection.collapsed(offset: s.primary.length),
+    );
+    widget.onSelected?.call(s);
+
+    // Clear the panel — it's just a function of these fields, so this
+    // makes the suggestion list vanish immediately and for good.
     setState(() {
       _suggestions = [];
       _loading = false;
+      _noResults = false;
     });
-
-    widget.controller.text = s.primary;
-    widget.controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: s.primary.length),
-    );
-    widget.onSelected?.call(s);
-    _hideOverlay();
     _focusNode.unfocus();
   }
 
-  Widget _buildDropdown() {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: widget.controller,
+          focusNode: _focusNode,
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            prefixIcon:
+                Icon(widget.prefixIcon, color: AppColors.textMuted, size: 20),
+            suffixIcon: _loading
+                ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.8,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+        ),
+        if (_panelVisible) ...[
+          const SizedBox(height: 6),
+          _buildPanel(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPanel() {
     return Container(
-      constraints: const BoxConstraints(maxHeight: 280),
+      constraints: const BoxConstraints(maxHeight: 260),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppColors.purpleAccent.withValues(alpha: 0.3),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: _loading
           ? const Padding(
@@ -268,6 +288,7 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
               : ListView.separated(
                   shrinkWrap: true,
                   padding: EdgeInsets.zero,
+                  physics: const ClampingScrollPhysics(),
                   itemCount: _suggestions.length,
                   separatorBuilder: (_, __) => Divider(
                     height: 1,
@@ -278,36 +299,6 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
                     onTap: () => _onSuggestionTapped(_suggestions[i]),
                   ),
                 ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: TextField(
-        controller: widget.controller,
-        focusNode: _focusNode,
-        style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
-        decoration: InputDecoration(
-          hintText: widget.hintText,
-          prefixIcon: Icon(widget.prefixIcon,
-              color: AppColors.textMuted, size: 20),
-          suffixIcon: _loading
-              ? const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.8,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                )
-              : null,
-        ),
-      ),
     );
   }
 }
@@ -381,12 +372,9 @@ class _SuggestionTile extends StatelessWidget {
 
 // ─── Data model ────────────────────────────────────────────────────────
 
-/// One Nominatim suggestion: a place name + its coordinates + the
-/// hierarchical context (state + country).
-///
-/// The lat/lon comes back from the geocoder for free, so callers can
-/// store them with the user profile and skip the server's geocode round-trip
-/// when the user submits.
+/// One Nominatim suggestion: a place name + coordinates + region context.
+/// lat/lon come back for free, so callers can store them and skip the
+/// server's geocode round-trip when the user picks a suggestion.
 class LocationSuggestion {
   /// Short city name, e.g. "Gopalganj"
   final String primary;
@@ -416,13 +404,19 @@ class LocationSuggestion {
   factory LocationSuggestion.fromNominatim(Map<String, dynamic> json) {
     final addr = (json['address'] as Map<String, dynamic>?) ?? const {};
     // Prefer the most-specific name first — village > town > city > county.
-    final primary = (addr['village'] ?? addr['town'] ?? addr['city'] ??
-            addr['municipality'] ?? addr['suburb'] ?? addr['county'] ??
-            json['name'] ?? '')
+    final primary = (addr['village'] ??
+            addr['town'] ??
+            addr['city'] ??
+            addr['municipality'] ??
+            addr['suburb'] ??
+            addr['county'] ??
+            json['name'] ??
+            '')
         .toString();
     final state = (addr['state'] ?? addr['region'] ?? '').toString();
     final country = (addr['country'] ?? '').toString();
-    final secondary = [state, country].where((s) => s.isNotEmpty).join(', ');
+    final secondary =
+        [state, country].where((s) => s.isNotEmpty).join(', ');
 
     return LocationSuggestion(
       primary: primary,
