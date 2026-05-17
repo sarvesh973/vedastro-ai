@@ -47,10 +47,14 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
   bool _loading = false;
   bool _noResults = false; // last search completed with zero matches
 
-  // Last query sent to Nominatim — used to discard out-of-order responses
-  // (type "del", "delh", "delhi" fast; the "del" response must not
-  // overwrite suggestions meant for "delhi").
-  String _lastQuery = '';
+  // Monotonic search id. Every new search AND every suggestion-selection
+  // bumps it; a _fetch captures the id at schedule time and discards its
+  // own result if the id has since moved on. This is collision-proof —
+  // unlike comparing query strings, which silently failed when the typed
+  // text equalled the picked place name (e.g. type "Khatauli", pick
+  // "Khatauli" — the in-flight response wasn't recognised as stale and
+  // re-opened the dropdown right after it had closed).
+  int _fetchSeq = 0;
 
   // Set true right before we programmatically write the selected place
   // back into the controller, so the controller listener doesn't treat
@@ -102,10 +106,13 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
       _noResults = false;
     });
 
+    // New search → new id. _fetch captures it and bails if it's superseded.
+    final seq = ++_fetchSeq;
+
     // 400ms debounce — responsive but skips every keystroke.
     _debounce = Timer(
       const Duration(milliseconds: 400),
-      () => _fetch(text.trim()),
+      () => _fetch(text.trim(), seq),
     );
   }
 
@@ -129,8 +136,7 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
     }
   }
 
-  Future<void> _fetch(String query) async {
-    _lastQuery = query;
+  Future<void> _fetch(String query, int seq) async {
     try {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search'
@@ -143,8 +149,8 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
         headers: {'User-Agent': 'MokshaApp/1.0 (vedic astrology)'},
       ).timeout(const Duration(seconds: 8));
 
-      // Stale response (user kept typing) or widget gone — discard.
-      if (query != _lastQuery || !mounted) return;
+      // Superseded by a newer search OR by a selection — discard.
+      if (seq != _fetchSeq || !mounted) return;
 
       if (resp.statusCode != 200) {
         setState(() {
@@ -168,7 +174,7 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
         _noResults = list.isEmpty;
       });
     } catch (_) {
-      if (!mounted || query != _lastQuery) return;
+      if (!mounted || seq != _fetchSeq) return;
       setState(() {
         _suggestions = [];
         _loading = false;
@@ -180,7 +186,10 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
   void _onSuggestionTapped(LocationSuggestion s) {
     _debounce?.cancel();
     _suppressNextFetch = true;
-    _lastQuery = s.primary; // any in-flight fetch becomes stale + is dropped
+    // Bump the search id so ANY fetch already in flight (even one whose
+    // query string happens to equal the picked place name) is recognised
+    // as stale on return and does not re-open the dropdown.
+    _fetchSeq++;
 
     widget.controller.text = s.primary;
     widget.controller.selection = TextSelection.fromPosition(
