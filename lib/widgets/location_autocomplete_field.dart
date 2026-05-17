@@ -186,14 +186,20 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
   void _onSuggestionTapped(LocationSuggestion s) {
     _debounce?.cancel();
     _suppressNextFetch = true;
-    // Bump the search id so ANY fetch already in flight (even one whose
-    // query string happens to equal the picked place name) is recognised
-    // as stale on return and does not re-open the dropdown.
+    // Bump the search id so ANY fetch already in flight is recognised as
+    // stale on return and does not re-open the dropdown.
     _fetchSeq++;
 
-    widget.controller.text = s.primary;
-    widget.controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: s.primary.length),
+    // Set text AND cursor position in ONE controller update. Assigning
+    // `.text` and then `.selection` separately fires the controller's
+    // listener TWICE — and `_suppressNextFetch` only swallows the first.
+    // The second (selection) change therefore slips through and kicks
+    // off a brand-new search for the place that was just picked, which
+    // re-opens the dropdown a moment after it closed. A single
+    // `.value` assignment fires the listener exactly once.
+    widget.controller.value = TextEditingValue(
+      text: s.primary,
+      selection: TextSelection.collapsed(offset: s.primary.length),
     );
     widget.onSelected?.call(s);
 
