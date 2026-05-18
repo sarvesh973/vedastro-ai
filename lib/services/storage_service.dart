@@ -273,6 +273,26 @@ class StorageService {
     await _prefs?.setString(_keyLastPurchasedPlan, planId);
   }
 
+  // ─── Language preference ────────────────────────
+  // 'english'  → all AI content (chat, kundli insights, horoscope) in
+  //              pure English.
+  // 'hinglish' → Hindi+English mix in Roman script.
+  // Default 'hinglish' — the app is India-first; this matches the prior
+  // behaviour (the server prompts used to default to Hinglish).
+  static const String _keyLanguage = 'language_preference';
+
+  static String get languagePreference =>
+      _prefs?.getString(_keyLanguage) ?? 'hinglish';
+
+  /// True once the user has explicitly chosen on the language screen.
+  /// Used to decide whether to show that screen during onboarding.
+  static bool get hasChosenLanguage =>
+      _prefs?.getString(_keyLanguage) != null;
+
+  static Future<void> setLanguagePreference(String lang) async {
+    await _prefs?.setString(_keyLanguage, lang);
+  }
+
   // ─── Reset ──────────────────────────────────────
   static Future<void> reset() async {
     _currentProfile = null;

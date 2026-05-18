@@ -118,6 +118,17 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => _handleShare(context),
             ).animate().fadeIn(duration: 500.ms, delay: 550.ms),
 
+            // Language — drives the language of chat, kundli insights and
+            // horoscope. Subtitle is reactive via ref.watch(languageProvider).
+            _buildInfoTile(
+              icon: Icons.translate_rounded,
+              title: 'Language',
+              subtitle: ref.watch(languageProvider) == 'english'
+                  ? 'Pure English'
+                  : 'Hinglish',
+              onTap: () => _showLanguagePicker(context, ref),
+            ).animate().fadeIn(duration: 500.ms, delay: 575.ms),
+
             const SizedBox(height: 24),
 
             // ─── Subscription management ─────────────────────────
@@ -496,6 +507,77 @@ class SettingsScreen extends ConsumerWidget {
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
+    );
+  }
+
+  /// Bottom sheet to switch language. Updates StorageService + the
+  /// languageProvider so the next chat / kundli / horoscope request
+  /// carries the new choice.
+  void _showLanguagePicker(BuildContext context, WidgetRef ref) {
+    final current = ref.read(languageProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        Widget option(String value, String label, String desc, IconData ic) {
+          final sel = current == value;
+          return ListTile(
+            leading: Icon(ic,
+                color: sel ? AppColors.goldLight : AppColors.textMuted,
+                size: 22),
+            title: Text(label,
+                style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600)),
+            subtitle: Text(desc,
+                style: const TextStyle(
+                    color: AppColors.textMuted, fontSize: 12)),
+            trailing: sel
+                ? const Icon(Icons.check_circle,
+                    color: AppColors.goldLight, size: 20)
+                : null,
+            onTap: () async {
+              await StorageService.setLanguagePreference(value);
+              ref.read(languageProvider.notifier).state = value;
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+          );
+        }
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              const Text('App Language',
+                  style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'Applies to chat, kundli readings and horoscope.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 8),
+              option('english', 'Pure English',
+                  'Clear, universal English.', Icons.public_rounded),
+              option('hinglish', 'Hinglish',
+                  'Hindi + English mix, Roman script.',
+                  Icons.chat_bubble_rounded),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
     );
   }
 
