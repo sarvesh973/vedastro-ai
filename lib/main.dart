@@ -58,12 +58,24 @@ void main() async {
     // Sync cloud data if user is logged in
     _syncCloudData();
 
-    // Set system UI overlay style for premium dark look
+    // Draw the app behind the status bar and navigation bar (edge-to-edge).
+    // WITHOUT this, newer Flutter stable builds render an opaque black
+    // status-bar strip — the app's starfield no longer bleeds under it,
+    // so the top shows a black box and the usable screen shrinks. The
+    // CI Flutter channel is 'stable' (auto-updating), so a Flutter bump
+    // silently introduced this; explicitly opting into edgeToEdge makes
+    // it correct on every Flutter version. Screens already use SafeArea,
+    // so content stays clear of the bars while the background fills.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    // Set system UI overlay style for premium dark look. Both bars are
+    // transparent so the app background shows through edge-to-edge.
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: AppColors.background,
+      systemNavigationBarColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarContrastEnforced: false,
     ));
 
     // Lock to portrait for best experience
