@@ -10,13 +10,15 @@
     <!-- For palm reading via camera capture path -->
     <uses-permission android:name="android.permission.CAMERA"/>
 
-    <!-- For palm reading via gallery (Android 13+ photo picker is permissionless,
-         but READ_MEDIA_IMAGES needed for full gallery access on older flows) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <!-- NOTE: no gallery storage permission is declared on purpose.
+         image_picker (>=1.0) uses the permissionless Android Photo Picker,
+         which grants per-image access without READ_MEDIA_IMAGES. Declaring
+         READ_MEDIA_IMAGES would trigger Play Console's "sensitive app
+         permissions" declaration requirement for no benefit.
 
-    <!-- Razorpay payment intents -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission"/>
+         QUERY_ALL_PACKAGES was also removed — Play policy disallows it for
+         this app type. UPI app visibility for Razorpay is handled by the
+         scoped <queries> intent below instead. -->
 
     <!-- Camera feature is OPTIONAL — app works without it -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
@@ -74,6 +76,13 @@
         <intent>
             <action android:name="android.intent.action.SEND_MULTIPLE"/>
             <data android:mimeType="*/*"/>
+        </intent>
+        <!-- Razorpay UPI: lets the SDK detect installed UPI apps (GPay,
+             PhonePe, Paytm, etc.) without the disallowed QUERY_ALL_PACKAGES
+             permission. This scoped query is Play-policy compliant. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
         </intent>
     </queries>
 </manifest>
