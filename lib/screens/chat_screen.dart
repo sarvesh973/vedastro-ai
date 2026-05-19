@@ -201,18 +201,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.purpleAccent.withOpacity(0.6),
-                    AppColors.purpleSoft.withOpacity(0.4),
-                  ],
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.purpleAccent, AppColors.purpleSoft],
                 ),
+                border: Border.all(
+                  color: AppColors.goldLight.withOpacity(0.4),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.purpleAccent.withOpacity(0.5),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
-              child: const Icon(Icons.auto_awesome, size: 18, color: AppColors.goldLight),
+              child: const Icon(Icons.auto_awesome, size: 19, color: AppColors.goldLight),
             ),
             const SizedBox(width: 12),
             Column(
@@ -568,6 +578,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               decoration: BoxDecoration(
                 color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.purpleAccent.withOpacity(0.22),
+                  width: 0.8,
+                ),
               ),
               child: TextField(
                 controller: _messageController,

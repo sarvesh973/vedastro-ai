@@ -69,6 +69,13 @@ class ChatBubble extends StatelessWidget {
           bottomLeft: Radius.circular(20),
           bottomRight: Radius.circular(6),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.purpleAccent.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Text(
         message.text,
@@ -93,14 +100,36 @@ class ChatBubble extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: AppColors.aiBubble,
-              border: Border.all(color: AppColors.divider, width: 0.5),
+              // Subtle top-left -> bottom-right gradient gives the bubble
+              // depth instead of a flat fill — a more modern, premium look.
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.aiBubble,
+                  Color.alphaBlend(
+                    AppColors.purpleAccent.withOpacity(0.07),
+                    AppColors.aiBubble,
+                  ),
+                ],
+              ),
+              border: Border.all(
+                color: AppColors.purpleAccent.withOpacity(0.16),
+                width: 0.7,
+              ),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(6),
                 topRight: Radius.circular(20),
                 bottomLeft: Radius.circular(20),
                 bottomRight: Radius.circular(20),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.22),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: isLatestAiMessage
                 ? TypewriterText(
@@ -176,6 +205,31 @@ class ChatBubble extends StatelessWidget {
         final trimmed = section.trim();
         if (trimmed.isEmpty) return const SizedBox.shrink();
 
+        // Bullet block — render each answer point with a modern glowing
+        // gradient marker instead of a plain "•" character.
+        final bulletLines = trimmed
+            .split('\n')
+            .map((l) => l.trim())
+            .where((l) => l.isNotEmpty)
+            .toList();
+        final bulletRe = RegExp(r'^[•\-\*]\s+');
+        if (bulletLines.isNotEmpty &&
+            bulletLines.every((l) => bulletRe.hasMatch(l))) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < bulletLines.length; i++)
+                  _buildBulletItem(
+                    bulletLines[i].replaceFirst(bulletRe, ''),
+                    isLast: i == bulletLines.length - 1,
+                  ),
+              ],
+            ),
+          );
+        }
+
         // Check if section starts with an emoji header
         if (trimmed.startsWith('\u{1F52E}') ||
             trimmed.startsWith('\u{1F4D6}') ||
@@ -218,6 +272,50 @@ class ChatBubble extends StatelessWidget {
           child: _buildRichText(trimmed),
         );
       }).toList(),
+    );
+  }
+
+  /// A single answer point rendered with a modern marker — a small
+  /// glowing gold→purple gradient dot inside a soft halo ring. Replaces
+  /// the plain "•" for a premium, modern look.
+  Widget _buildBulletItem(String text, {bool isLast = false}) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 3, right: 12),
+            width: 18,
+            height: 18,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.purpleAccent.withOpacity(0.12),
+            ),
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [AppColors.goldLight, AppColors.purpleAccent],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.goldLight.withOpacity(0.55),
+                    blurRadius: 6,
+                    spreadRadius: 0.5,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: _buildRichText(text)),
+        ],
+      ),
     );
   }
 
