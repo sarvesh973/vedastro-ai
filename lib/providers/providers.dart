@@ -49,6 +49,11 @@ final chatQuestionsUsedProvider =
 final palmReadingsUsedProvider =
     StateProvider<int>((ref) => StorageService.palmReadingsUsed);
 
+// Language preference: 'english' or 'hinglish'. Controls the language of
+// all AI content — chat, kundli insights, horoscope.
+final languageProvider =
+    StateProvider<String>((ref) => StorageService.languagePreference);
+
 class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
   ChatMessagesNotifier() : super([]);
 

@@ -11,6 +11,7 @@ import '../models/user_profile.dart';
 import '../models/palm_result.dart';
 import '../models/chat_message.dart';
 import 'analytics_service.dart';
+import 'storage_service.dart';
 
 /// Helper: get headers with Firebase Auth ID token for Cloud Function calls.
 /// Cloud Functions reject unauthenticated requests.
@@ -103,6 +104,8 @@ class AiService {
               'birthDate': profile.dobFormatted,
               'birthTime': profile.timeOfBirth ?? '',
               'place': profile.placeOfBirth,
+              // 'english' | 'hinglish' — server replies entirely in this.
+              'language': StorageService.languagePreference,
               'chatHistory': chatHistory.length > 10
                   ? chatHistory.sublist(chatHistory.length - 10)
                   : chatHistory,
@@ -218,6 +221,8 @@ class AiService {
               if (profile.timeOfBirth != null && profile.timeOfBirth!.isNotEmpty)
                 'birthTime': profile.timeOfBirth,
               'place': profile.placeOfBirth,
+              // 'english' | 'hinglish' — server writes the horoscope in this.
+              'language': StorageService.languagePreference,
             }),
           )
           .timeout(const Duration(seconds: 45));

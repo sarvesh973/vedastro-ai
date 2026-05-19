@@ -9,6 +9,7 @@ import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/location_autocomplete_field.dart';
 import 'home_screen.dart';
+import 'language_selection_screen.dart';
 
 class UserDetailsScreen extends ConsumerStatefulWidget {
   final bool fromOnboarding;
@@ -143,13 +144,17 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
     FirestoreService.syncProfile(profile);
 
     if (widget.fromOnboarding) {
-      // First-time profile setup AFTER login is already done -> go to Home.
-      // (Old flow used to bounce back to LoginScreen here, but login now
-      //  always happens BEFORE this screen, so we go straight to Home.)
+      // First-time profile setup. Next step in onboarding is the language
+      // page (Pure English vs Hinglish) — UNLESS the user already chose
+      // a language on a prior run (e.g. cloud-restored profile), in which
+      // case skip straight to Home. The language screen routes to Home
+      // itself once a choice is confirmed.
+      final next = StorageService.hasChosenLanguage
+          ? const HomeScreen()
+          : const LanguageSelectionScreen();
       Navigator.of(context).pushAndRemoveUntil(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const HomeScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) => next,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
