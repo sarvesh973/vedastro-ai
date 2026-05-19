@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../models/chat_message.dart';
+import '../services/firestore_service.dart';
 import 'typewriter_text.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -33,7 +35,7 @@ class ChatBubble extends StatelessWidget {
           right: isUser ? 0 : 48,
           bottom: 12,
         ),
-        child: isUser ? _buildUserBubble() : _buildAiBubble(),
+        child: isUser ? _buildUserBubble() : _buildAiBubble(context),
       ),
     );
 
@@ -79,31 +81,37 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildAiBubble() {
+  Widget _buildAiBubble(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: AppColors.aiBubble,
-            border: Border.all(color: AppColors.divider, width: 0.5),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(6),
-              topRight: Radius.circular(20),
-              bottomLeft: Radius.circular(20),
-              bottomRight: Radius.circular(20),
+        // Long-press an AI answer to report it. Required by Google Play's
+        // Generative AI policy — users must be able to flag offensive or
+        // inappropriate AI-generated content from inside the app.
+        GestureDetector(
+          onLongPress: () => _showReportSheet(context),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.aiBubble,
+              border: Border.all(color: AppColors.divider, width: 0.5),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(6),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
             ),
+            child: isLatestAiMessage
+                ? TypewriterText(
+                    key: ValueKey('tw_${message.timestamp.millisecondsSinceEpoch}'),
+                    text: message.text,
+                    // Melooha-like pace — slower, calmer, easier to read.
+                    charDuration: const Duration(milliseconds: 35),
+                    onComplete: onTypewriterComplete,
+                  )
+                : _buildFormattedAiText(message.text),
           ),
-          child: isLatestAiMessage
-              ? TypewriterText(
-                  key: ValueKey('tw_${message.timestamp.millisecondsSinceEpoch}'),
-                  text: message.text,
-                  // Melooha-like pace — slower, calmer, easier to read.
-                  charDuration: const Duration(milliseconds: 35),
-                  onComplete: onTypewriterComplete,
-                )
-              : _buildFormattedAiText(message.text),
         ),
         // Always show sources below — even for the latest message currently
         // being typed — so users see citations in the dedicated section
@@ -256,6 +264,85 @@ class ChatBubble extends StatelessWidget {
         ),
         children: spans.isEmpty ? [TextSpan(text: text)] : spans,
       ),
+    );
+  }
+
+  /// Bottom sheet to report an inappropriate AI response.
+  void _showReportSheet(BuildContext context) {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined,
+                      color: AppColors.error),
+                  title: const Text(
+                    'Report this response',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Flag offensive or inappropriate AI content',
+                    style: TextStyle(
+                        color: AppColors.textMuted, fontSize: 12),
+                  ),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await FirestoreService.reportAiMessage(
+                      messageText: message.text,
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text(
+                              'Thanks — this response has been reported for review.'),
+                          backgroundColor: AppColors.purpleSoft,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close_rounded,
+                      color: AppColors.textMuted),
+                  title: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                        color: AppColors.textMuted, fontSize: 15),
+                  ),
+                  onTap: () => Navigator.of(sheetContext).pop(),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

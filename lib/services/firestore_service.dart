@@ -200,6 +200,25 @@ class FirestoreService {
     }
   }
 
+  /// Flag an AI response as offensive / inappropriate. Required by Google
+  /// Play's Generative AI policy: users must be able to report AI-generated
+  /// content in-app. Reports land in a top-level `ai_reports` collection
+  /// for moderation review.
+  static Future<void> reportAiMessage({
+    required String messageText,
+    String reason = 'inappropriate',
+  }) async {
+    try {
+      await _db.collection('ai_reports').add({
+        'uid': _uid ?? 'anonymous',
+        'messageText':
+            messageText.length > 2000 ? messageText.substring(0, 2000) : messageText,
+        'reason': reason,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
   /// Get chat history for a user
   static Future<List<Map<String, dynamic>>> getChatHistory(String uid) async {
     try {
