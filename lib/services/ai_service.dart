@@ -126,14 +126,34 @@ class AiService {
         // (per-point chapter deep-dives). The server also still sends
         // `answer` (a bulleted join) for backward-compat — we prefer
         // `summary` when present, fall back to `answer` otherwise.
-        final summaryJson = data['summary'] as List<dynamic>?;
+        List<dynamic>? summaryJson = data['summary'] as List<dynamic>?;
+        List<dynamic> detailsJson = data['details'] as List<dynamic>? ?? [];
+        String rawAnswer = data['answer'] as String? ?? '';
+
+        // Defensive recovery: when the RAG server is on an OLDER deploy it
+        // does not parse the model's structured reply — it just dumps the
+        // model's raw JSON string into `answer`. Without this, the user
+        // sees a `{"summary":[...],"details":[...]}` blob in the chat
+        // bubble. Detect that case and parse it client-side so the chat
+        // stays clean regardless of the server's deploy state.
+        if (summaryJson == null || summaryJson.isEmpty) {
+          final recovered = _tryParseStructuredAnswer(rawAnswer);
+          if (recovered != null) {
+            summaryJson = recovered['summary'] as List<dynamic>?;
+            if (detailsJson.isEmpty) {
+              detailsJson = recovered['details'] as List<dynamic>? ?? [];
+            }
+            rawAnswer = '';
+          }
+        }
+
         String answer;
         if (summaryJson != null && summaryJson.isNotEmpty) {
           answer = summaryJson
               .map((p) => '• ${p.toString().trim()}')
               .join('\n');
         } else {
-          answer = data['answer'] as String? ?? '';
+          answer = rawAnswer;
         }
         if (answer.isEmpty) {
           _lastError = 'RAG returned empty answer';
@@ -144,8 +164,6 @@ class AiService {
         final sources = sourcesJson
             .map((s) => VedicSource.fromJson(s as Map<String, dynamic>))
             .toList();
-
-        final detailsJson = data['details'] as List<dynamic>? ?? [];
         final details = detailsJson
             .whereType<Map<String, dynamic>>()
             .map((d) => ChapterDetail.fromJson(d))
@@ -187,6 +205,34 @@ class AiService {
     } catch (e) {
       _lastError = 'RAG exception: $e';
       print('[RAG] $_lastError');
+    }
+    return null;
+  }
+
+  /// Recover a structured `{summary, details}` payload from a raw answer
+  /// string. An older RAG server deploy returns the model's JSON verbatim
+  /// inside `answer` instead of parsing it — this lets the app parse it
+  /// itself so the user never sees a JSON dump in the chat bubble.
+  /// Returns null when [raw] is not a structured-answer JSON object.
+  static Map<String, dynamic>? _tryParseStructuredAnswer(String raw) {
+    var s = raw.trim();
+    if (s.isEmpty) return null;
+    // Strip ```json ... ``` fences if the model wrapped its reply.
+    if (s.startsWith('```')) {
+      s = s
+          .replaceAll(RegExp(r'^```\w*\n?'), '')
+          .replaceAll(RegExp(r'\n?```$'), '')
+          .trim();
+    }
+    // Must look like a JSON object that carries a summary field.
+    if (!s.startsWith('{') || !s.contains('"summary"')) return null;
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is Map<String, dynamic> && decoded['summary'] is List) {
+        return decoded;
+      }
+    } catch (_) {
+      // Not valid JSON — leave the answer untouched.
     }
     return null;
   }
