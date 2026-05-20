@@ -341,12 +341,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildSuggestionChips() {
-    final suggestions = [
-      'Mera career kaisa rahega?',
-      'Love life ke baare mein batao',
-      'Health prediction',
-      'Finance & wealth',
-    ];
+    // Suggestion text is sent verbatim as the user's question, so the
+    // language has to match the user's pick — otherwise an English user
+    // taps a chip and their own message appears in Hinglish.
+    final isEnglish = StorageService.languagePreference == 'english';
+    final suggestions = isEnglish
+        ? const [
+            'How will my career be?',
+            'Tell me about my love life',
+            'Health prediction',
+            'Finance & wealth',
+          ]
+        : const [
+            'Mera career kaisa rahega?',
+            'Love life ke baare mein batao',
+            'Health prediction',
+            'Finance & wealth',
+          ];
 
     return Container(
       height: 48,
@@ -389,29 +400,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// reading itself no longer ends with a forced remedy; remedies are now
   /// an explicit opt-in step.
   Widget _buildAnswerFollowUps() {
+    // Tapping a chip sends the message text as the user's next question.
+    // Both the chip label AND the sent text need to match the user's
+    // chosen language — otherwise an English user taps "Remedies" and
+    // suddenly their own bubble shows a Hinglish prompt.
+    final isEnglish = StorageService.languagePreference == 'english';
+
     // (label, icon, message-that-gets-sent, isPrimary)
-    final followUps = <(String, IconData, String, bool)>[
-      (
-        'Remedies & upay',
-        Icons.spa_outlined,
-        'Iske liye remedies aur upay bataiye — mantra ke saath saath '
-            'real-life practical solutions bhi (habits, lifestyle, '
-            'career ya finance steps).',
-        true,
-      ),
-      (
-        'Explain in more detail',
-        Icons.unfold_more_rounded,
-        'Iske baare mein thoda aur detail mein samjhaiye.',
-        false,
-      ),
-      (
-        'What should I focus on?',
-        Icons.center_focus_strong_outlined,
-        'Mujhe abhi kis cheez par sabse zyada dhyaan dena chahiye?',
-        false,
-      ),
-    ];
+    final followUps = isEnglish
+        ? <(String, IconData, String, bool)>[
+            (
+              'Remedies',
+              Icons.spa_outlined,
+              'Please share remedies for this — mantras as well as real-life '
+                  'practical steps (habits, lifestyle, career or finance).',
+              true,
+            ),
+            (
+              'Explain in more detail',
+              Icons.unfold_more_rounded,
+              'Please explain this in more detail.',
+              false,
+            ),
+            (
+              'What should I focus on?',
+              Icons.center_focus_strong_outlined,
+              'What should I focus on the most right now?',
+              false,
+            ),
+          ]
+        : <(String, IconData, String, bool)>[
+            (
+              'Remedies & upay',
+              Icons.spa_outlined,
+              'Iske liye remedies aur upay bataiye — mantra ke saath saath '
+                  'real-life practical solutions bhi (habits, lifestyle, '
+                  'career ya finance steps).',
+              true,
+            ),
+            (
+              'Explain in more detail',
+              Icons.unfold_more_rounded,
+              'Iske baare mein thoda aur detail mein samjhaiye.',
+              false,
+            ),
+            (
+              'What should I focus on?',
+              Icons.center_focus_strong_outlined,
+              'Mujhe abhi kis cheez par sabse zyada dhyaan dena chahiye?',
+              false,
+            ),
+          ];
 
     return Padding(
       padding: const EdgeInsets.only(left: 8, right: 8, top: 2, bottom: 10),

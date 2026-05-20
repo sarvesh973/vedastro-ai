@@ -664,15 +664,27 @@ class AiService {
     );
   }
 
-  /// Welcome message when chat starts
+  /// Welcome message when chat starts. Pure English when the user has
+  /// picked English on the language page; Hinglish otherwise. Keeping the
+  /// first impression in the user's chosen language avoids the "I picked
+  /// English but the app greets me in Hinglish" inconsistency.
   static String getWelcomeMessage(UserProfile profile) {
     final first = profile.firstName;
-    final opener = first.isNotEmpty ? 'Hello $first' : 'Hello';
-    return '''$opener
+    final isEnglish = StorageService.languagePreference == 'english';
+
+    if (isEnglish) {
+      final opener = first.isNotEmpty ? 'Hello $first' : 'Hello';
+      return '''$opener
 
 I am your Vedic astrologer. Your birth details are saved with me.
 
-Aap English, Hindi ya Hinglish mein baat kar sakte hain — I will reply in the same language.
+Ask me anything — career, love, health, finance, family — and I will read your stars for you.''';
+    }
+
+    final opener = first.isNotEmpty ? 'Namaste $first' : 'Namaste';
+    return '''$opener
+
+I am your Vedic astrologer. Your birth details are saved with me.
 
 Career, love, health, finance — jo bhi poochhna ho, puchiye.''';
   }
