@@ -39,10 +39,15 @@ class AiResponse {
   /// bubble. Parallel to the summary bullets in [text].
   final List<ChapterDetail> details;
 
+  /// Admin-only diagnostic blob — raw HTTP body + which parser branch
+  /// produced [text]. Surfaced via long-press for admin sign-ins.
+  final String? debugRaw;
+
   const AiResponse({
     required this.text,
     this.sources = const [],
     this.details = const [],
+    this.debugRaw,
   });
 }
 
@@ -120,7 +125,11 @@ class AiService {
 
       print('[RAG] Status: ${response.statusCode}');
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        // Keep the raw body around so an admin can long-press the
+        // resulting bubble and inspect exactly what came back.
+        final rawBody = response.body;
+        final parsePath = <String>[];
+        final data = jsonDecode(rawBody) as Map<String, dynamic>;
 
         // Structured response: `summary` (short bullets) + `details`
         // (per-point chapter deep-dives). The server also still sends
@@ -129,6 +138,11 @@ class AiService {
         List<dynamic>? summaryJson = data['summary'] as List<dynamic>?;
         List<dynamic> detailsJson = data['details'] as List<dynamic>? ?? [];
         String rawAnswer = data['answer'] as String? ?? '';
+        if (summaryJson != null && summaryJson.isNotEmpty) {
+          parsePath.add('summary:${summaryJson.length}');
+        }
+        if (detailsJson.isNotEmpty) parsePath.add('details:${detailsJson.length}');
+        if (rawAnswer.isNotEmpty) parsePath.add('answer:${rawAnswer.length}b');
 
         // Defensive recovery: when the RAG server is on an OLDER deploy it
         // does not parse the model's structured reply — it just dumps the
@@ -144,6 +158,32 @@ class AiService {
               detailsJson = recovered['details'] as List<dynamic>? ?? [];
             }
             rawAnswer = '';
+            parsePath.add('recovered-from-answer');
+          } else if (rawAnswer.isNotEmpty) {
+            parsePath.add('recovery-FAILED');
+          }
+        }
+
+        // Second layer of defence: the server sometimes returns a single
+        // summary entry that is itself the model's full ```json{...}```
+        // block — i.e. the structured reply got stuffed verbatim into
+        // summary[0] instead of being parsed. Unwrap that so the user
+        // sees real bullets, not a JSON dump rendered as one giant point.
+        if (summaryJson != null && summaryJson.length == 1) {
+          final only = summaryJson.first.toString();
+          if (only.contains('"summary"') &&
+              (only.contains('```') || only.trimLeft().startsWith('{') ||
+               only.trimLeft().startsWith('['))) {
+            final unwrapped = _tryParseStructuredAnswer(only);
+            if (unwrapped != null) {
+              summaryJson = unwrapped['summary'] as List<dynamic>?;
+              if (detailsJson.isEmpty) {
+                detailsJson = unwrapped['details'] as List<dynamic>? ?? [];
+              }
+              parsePath.add('unwrapped-summary[0]');
+            } else {
+              parsePath.add('unwrap-FAILED');
+            }
           }
         }
 
@@ -152,8 +192,10 @@ class AiService {
           answer = summaryJson
               .map((p) => '• ${p.toString().trim()}')
               .join('\n');
+          parsePath.add('render:summary-bullets');
         } else {
           answer = rawAnswer;
+          parsePath.add('render:raw-answer');
         }
         if (answer.isEmpty) {
           _lastError = 'RAG returned empty answer';
@@ -171,8 +213,23 @@ class AiService {
             .toList();
 
         print('[RAG] Success! chartUsed=${data['chartUsed']}, '
-            'sources=${sources.length}, details=${details.length}');
-        return AiResponse(text: answer, sources: sources, details: details);
+            'sources=${sources.length}, details=${details.length}, '
+            'path=${parsePath.join(' -> ')}');
+
+        // Compose the admin diagnostic blob: parse-path + truncated body.
+        final truncated = rawBody.length > 6000
+            ? '${rawBody.substring(0, 6000)}\n…[truncated ${rawBody.length - 6000} bytes]'
+            : rawBody;
+        final debugRaw = 'PARSE PATH: ${parsePath.join(' -> ')}\n'
+            'STATUS: 200\n'
+            'BODY (${rawBody.length} bytes):\n$truncated';
+
+        return AiResponse(
+          text: answer,
+          sources: sources,
+          details: details,
+          debugRaw: debugRaw,
+        );
       } else if (response.statusCode == 401) {
         // Token expired or invalid — surface user-friendly message and signal re-login
         _lastError = 'AUTH_EXPIRED';
@@ -225,13 +282,8 @@ class AiService {
     var s = raw.trim();
     if (s.isEmpty) return null;
 
-    // Strip ```json ... ``` fences if the model wrapped its reply.
-    if (s.startsWith('```')) {
-      s = s
-          .replaceAll(RegExp(r'^```\w*\n?'), '')
-          .replaceAll(RegExp(r'\n?```$'), '')
-          .trim();
-    }
+    // Strip leading ```json (or ``` plain) fence if the model opened with one.
+    s = s.replaceAll(RegExp(r'^```\w*\n?'), '').trim();
 
     // Drop any leading non-JSON characters (markdown asterisks, quotes,
     // stray whitespace) before the first `{` or `[`. Gemini occasionally
@@ -240,29 +292,74 @@ class AiService {
     if (firstBrace < 0) return null;
     if (firstBrace > 0) s = s.substring(firstBrace);
 
+    // Strip any trailing ``` fence (with optional trailing whitespace).
+    // Without this, summary entries that embed the closing fence cause
+    // jsonDecode to throw at the backticks.
+    s = s.replaceAll(RegExp(r'\n?```\s*$'), '').trim();
+
     // Must mention a summary field somewhere — quick sanity check.
     if (!s.contains('"summary"')) return null;
 
+    dynamic decoded;
     try {
-      final decoded = jsonDecode(s);
-
-      // Bare object: {"summary":[...], "details":[...]}
-      if (decoded is Map<String, dynamic> && decoded['summary'] is List) {
-        return decoded;
-      }
-
-      // Array-wrapped: [{"summary":[...], "details":[...]}] — Gemini
-      // sometimes returns its single answer object inside a 1-item array.
-      if (decoded is List && decoded.isNotEmpty) {
-        final first = decoded.first;
-        if (first is Map<String, dynamic> && first['summary'] is List) {
-          return first;
-        }
-      }
+      decoded = jsonDecode(s);
     } catch (_) {
-      // Not valid JSON — leave the answer untouched.
+      // Gemini occasionally drops a closing `]` or `}` (output truncation
+      // or token-limit cut). Auto-balance the brackets and try once more
+      // — recovers cleanly from real-world malformed responses we've
+      // seen in production (e.g. `"details": [ {...}, {...} }` missing
+      // its `]`).
+      try {
+        decoded = jsonDecode(_balanceJsonBrackets(s));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Bare object: {"summary":[...], "details":[...]}
+    if (decoded is Map<String, dynamic> && decoded['summary'] is List) {
+      return decoded;
+    }
+
+    // Array-wrapped: [{"summary":[...], "details":[...]}] — Gemini
+    // sometimes returns its single answer object inside a 1-item array.
+    if (decoded is List && decoded.isNotEmpty) {
+      final first = decoded.first;
+      if (first is Map<String, dynamic> && first['summary'] is List) {
+        return first;
+      }
     }
     return null;
+  }
+
+  /// Append the minimum number of `]` / `}` needed to balance brackets
+  /// in [s]. Walks the source ignoring brackets inside JSON strings, so
+  /// punctuation inside an explanation can't confuse the count.
+  /// Used as a last-resort repair when Gemini returns truncated JSON.
+  static String _balanceJsonBrackets(String s) {
+    // Replace every quoted string with "" so braces/brackets inside
+    // strings are not counted. The regex matches a JSON string with
+    // escape sequences correctly.
+    final stripped = s.replaceAll(
+        RegExp(r'"(?:\\.|[^"\\])*"', dotAll: true), '""');
+    final stack = <int>[]; // codepoints of expected closers, in order
+    for (final c in stripped.codeUnits) {
+      if (c == 0x7B) {
+        stack.add(0x7D); // { → need }
+      } else if (c == 0x5B) {
+        stack.add(0x5D); // [ → need ]
+      } else if (c == 0x7D || c == 0x5D) {
+        if (stack.isNotEmpty && stack.last == c) {
+          stack.removeLast();
+        }
+      }
+    }
+    if (stack.isEmpty) return s;
+    final buf = StringBuffer(s);
+    for (int i = stack.length - 1; i >= 0; i--) {
+      buf.writeCharCode(stack[i]);
+    }
+    return buf.toString();
   }
 
   /// Try server horoscope: cached first (fast), then live POST (real-time Gemini)
