@@ -10,6 +10,8 @@ import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'subscription_screen.dart';
 import 'delete_account_screen.dart';
+import 'ui_error_log_screen.dart';
+import '../services/ui_error_log.dart';
 import '../theme/m_page_route.dart';
 import '../widgets/cosmic_background.dart';
 
@@ -128,6 +130,25 @@ class SettingsScreen extends ConsumerWidget {
                   : 'Hinglish',
               onTap: () => _showLanguagePicker(context, ref),
             ).animate().fadeIn(duration: 500.ms, delay: 575.ms),
+
+            // Admin-only diagnostic: lists every Flutter UI error captured
+            // this session. Lets us see the actual exception + stack of
+            // intermittent "Something went wrong" screens.
+            if (AuthService.isAdmin)
+              _buildInfoTile(
+                icon: Icons.bug_report_outlined,
+                title: 'View UI errors (admin)',
+                subtitle: UiErrorLog.entries.isEmpty
+                    ? 'No errors captured this session'
+                    : '${UiErrorLog.entries.length} captured • tap to inspect',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const UiErrorLogScreen(),
+                    ),
+                  );
+                },
+              ).animate().fadeIn(duration: 500.ms, delay: 590.ms),
 
             const SizedBox(height: 24),
 
