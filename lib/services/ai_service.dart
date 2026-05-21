@@ -147,6 +147,26 @@ class AiService {
           }
         }
 
+        // Second layer of defence: the server sometimes returns a single
+        // summary entry that is itself the model's full ```json{...}```
+        // block — i.e. the structured reply got stuffed verbatim into
+        // summary[0] instead of being parsed. Unwrap that so the user
+        // sees real bullets, not a JSON dump rendered as one giant point.
+        if (summaryJson != null && summaryJson.length == 1) {
+          final only = summaryJson.first.toString();
+          if (only.contains('"summary"') &&
+              (only.contains('```') || only.trimLeft().startsWith('{') ||
+               only.trimLeft().startsWith('['))) {
+            final unwrapped = _tryParseStructuredAnswer(only);
+            if (unwrapped != null) {
+              summaryJson = unwrapped['summary'] as List<dynamic>?;
+              if (detailsJson.isEmpty) {
+                detailsJson = unwrapped['details'] as List<dynamic>? ?? [];
+              }
+            }
+          }
+        }
+
         String answer;
         if (summaryJson != null && summaryJson.isNotEmpty) {
           answer = summaryJson
@@ -225,13 +245,8 @@ class AiService {
     var s = raw.trim();
     if (s.isEmpty) return null;
 
-    // Strip ```json ... ``` fences if the model wrapped its reply.
-    if (s.startsWith('```')) {
-      s = s
-          .replaceAll(RegExp(r'^```\w*\n?'), '')
-          .replaceAll(RegExp(r'\n?```$'), '')
-          .trim();
-    }
+    // Strip leading ```json (or ``` plain) fence if the model opened with one.
+    s = s.replaceAll(RegExp(r'^```\w*\n?'), '').trim();
 
     // Drop any leading non-JSON characters (markdown asterisks, quotes,
     // stray whitespace) before the first `{` or `[`. Gemini occasionally
@@ -239,6 +254,11 @@ class AiService {
     final firstBrace = s.indexOf(RegExp(r'[\{\[]'));
     if (firstBrace < 0) return null;
     if (firstBrace > 0) s = s.substring(firstBrace);
+
+    // Strip any trailing ``` fence (with optional trailing whitespace).
+    // Without this, summary entries that embed the closing fence cause
+    // jsonDecode to throw at the backticks.
+    s = s.replaceAll(RegExp(r'\n?```\s*$'), '').trim();
 
     // Must mention a summary field somewhere — quick sanity check.
     if (!s.contains('"summary"')) return null;
