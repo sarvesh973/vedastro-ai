@@ -213,10 +213,18 @@ class AiService {
   /// string. An older RAG server deploy returns the model's JSON verbatim
   /// inside `answer` instead of parsing it — this lets the app parse it
   /// itself so the user never sees a JSON dump in the chat bubble.
-  /// Returns null when [raw] is not a structured-answer JSON object.
+  ///
+  /// Handles every shape Gemini has been observed to return:
+  ///   - bare object:           `{"summary":[...], "details":[...]}`
+  ///   - array-wrapped:         `[{"summary":[...], "details":[...]}]`
+  ///   - fenced markdown:       ```json\n{...}\n```
+  ///   - leading junk:          `*`, `>`, whitespace before the JSON
+  ///
+  /// Returns null when [raw] is not parseable as a structured answer.
   static Map<String, dynamic>? _tryParseStructuredAnswer(String raw) {
     var s = raw.trim();
     if (s.isEmpty) return null;
+
     // Strip ```json ... ``` fences if the model wrapped its reply.
     if (s.startsWith('```')) {
       s = s
@@ -224,12 +232,32 @@ class AiService {
           .replaceAll(RegExp(r'\n?```$'), '')
           .trim();
     }
-    // Must look like a JSON object that carries a summary field.
-    if (!s.startsWith('{') || !s.contains('"summary"')) return null;
+
+    // Drop any leading non-JSON characters (markdown asterisks, quotes,
+    // stray whitespace) before the first `{` or `[`. Gemini occasionally
+    // prefixes its JSON with `*` bullet markers or commentary.
+    final firstBrace = s.indexOf(RegExp(r'[\{\[]'));
+    if (firstBrace < 0) return null;
+    if (firstBrace > 0) s = s.substring(firstBrace);
+
+    // Must mention a summary field somewhere — quick sanity check.
+    if (!s.contains('"summary"')) return null;
+
     try {
       final decoded = jsonDecode(s);
+
+      // Bare object: {"summary":[...], "details":[...]}
       if (decoded is Map<String, dynamic> && decoded['summary'] is List) {
         return decoded;
+      }
+
+      // Array-wrapped: [{"summary":[...], "details":[...]}] — Gemini
+      // sometimes returns its single answer object inside a 1-item array.
+      if (decoded is List && decoded.isNotEmpty) {
+        final first = decoded.first;
+        if (first is Map<String, dynamic> && first['summary'] is List) {
+          return first;
+        }
       }
     } catch (_) {
       // Not valid JSON — leave the answer untouched.
