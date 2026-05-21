@@ -105,6 +105,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       timestamp: DateTime.now(),
       sources: aiResponse.sources,
       details: aiResponse.details,
+      debugRaw: aiResponse.debugRaw,
     ));
     // Sync AI response to cloud
     FirestoreService.syncChatMessage(aiResponse.text, 'ai');
