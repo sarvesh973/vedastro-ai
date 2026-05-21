@@ -564,56 +564,51 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     required String fallback,
     required bool isEnglish,
   }) {
-    final messages = ref.read(chatMessagesProvider);
-    ChatMessage? lastAi;
-    for (var i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].isAi) {
-        lastAi = messages[i];
-        break;
-      }
-    }
-    if (lastAi == null) return fallback;
-    final prev = lastAi.text;
+    // IMPORTANT: do NOT inline the previous AI reply here. It already
+    // travels to the server in `chatHistory`. Inlining it pushed the
+    // prompt to ~2KB which tipped Gemini past the 60s timeout — the
+    // server call failed and the user landed on the keyword-template
+    // fallback instead of a real expanded reading. Short, sharp
+    // directives that REFER to "your previous reply" are both faster
+    // and more effective.
 
     if (label == 'Explain in more detail') {
       return isEnglish
-          ? 'Your previous reply was:\n\n$prev\n\nNow expand each of those '
-              'points significantly. For every point, add deeper Vedic '
-              'reasoning (cite the specific BPHS / Phaladeepika chapter '
-              'or verse where applicable), explain the dasha or transit '
-              'mechanics involved, and give a concrete real-life example '
-              'or scenario. The response must be noticeably longer and '
-              'richer than the previous one — every point should contain '
-              'new insight, not a restatement.'
-          : 'Aapne abhi yeh bataya:\n\n$prev\n\nAb in points ko ek-ek karke '
-              'detail mein samjhaiye. Har point ke liye: gehre Vedic '
-              'reasoning dijiye (BPHS ya Phaladeepika ka exact adhyay ya '
-              'shloka batate hue), dasha aur transit ki mechanics samjhaiye, '
-              'aur ek real-life example ya scenario dijiye. Pichle answer '
-              'se kaafi longer aur deeper hona chahiye — har point mein '
-              'nayi baat honi chahiye, sirf rephrase nahi.';
+          ? 'Take your previous reply in this conversation and expand each '
+              'point significantly. For every point: add deeper Vedic '
+              'reasoning (cite the BPHS / Phaladeepika chapter or verse), '
+              'explain the dasha or transit mechanics, and give a concrete '
+              'real-life example. The reply must be noticeably longer and '
+              'richer — every point should carry new insight, not just '
+              'rephrase the previous one.'
+          : 'Apne pichle reply mein jo points the, un sab ko detail mein '
+              'expand kijiye. Har point ke liye: gehre Vedic reasoning '
+              '(BPHS ya Phaladeepika ka exact adhyay ya shloka), dasha aur '
+              'transit ki mechanics, aur ek real-life example. Pichle '
+              'answer se kaafi longer aur deeper hona chahiye — har point '
+              'mein nayi baat ho, sirf rephrase nahi.';
     } else if (label.startsWith('Remedies')) {
       return isEnglish
-          ? 'For the reading above:\n\n$prev\n\nNow give me remedies and '
-              'upay — BOTH classical (mantras with the right day/time and '
-              'count, fasts, gemstones if appropriate) AND real-life '
-              'practical steps (habits, lifestyle adjustments, specific '
-              'career or finance actions I can begin this week).'
-          : 'Upar di gayi reading ke liye:\n\n$prev\n\nAb remedies aur upay '
-              'bataiye — classical (mantra sahi din/samay aur count ke '
-              'saath, vrat, ratna jo bhi sahi ho) ke saath saath real-life '
+          ? 'For the reading you just gave me, share remedies and upay — '
+              'BOTH classical (mantras with the right day/time/count, '
+              'fasts, gemstones if appropriate) AND real-life practical '
+              'steps (habits, lifestyle, specific career or finance '
+              'actions I can start this week).'
+          : 'Aapne abhi jo reading di hai uske liye remedies aur upay '
+              'bataiye — classical (mantra sahi din/samay/count ke saath, '
+              'vrat, ratna jo bhi sahi ho) ke saath saath real-life '
               'practical steps bhi (habits, lifestyle, career ya finance '
               'ke kaam jo main is hafte se shuru kar sakta hoon).';
     } else if (label == 'What should I focus on?') {
       return isEnglish
-          ? 'Based on this reading:\n\n$prev\n\nWhat single most important '
-              'thing should I focus on right now? Pick the most urgent point '
-              'across everything you said and explain in detail why it '
-              'matters most this month and what exactly I should do about it.'
-          : 'Is reading ke aadhar par:\n\n$prev\n\nMujhe abhi sabse zyada kis '
-              'cheez par dhyaan dena chahiye? Sabse important ek baat chuniye '
-              'aur detail mein samjhaiye ki yeh is mahine sabse zaroori kyun '
-              'hai aur main exactly kya karoon.';
+          ? 'Based on the reading you just gave me, what single most '
+              'important thing should I focus on right now? Pick the most '
+              'urgent point and explain in detail why it matters most this '
+              'month and what exactly I should do about it.'
+          : 'Aapne abhi jo reading di uske aadhar par, mujhe sabse zyada '
+              'kis cheez par dhyaan dena chahiye? Sabse important ek baat '
+              'chuniye aur detail mein samjhaiye ki yeh is mahine sabse '
+              'zaroori kyun hai aur main exactly kya karoon.';
     }
     return fallback;
   }

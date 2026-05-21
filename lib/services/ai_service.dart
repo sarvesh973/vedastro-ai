@@ -481,15 +481,27 @@ class AiService {
     //
     // If the server returned a friendly auth/rate-limit error, that message
     // is already in lastDiagnosticError. Otherwise show a generic offline message.
+    final fallbackDebug =
+        '[FALLBACK]\nlastError: $_lastError\nlastDiagnosticError: '
+        '$lastDiagnosticError\nuserMessage(${userMessage.length}b): '
+        '${userMessage.length > 800 ? '${userMessage.substring(0, 800)}…' : userMessage}';
+
     if (_lastError == 'AUTH_EXPIRED' ||
         _lastError == 'RATE_LIMITED' ||
         _lastError == 'SERVER_DOWN') {
-      return AiResponse(text: lastDiagnosticError);
+      return AiResponse(text: lastDiagnosticError, debugRaw: fallbackDebug);
     }
 
-    // 3. Network or unknown error — show template guidance
-    print('[FALLBACK] Server unreachable, using template response');
-    return AiResponse(text: _getFallbackResponse(profile, userMessage));
+    // 3. Network or unknown error — show template guidance. The debug
+    // blob lets an admin long-press the bubble and see WHY the server
+    // failed (network exception, parse failure, empty answer, etc.)
+    // instead of having to guess from the generic template text.
+    print('[FALLBACK] Server unreachable, using template response. '
+        'lastError=$_lastError');
+    return AiResponse(
+      text: _getFallbackResponse(profile, userMessage),
+      debugRaw: fallbackDebug,
+    );
   }
 
   /// Get horoscope data. Tries cached endpoint -> live server -> direct Gemini -> static fallback.
