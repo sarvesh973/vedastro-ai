@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../models/chat_message.dart';
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import 'typewriter_text.dart';
 
@@ -390,6 +391,31 @@ class ChatBubble extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
+                // Admin-only diagnostic — shows the raw HTTP response
+                // and which parser branch produced this bubble. Hidden
+                // for non-admin sign-ins so regular users never see it.
+                if (AuthService.isAdmin && message.hasDebug)
+                  ListTile(
+                    leading: const Icon(Icons.bug_report_outlined,
+                        color: AppColors.purpleLight),
+                    title: const Text(
+                      'View raw response (admin)',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Inspect what the server actually sent',
+                      style: TextStyle(
+                          color: AppColors.textMuted, fontSize: 12),
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _showRawResponseDialog(context, message.debugRaw!);
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.flag_outlined,
                       color: AppColors.error),
@@ -435,6 +461,89 @@ class ChatBubble extends StatelessWidget {
                         color: AppColors.textMuted, fontSize: 15),
                   ),
                   onTap: () => Navigator.of(sheetContext).pop(),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Admin diagnostic dialog: shows the raw server response + which
+  /// parser branch fired. Lets us see *exactly* what the server sent
+  /// without needing logs or a desktop debugger.
+  void _showRawResponseDialog(BuildContext context, String debugRaw) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 32),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.bug_report_outlined,
+                        color: AppColors.purpleLight, size: 20),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Raw server response',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy_rounded,
+                          size: 18, color: AppColors.textMuted),
+                      tooltip: 'Copy',
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: debugRaw));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Copied to clipboard'),
+                            backgroundColor: AppColors.purpleSoft,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded,
+                          size: 20, color: AppColors.textMuted),
+                      onPressed: () =>
+                          Navigator.of(dialogContext).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(color: AppColors.divider, height: 16),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      debugRaw,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        color: AppColors.textPrimary,
+                        fontSize: 11,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),

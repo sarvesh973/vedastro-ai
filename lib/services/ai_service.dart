@@ -39,10 +39,15 @@ class AiResponse {
   /// bubble. Parallel to the summary bullets in [text].
   final List<ChapterDetail> details;
 
+  /// Admin-only diagnostic blob — raw HTTP body + which parser branch
+  /// produced [text]. Surfaced via long-press for admin sign-ins.
+  final String? debugRaw;
+
   const AiResponse({
     required this.text,
     this.sources = const [],
     this.details = const [],
+    this.debugRaw,
   });
 }
 
@@ -120,7 +125,11 @@ class AiService {
 
       print('[RAG] Status: ${response.statusCode}');
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        // Keep the raw body around so an admin can long-press the
+        // resulting bubble and inspect exactly what came back.
+        final rawBody = response.body;
+        final parsePath = <String>[];
+        final data = jsonDecode(rawBody) as Map<String, dynamic>;
 
         // Structured response: `summary` (short bullets) + `details`
         // (per-point chapter deep-dives). The server also still sends
@@ -129,6 +138,11 @@ class AiService {
         List<dynamic>? summaryJson = data['summary'] as List<dynamic>?;
         List<dynamic> detailsJson = data['details'] as List<dynamic>? ?? [];
         String rawAnswer = data['answer'] as String? ?? '';
+        if (summaryJson != null && summaryJson.isNotEmpty) {
+          parsePath.add('summary:${summaryJson.length}');
+        }
+        if (detailsJson.isNotEmpty) parsePath.add('details:${detailsJson.length}');
+        if (rawAnswer.isNotEmpty) parsePath.add('answer:${rawAnswer.length}b');
 
         // Defensive recovery: when the RAG server is on an OLDER deploy it
         // does not parse the model's structured reply — it just dumps the
@@ -144,6 +158,9 @@ class AiService {
               detailsJson = recovered['details'] as List<dynamic>? ?? [];
             }
             rawAnswer = '';
+            parsePath.add('recovered-from-answer');
+          } else if (rawAnswer.isNotEmpty) {
+            parsePath.add('recovery-FAILED');
           }
         }
 
@@ -163,6 +180,9 @@ class AiService {
               if (detailsJson.isEmpty) {
                 detailsJson = unwrapped['details'] as List<dynamic>? ?? [];
               }
+              parsePath.add('unwrapped-summary[0]');
+            } else {
+              parsePath.add('unwrap-FAILED');
             }
           }
         }
@@ -172,8 +192,10 @@ class AiService {
           answer = summaryJson
               .map((p) => '• ${p.toString().trim()}')
               .join('\n');
+          parsePath.add('render:summary-bullets');
         } else {
           answer = rawAnswer;
+          parsePath.add('render:raw-answer');
         }
         if (answer.isEmpty) {
           _lastError = 'RAG returned empty answer';
@@ -191,8 +213,23 @@ class AiService {
             .toList();
 
         print('[RAG] Success! chartUsed=${data['chartUsed']}, '
-            'sources=${sources.length}, details=${details.length}');
-        return AiResponse(text: answer, sources: sources, details: details);
+            'sources=${sources.length}, details=${details.length}, '
+            'path=${parsePath.join(' -> ')}');
+
+        // Compose the admin diagnostic blob: parse-path + truncated body.
+        final truncated = rawBody.length > 6000
+            ? '${rawBody.substring(0, 6000)}\n…[truncated ${rawBody.length - 6000} bytes]'
+            : rawBody;
+        final debugRaw = 'PARSE PATH: ${parsePath.join(' -> ')}\n'
+            'STATUS: 200\n'
+            'BODY (${rawBody.length} bytes):\n$truncated';
+
+        return AiResponse(
+          text: answer,
+          sources: sources,
+          details: details,
+          debugRaw: debugRaw,
+        );
       } else if (response.statusCode == 401) {
         // Token expired or invalid — surface user-friendly message and signal re-login
         _lastError = 'AUTH_EXPIRED';

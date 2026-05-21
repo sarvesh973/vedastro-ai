@@ -55,16 +55,24 @@ class ChatMessage {
   /// came back without structured details.
   final List<ChapterDetail> details;
 
+  /// Admin-only diagnostic payload. Captures the raw HTTP response body
+  /// from the chat server + which parser branch produced [text]. Surfaced
+  /// via long-press on the bubble when the signed-in user is an admin —
+  /// lets us see exactly what came back when parsing went sideways.
+  final String? debugRaw;
+
   const ChatMessage({
     required this.text,
     required this.role,
     required this.timestamp,
     this.sources = const [],
     this.details = const [],
+    this.debugRaw,
   });
 
   bool get isUser => role == MessageRole.user;
   bool get isAi => role == MessageRole.ai;
   bool get hasSources => sources.isNotEmpty;
   bool get hasDetails => details.isNotEmpty;
+  bool get hasDebug => debugRaw != null && debugRaw!.isNotEmpty;
 }
