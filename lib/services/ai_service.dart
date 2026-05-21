@@ -300,26 +300,66 @@ class AiService {
     // Must mention a summary field somewhere — quick sanity check.
     if (!s.contains('"summary"')) return null;
 
+    dynamic decoded;
     try {
-      final decoded = jsonDecode(s);
-
-      // Bare object: {"summary":[...], "details":[...]}
-      if (decoded is Map<String, dynamic> && decoded['summary'] is List) {
-        return decoded;
-      }
-
-      // Array-wrapped: [{"summary":[...], "details":[...]}] — Gemini
-      // sometimes returns its single answer object inside a 1-item array.
-      if (decoded is List && decoded.isNotEmpty) {
-        final first = decoded.first;
-        if (first is Map<String, dynamic> && first['summary'] is List) {
-          return first;
-        }
-      }
+      decoded = jsonDecode(s);
     } catch (_) {
-      // Not valid JSON — leave the answer untouched.
+      // Gemini occasionally drops a closing `]` or `}` (output truncation
+      // or token-limit cut). Auto-balance the brackets and try once more
+      // — recovers cleanly from real-world malformed responses we've
+      // seen in production (e.g. `"details": [ {...}, {...} }` missing
+      // its `]`).
+      try {
+        decoded = jsonDecode(_balanceJsonBrackets(s));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Bare object: {"summary":[...], "details":[...]}
+    if (decoded is Map<String, dynamic> && decoded['summary'] is List) {
+      return decoded;
+    }
+
+    // Array-wrapped: [{"summary":[...], "details":[...]}] — Gemini
+    // sometimes returns its single answer object inside a 1-item array.
+    if (decoded is List && decoded.isNotEmpty) {
+      final first = decoded.first;
+      if (first is Map<String, dynamic> && first['summary'] is List) {
+        return first;
+      }
     }
     return null;
+  }
+
+  /// Append the minimum number of `]` / `}` needed to balance brackets
+  /// in [s]. Walks the source ignoring brackets inside JSON strings, so
+  /// punctuation inside an explanation can't confuse the count.
+  /// Used as a last-resort repair when Gemini returns truncated JSON.
+  static String _balanceJsonBrackets(String s) {
+    // Replace every quoted string with "" so braces/brackets inside
+    // strings are not counted. The regex matches a JSON string with
+    // escape sequences correctly.
+    final stripped = s.replaceAll(
+        RegExp(r'"(?:\\.|[^"\\])*"', dotAll: true), '""');
+    final stack = <int>[]; // codepoints of expected closers, in order
+    for (final c in stripped.codeUnits) {
+      if (c == 0x7B) {
+        stack.add(0x7D); // { → need }
+      } else if (c == 0x5B) {
+        stack.add(0x5D); // [ → need ]
+      } else if (c == 0x7D || c == 0x5D) {
+        if (stack.isNotEmpty && stack.last == c) {
+          stack.removeLast();
+        }
+      }
+    }
+    if (stack.isEmpty) return s;
+    final buf = StringBuffer(s);
+    for (int i = stack.length - 1; i >= 0; i--) {
+      buf.writeCharCode(stack[i]);
+    }
+    return buf.toString();
   }
 
   /// Try server horoscope: cached first (fast), then live POST (real-time Gemini)
