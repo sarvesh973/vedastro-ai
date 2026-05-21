@@ -51,7 +51,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _sendMessage() async {
+  /// [serverPromptOverride] lets the follow-up chips show a clean short
+  /// label in the user's bubble ("Explain in more detail") while sending
+  /// the AI a far richer prompt that explicitly quotes the previous
+  /// answer plus a "expand each point, go deeper" directive. Without
+  /// the override the server's structured prompt just re-summarises
+  /// the same content and the chip appears to do nothing.
+  Future<void> _sendMessage({String? serverPromptOverride}) async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
@@ -87,10 +93,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     typingController.state = true;
     _scrollToBottom();
 
-    // Get AI response (tries Cloud Function RAG -> Direct Gemini -> Fallback)
+    // Get AI response (tries Cloud Function RAG -> Direct Gemini -> Fallback).
+    // [serverPromptOverride] takes precedence for follow-up chips that
+    // need a richer context-laden prompt than the user's visible bubble.
     final aiResponse = await AiService.getAstrologyResponse(
       profile: profile,
-      userMessage: text,
+      userMessage: serverPromptOverride ?? text,
       chatHistory: ref.read(chatMessagesProvider).map((m) => m.text).toList(),
     );
 
@@ -477,8 +485,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               for (final (label, icon, message, isPrimary) in followUps)
                 GestureDetector(
                   onTap: () {
-                    _messageController.text = message;
-                    _sendMessage();
+                    // Build a context-rich prompt for the server that
+                    // explicitly quotes the previous AI answer + tells
+                    // the model to go deeper. The user's bubble still
+                    // shows the short clean [label]. Without this, the
+                    // server's structured-output prompt just re-summarises
+                    // the same content and "Explain in more detail"
+                    // appears to do nothing.
+                    final override = _buildFollowUpServerPrompt(
+                      label: label,
+                      fallback: message,
+                      isEnglish: isEnglish,
+                    );
+                    _messageController.text = label;
+                    _sendMessage(serverPromptOverride: override);
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -529,6 +549,73 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .animate()
         .fadeIn(duration: 350.ms, delay: 150.ms)
         .slideY(begin: 0.15, end: 0, duration: 350.ms, delay: 150.ms);
+  }
+
+  /// Builds the server-side prompt for a follow-up chip. Quotes the
+  /// most recent AI answer verbatim and tells the model exactly how to
+  /// go deeper — fixes the "Explain in more detail just repeats the
+  /// same bullets" bug where the vague "iske baare mein detail bataiye"
+  /// gave the structured-output template nothing to grip on.
+  ///
+  /// Falls back to [fallback] if there's no previous AI message yet
+  /// (shouldn't happen in practice since chips only appear under one).
+  String _buildFollowUpServerPrompt({
+    required String label,
+    required String fallback,
+    required bool isEnglish,
+  }) {
+    final messages = ref.read(chatMessagesProvider);
+    ChatMessage? lastAi;
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].isAi) {
+        lastAi = messages[i];
+        break;
+      }
+    }
+    if (lastAi == null) return fallback;
+    final prev = lastAi.text;
+
+    if (label == 'Explain in more detail') {
+      return isEnglish
+          ? 'Your previous reply was:\n\n$prev\n\nNow expand each of those '
+              'points significantly. For every point, add deeper Vedic '
+              'reasoning (cite the specific BPHS / Phaladeepika chapter '
+              'or verse where applicable), explain the dasha or transit '
+              'mechanics involved, and give a concrete real-life example '
+              'or scenario. The response must be noticeably longer and '
+              'richer than the previous one — every point should contain '
+              'new insight, not a restatement.'
+          : 'Aapne abhi yeh bataya:\n\n$prev\n\nAb in points ko ek-ek karke '
+              'detail mein samjhaiye. Har point ke liye: gehre Vedic '
+              'reasoning dijiye (BPHS ya Phaladeepika ka exact adhyay ya '
+              'shloka batate hue), dasha aur transit ki mechanics samjhaiye, '
+              'aur ek real-life example ya scenario dijiye. Pichle answer '
+              'se kaafi longer aur deeper hona chahiye — har point mein '
+              'nayi baat honi chahiye, sirf rephrase nahi.';
+    } else if (label.startsWith('Remedies')) {
+      return isEnglish
+          ? 'For the reading above:\n\n$prev\n\nNow give me remedies and '
+              'upay — BOTH classical (mantras with the right day/time and '
+              'count, fasts, gemstones if appropriate) AND real-life '
+              'practical steps (habits, lifestyle adjustments, specific '
+              'career or finance actions I can begin this week).'
+          : 'Upar di gayi reading ke liye:\n\n$prev\n\nAb remedies aur upay '
+              'bataiye — classical (mantra sahi din/samay aur count ke '
+              'saath, vrat, ratna jo bhi sahi ho) ke saath saath real-life '
+              'practical steps bhi (habits, lifestyle, career ya finance '
+              'ke kaam jo main is hafte se shuru kar sakta hoon).';
+    } else if (label == 'What should I focus on?') {
+      return isEnglish
+          ? 'Based on this reading:\n\n$prev\n\nWhat single most important '
+              'thing should I focus on right now? Pick the most urgent point '
+              'across everything you said and explain in detail why it '
+              'matters most this month and what exactly I should do about it.'
+          : 'Is reading ke aadhar par:\n\n$prev\n\nMujhe abhi sabse zyada kis '
+              'cheez par dhyaan dena chahiye? Sabse important ek baat chuniye '
+              'aur detail mein samjhaiye ki yeh is mahine sabse zaroori kyun '
+              'hai aur main exactly kya karoon.';
+    }
+    return fallback;
   }
 
   /// Tappable chapter-reference cards rendered under an AI answer — one
