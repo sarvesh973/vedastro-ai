@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import '../models/user_profile.dart';
 import '../models/subscription_plan.dart';
 import '../models/subscription_status.dart';
@@ -350,7 +351,12 @@ class FirestoreService {
   /// Save user feedback to Firestore.
   /// View in Firebase Console -> Firestore Database -> `feedback` collection.
   /// Works even for anonymous / logged-out users.
-  static Future<bool> saveFeedback({
+  ///
+  /// Returns null on success, or a short error string on failure (e.g.
+  /// "permission-denied", "unavailable", "deadline-exceeded"). Caller can
+  /// show a friendly message to the user AND log the technical cause for
+  /// admins instead of guessing "check your internet" for every failure.
+  static Future<String?> saveFeedback({
     required String text,
     String? category,
   }) async {
@@ -366,9 +372,13 @@ class FirestoreService {
         'isAnonymous': user == null,
         'timestamp': FieldValue.serverTimestamp(),
       });
-      return true;
-    } catch (_) {
-      return false;
+      return null;
+    } on FirebaseException catch (e) {
+      // Most likely cause: Firestore rules don't allow writes to
+      // /feedback. The code is what we need to confirm it.
+      return '${e.code}${e.message != null ? ': ${e.message}' : ''}';
+    } catch (e) {
+      return e.toString();
     }
   }
 
