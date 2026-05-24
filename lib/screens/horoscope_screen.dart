@@ -258,7 +258,13 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(5, (i) {
-                    final rating = (_horoscopeData?['rating'] as int?) ?? 4;
+                    // Gemini sometimes returns `rating` as a double (4.0 or 3.5)
+                    // instead of an int — `as int?` throws on doubles which
+                    // crashes the whole horoscope screen. Go through `num`
+                    // so both ints and doubles round-trip safely.
+                    final rating = ((_horoscopeData?['rating'] as num?) ?? 4)
+                        .toInt()
+                        .clamp(0, 5);
                     return Icon(
                       i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
                       color: AppColors.goldLight,
