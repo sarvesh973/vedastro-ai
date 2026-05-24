@@ -223,7 +223,10 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
     for (final entry in planets.entries) {
       final name = entry.key;
       final data = entry.value as Map<String, dynamic>;
-      final house = data['house'] as int? ?? 0;
+      // Go via num so an upstream change that returns a double (e.g.
+      // 1.0 instead of 1) doesn't crash the kundli screen — `as int?`
+      // throws on doubles.
+      final house = (data['house'] as num?)?.toInt() ?? 0;
       if (house < 1 || house > 12) continue;
 
       final abbr = KundliChart.planetAbbr[name] ?? name.substring(0, 2);
