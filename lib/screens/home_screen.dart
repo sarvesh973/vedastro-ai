@@ -147,23 +147,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// Short bullet point — punchy, no explanations. Truncates at the
-  /// first sentence break and hard-caps at ~55 chars so the Daily
-  /// Vibe card reads as one-glance bullets, not paragraphs.
-  /// Drops em-dashes per user preference, swaps to commas.
+  /// Short bullet point — punchy, no explanations. Reads as a clean
+  /// thought, not a paragraph fragment. Strategy:
+  ///   1. Try first sentence (.!?) — ideal stop.
+  ///   2. If no sentence break in first 70 chars, stop at last
+  ///      comma before 60 chars — preserves clause integrity.
+  ///   3. If neither works, hard-trim at last word boundary
+  ///      under 55 chars so we never cut mid-word.
+  /// Drops em-dashes per user preference.
   String _shortPoint(String raw) {
     final clean = raw.replaceAll('—', ',').replaceAll('–', ',').trim();
+
+    // Strategy 1: first sentence end
     final dotIdx = clean.indexOf(RegExp(r'[.!?]'));
-    var s = dotIdx > 10 && dotIdx < 60
-        ? clean.substring(0, dotIdx).trim()
-        : clean;
-    if (s.length > 55) {
-      // Trim to last word boundary under 55 chars so we don't end mid-word.
-      final cut = s.substring(0, 55);
-      final lastSpace = cut.lastIndexOf(' ');
-      s = lastSpace > 30 ? cut.substring(0, lastSpace) : cut;
+    if (dotIdx > 10 && dotIdx < 70) {
+      return clean.substring(0, dotIdx).trim();
     }
-    return s;
+
+    // Strategy 2: last comma before 60 chars (clean clause boundary)
+    if (clean.length > 55) {
+      final head = clean.substring(0, clean.length > 60 ? 60 : clean.length);
+      final lastComma = head.lastIndexOf(',');
+      if (lastComma > 18) {
+        return head.substring(0, lastComma).trim();
+      }
+    }
+
+    // Strategy 3: hard trim at last word boundary under 55
+    if (clean.length > 55) {
+      final cut = clean.substring(0, 55);
+      final lastSpace = cut.lastIndexOf(' ');
+      return (lastSpace > 30 ? cut.substring(0, lastSpace) : cut).trim();
+    }
+    return clean;
   }
 
   @override
