@@ -35,6 +35,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   double _overscrollAmount = 0.0;
 
+  // Tracks which bottom-nav item the user just pushed into. -1 = none
+  // active (sitting on home). Glow persists on that button while the
+  // pushed screen is up, fades back when the user pops to home.
+  int _activeNavIndex = -1;
+
   // Rotates daily by day-of-year. Same fact for the full 24h so users
   // who reopen the app don't see it shuffle on every launch.
   static const List<String> _astroFacts = [
@@ -1489,101 +1494,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// makes them reachable from anywhere in the home flow with one
   /// thumb tap.
   Widget _buildBottomNav(BuildContext context) {
-    // Single accent (goldLight) shared across all three actions — the
-    // three are peer features, no hierarchy between them. Each icon
-    // sits inside a tinted chip so the buttons read as solid, tappable
-    // surfaces rather than thin glyphs.
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        height: 82,
-        decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: AppColors.gold.withValues(alpha: 0.28),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.gold.withValues(alpha: 0.16),
-              blurRadius: 22,
-              spreadRadius: 1,
-              offset: const Offset(0, -2),
-            ),
+    // Transparent bar — no boxed container. A subtle dark gradient
+    // fades up from the bottom edge so the buttons stay readable over
+    // whatever scroll content is behind them, without a hard border.
+    //
+    // Active button (whichever screen the user is currently inside)
+    // gets a glowing gold pill behind its icon + label. Inactive
+    // buttons are plain icon + label, no chip.
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.background.withValues(alpha: 0.0),
+            AppColors.background.withValues(alpha: 0.65),
+            AppColors.background.withValues(alpha: 0.92),
           ],
+          stops: const [0.0, 0.55, 1.0],
         ),
-        child: Row(
-          children: [
-            _bottomNavItem(
-              icon: Icons.auto_awesome_mosaic_outlined,
-              label: 'Kundli',
-              onTap: () => Navigator.of(context)
-                  .push(_buildPageRoute(const KundliScreen())),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+          child: SizedBox(
+            height: 70,
+            child: Row(
+              children: [
+                _bottomNavItem(
+                  index: 0,
+                  icon: Icons.auto_awesome_mosaic_outlined,
+                  label: 'Kundli',
+                  destination: const KundliScreen(),
+                ),
+                _bottomNavItem(
+                  index: 1,
+                  icon: Icons.back_hand_outlined,
+                  label: 'Palm',
+                  destination: const PalmUploadScreen(),
+                ),
+                _bottomNavItem(
+                  index: 2,
+                  icon: Icons.stars_outlined,
+                  label: 'Horoscope',
+                  destination: const HoroscopeScreen(),
+                ),
+              ],
             ),
-            _bottomNavItem(
-              icon: Icons.back_hand_outlined,
-              label: 'Palm',
-              onTap: () => Navigator.of(context)
-                  .push(_buildPageRoute(const PalmUploadScreen())),
-            ),
-            _bottomNavItem(
-              icon: Icons.stars_outlined,
-              label: 'Horoscope',
-              onTap: () => Navigator.of(context)
-                  .push(_buildPageRoute(const HoroscopeScreen())),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _bottomNavItem({
+    required int index,
     required IconData icon,
     required String label,
-    required VoidCallback onTap,
+    required Widget destination,
   }) {
     const tone = AppColors.goldLight;
+    final isActive = _activeNavIndex == index;
+
     return Expanded(
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           splashColor: tone.withValues(alpha: 0.18),
           highlightColor: tone.withValues(alpha: 0.08),
-          onTap: () {
+          onTap: () async {
             HapticFeedback.selectionClick();
-            onTap();
+            // Set this item active, push the screen, clear when popped.
+            // setState is safe here — we own the state class.
+            setState(() => _activeNavIndex = index);
+            await Navigator.of(context).push(_buildPageRoute(destination));
+            if (mounted) {
+              setState(() => _activeNavIndex = -1);
+            }
           },
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Icon chip — gives each item visual weight without
-              // overloading the bar. Subtle border, gold tint inside.
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: tone.withValues(alpha: 0.14),
-                  border: Border.all(color: tone.withValues(alpha: 0.35)),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              color: isActive
+                  ? tone.withValues(alpha: 0.20)
+                  : Colors.transparent,
+              border: isActive
+                  ? Border.all(color: tone.withValues(alpha: 0.45), width: 1)
+                  : Border.all(color: Colors.transparent, width: 1),
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: tone.withValues(alpha: 0.35),
+                        blurRadius: 18,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: tone.withValues(alpha: isActive ? 1.0 : 0.78),
+                  size: 22,
                 ),
-                child: Icon(icon, color: tone, size: 20),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: tone,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: tone.withValues(alpha: isActive ? 1.0 : 0.78),
+                    fontSize: 11.5,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
