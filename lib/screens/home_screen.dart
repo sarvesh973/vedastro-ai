@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1494,53 +1496,57 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// makes them reachable from anywhere in the home flow with one
   /// thumb tap.
   Widget _buildBottomNav(BuildContext context) {
-    // Transparent bar — no boxed container. A subtle dark gradient
-    // fades up from the bottom edge so the buttons stay readable over
-    // whatever scroll content is behind them, without a hard border.
+    // Frosted glass bar — BackdropFilter blurs whatever is behind
+    // (scroll content, starfield, etc.). A thin tinted overlay (8%
+    // alpha) gives the bar just enough body to read against bright
+    // content without feeling boxed. Top hairline (subtle gold edge)
+    // gives a soft visual handoff so the bar doesn't float weirdly.
     //
     // Active button (whichever screen the user is currently inside)
     // gets a glowing gold pill behind its icon + label. Inactive
     // buttons are plain icon + label, no chip.
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppColors.background.withValues(alpha: 0.0),
-            AppColors.background.withValues(alpha: 0.65),
-            AppColors.background.withValues(alpha: 0.92),
-          ],
-          stops: const [0.0, 0.55, 1.0],
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-          child: SizedBox(
-            height: 70,
-            child: Row(
-              children: [
-                _bottomNavItem(
-                  index: 0,
-                  icon: Icons.auto_awesome_mosaic_outlined,
-                  label: 'Kundli',
-                  destination: const KundliScreen(),
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface.withValues(alpha: 0.08),
+            border: Border(
+              top: BorderSide(
+                color: AppColors.gold.withValues(alpha: 0.18),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              child: SizedBox(
+                height: 70,
+                child: Row(
+                  children: [
+                    _bottomNavItem(
+                      index: 0,
+                      icon: Icons.auto_awesome_mosaic_outlined,
+                      label: 'Kundli',
+                      destination: const KundliScreen(),
+                    ),
+                    _bottomNavItem(
+                      index: 1,
+                      icon: Icons.back_hand_outlined,
+                      label: 'Palm',
+                      destination: const PalmUploadScreen(),
+                    ),
+                    _bottomNavItem(
+                      index: 2,
+                      icon: Icons.stars_outlined,
+                      label: 'Horoscope',
+                      destination: const HoroscopeScreen(),
+                    ),
+                  ],
                 ),
-                _bottomNavItem(
-                  index: 1,
-                  icon: Icons.back_hand_outlined,
-                  label: 'Palm',
-                  destination: const PalmUploadScreen(),
-                ),
-                _bottomNavItem(
-                  index: 2,
-                  icon: Icons.stars_outlined,
-                  label: 'Horoscope',
-                  destination: const HoroscopeScreen(),
-                ),
-              ],
+              ),
             ),
           ),
         ),
