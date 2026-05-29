@@ -9,6 +9,7 @@ import '../widgets/starfield_background.dart';
 import '../widgets/shooting_star_overlay.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
+import '../services/ai_service.dart';
 import '../services/auth_service.dart';
 import '../providers/providers.dart';
 import 'user_details_screen.dart';
@@ -41,6 +42,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // active (sitting on home). Glow persists on that button while the
   // pushed screen is up, fades back when the user pops to home.
   int _activeNavIndex = -1;
+
+  // Daily Vibe card state — 3 short snippets pulled from today's
+  // horoscope. Cached aggressively (AiService.getHoroscope already
+  // checks SharedPreferences first) so this is effectively instant
+  // after the first launch of the day.
+  List<String>? _dailyVibePoints;
+  bool _dailyVibeLoading = false;
 
   // Rotates daily by day-of-year. Same fact for the full 24h so users
   // who reopen the app don't see it shuffle on every launch.
@@ -92,6 +100,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final dayOfYear =
         now.difference(DateTime(now.year, 1, 1)).inDays;
     return _astroFacts[dayOfYear % _astroFacts.length];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Kick off the daily vibe load after first frame so build() returns
+    // immediately. AiService.getHoroscope() will hit the local cache
+    // first (instant if cached today) before calling the server.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDailyVibe();
+    });
+  }
+
+  Future<void> _loadDailyVibe() async {
+    final profile = ref.read(userProfileProvider);
+    if (profile == null || _dailyVibeLoading) return;
+    setState(() => _dailyVibeLoading = true);
+    try {
+      final data = await AiService.getHoroscope(
+        profile: profile,
+        period: 'daily',
+      );
+      if (!mounted) return;
+      if (data != null) {
+        // Pull 3 short snippets from the horoscope shape. Server returns
+        // a richer object (overall/love/career/health). We pick 3 with
+        // labels and truncate each to the first sentence so the card
+        // reads as bite-sized "today's vibe" hits, not paragraphs.
+        final picks = <String>[];
+        for (final key in ['overall', 'career', 'love', 'health']) {
+          final v = data[key];
+          if (v is String && v.trim().isNotEmpty) {
+            picks.add(_firstSentence(v));
+            if (picks.length == 3) break;
+          }
+        }
+        if (picks.isNotEmpty) {
+          setState(() => _dailyVibePoints = picks);
+        }
+      }
+    } catch (_) {
+      // Silent — card just keeps showing the shimmer/placeholder.
+    } finally {
+      if (mounted) setState(() => _dailyVibeLoading = false);
+    }
+  }
+
+  /// Trim a horoscope blob to a single sentence (under ~110 chars).
+  /// Drops em-dashes per user preference, swaps to commas.
+  String _firstSentence(String raw) {
+    final clean = raw.replaceAll('—', ',').replaceAll('–', ',').trim();
+    final dotIdx = clean.indexOf(RegExp(r'[.!?]'));
+    var s = dotIdx > 20 ? clean.substring(0, dotIdx + 1) : clean;
+    if (s.length > 110) s = '${s.substring(0, 107).trimRight()}...';
+    return s;
   }
 
   @override
@@ -236,47 +299,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         .animate()
                         .fadeIn(duration: 500.ms),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 28),
 
-                    // Brand hero cluster — AI logo + Moksha wordmark +
-                    // sun-sign chip read as one unit. Gaps deliberately
-                    // tight so they don't feel like separate components.
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            AppColors.purpleAccent.withOpacity(0.3),
-                            AppColors.purpleAccent.withOpacity(0.05),
-                          ],
-                        ),
-                        border: Border.all(
-                          color: AppColors.purpleAccent.withOpacity(0.3),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.auto_awesome,
-                        color: AppColors.goldLight,
-                        size: 40,
-                      ),
-                    )
-                        .animate()
-                        .fadeIn(duration: 800.ms)
-                        .scaleXY(
-                          begin: 0.8,
-                          end: 1.0,
-                          duration: 800.ms,
-                          curve: Curves.easeOut,
-                        ),
-
-                    // Wordmark sits flush against the logo. Crop bumped
-                    // tighter so the asset's transparent margin doesn't
-                    // reintroduce phantom whitespace.
+                    // Brand hero — Moksha wordmark sits on its own now
+                    // (AI sparkle logo removed per user request, the
+                    // wordmark IS the brand). Sun-sign chip ("sunshine
+                    // bar") sits flush beneath as a single identity unit.
                     const MokshaWordmarkImage(
-                      widthFactor: 0.72,
+                      widthFactor: 0.78,
                       crop: 0.34,
                     )
                         .animate()
@@ -340,10 +370,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                     const SizedBox(height: 18),
 
-                    // Daily astrology fact. Rotates once a day so the
-                    // home screen always has fresh content but doesn't
-                    // shuffle on every app open.
-                    _buildDidYouKnowCard(),
+                    // Daily Vibe card — 3 short snippets from today's
+                    // horoscope, tappable to open the full horoscope
+                    // screen. Cool gold-glow border, drifting stars,
+                    // rotating zodiac glyph in the corner. Replaces the
+                    // old Did-You-Know card.
+                    _buildDailyVibeCard(context),
 
                     // Email verification banner — only renders for
                     // email/password users with unverified addresses.
@@ -888,6 +920,338 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// and the subscription banner — visible to all users, free or paid,
   /// every day. Picked by day-of-year so it stays stable across the
   /// day but feels fresh on a new visit.
+  /// Daily Vibe card — 3 short snippets from today's horoscope.
+  /// Tappable to open the full horoscope screen. Loaded async via
+  /// _loadDailyVibe(); shows shimmer rows until data lands.
+  Widget _buildDailyVibeCard(BuildContext context) {
+    final points = _dailyVibePoints;
+    final isReady = points != null && points.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          Navigator.of(context).push(
+            _buildPageRoute(const HoroscopeScreen()),
+          );
+        },
+        child: Stack(
+          children: [
+            // Main card body
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.purpleAccent.withOpacity(0.22),
+                    AppColors.surface.withOpacity(0.92),
+                    AppColors.gold.withOpacity(0.14),
+                  ],
+                  stops: const [0.0, 0.55, 1.0],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: AppColors.gold.withOpacity(0.38),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.gold.withOpacity(0.22),
+                    blurRadius: 24,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header row — title + chevron hint
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              AppColors.goldLight.withOpacity(0.45),
+                              AppColors.goldLight.withOpacity(0.08),
+                            ],
+                          ),
+                          border: Border.all(
+                            color: AppColors.gold.withOpacity(0.55),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.wb_sunny_rounded,
+                          color: AppColors.goldLight,
+                          size: 16,
+                        ),
+                      )
+                          .animate(
+                            onPlay: (c) => c.repeat(reverse: true),
+                          )
+                          .scaleXY(
+                            begin: 1.0,
+                            end: 1.12,
+                            duration: 1600.ms,
+                            curve: Curves.easeInOut,
+                          ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'TODAY\'S COSMIC MOOD',
+                              style: TextStyle(
+                                color: AppColors.goldLight,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.6,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _todayDateString(),
+                              style: TextStyle(
+                                color:
+                                    AppColors.textMuted.withOpacity(0.78),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.goldLight.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppColors.goldLight.withOpacity(0.32),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'Full reading',
+                              style: TextStyle(
+                                color: AppColors.goldLight,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              color: AppColors.goldLight.withOpacity(0.85),
+                              size: 12,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 3 points
+                  if (isReady)
+                    ...List.generate(points.length, (i) {
+                      return Padding(
+                        padding: EdgeInsets.only(
+                            bottom: i == points.length - 1 ? 0 : 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.goldLight,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.goldLight
+                                        .withOpacity(0.65),
+                                    blurRadius: 6,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                points[i],
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 13.5,
+                                  height: 1.45,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                          .animate()
+                          .fadeIn(
+                            duration: 500.ms,
+                            delay: (100 + i * 120).ms,
+                          )
+                          .slideX(begin: -0.05, end: 0, duration: 500.ms);
+                    })
+                  else
+                    // Shimmer placeholder while loading
+                    Column(
+                      children: List.generate(3, (i) {
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: i == 2 ? 0 : 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(top: 6),
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.goldLight.withOpacity(0.4),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Container(
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceLight
+                                        .withOpacity(0.55),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                )
+                                    .animate(
+                                      onPlay: (c) => c.repeat(),
+                                    )
+                                    .shimmer(
+                                      duration: 1400.ms,
+                                      color: AppColors.goldLight
+                                          .withOpacity(0.25),
+                                    ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ),
+                ],
+              ),
+            ),
+
+            // Rotating zodiac glyph in the top-right corner — pure
+            // Flutter (no Lottie dep). Slow continuous rotation, soft
+            // gold tint, sits behind the chevron so it's atmospheric
+            // not in-your-face.
+            Positioned(
+              right: 18,
+              top: -14,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.55,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.goldLight.withOpacity(0.30),
+                          AppColors.goldLight.withOpacity(0.0),
+                        ],
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.brightness_high,
+                      color: AppColors.goldLight,
+                      size: 30,
+                    ),
+                  )
+                      .animate(onPlay: (c) => c.repeat())
+                      .rotate(duration: 22000.ms),
+                ),
+              ),
+            ),
+
+            // 3 tiny drifting sparkle stars — give the card subtle
+            // life without overloading it. Each one fades + drifts on
+            // its own loop with a different delay.
+            _driftingStar(top: 22, left: 60, delayMs: 0),
+            _driftingStar(top: 70, left: 200, delayMs: 1200),
+            _driftingStar(top: 110, left: 130, delayMs: 2400),
+          ],
+        ),
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 700.ms, delay: 750.ms)
+        .slideY(
+          begin: 0.12,
+          end: 0,
+          duration: 700.ms,
+          delay: 750.ms,
+        );
+  }
+
+  Widget _driftingStar({
+    required double top,
+    required double left,
+    required int delayMs,
+  }) {
+    return Positioned(
+      top: top,
+      left: left,
+      child: IgnorePointer(
+        child: Icon(
+          Icons.auto_awesome,
+          size: 9,
+          color: AppColors.goldLight.withOpacity(0.7),
+        )
+            .animate(onPlay: (c) => c.repeat())
+            .fadeIn(duration: 1200.ms, delay: delayMs.ms)
+            .then()
+            .fadeOut(duration: 1500.ms)
+            .moveY(begin: 0, end: -10, duration: 2700.ms),
+      ),
+    );
+  }
+
+  String _todayDateString() {
+    final now = DateTime.now();
+    const days = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday',
+    ];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
+  }
+
   Widget _buildDidYouKnowCard() {
     final fact = _factOfTheDay();
     return Padding(
