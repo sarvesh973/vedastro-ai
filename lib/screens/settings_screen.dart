@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
+import '../services/ai_service.dart';
 import '../providers/providers.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -563,6 +564,12 @@ class SettingsScreen extends ConsumerWidget {
                 : null,
             onTap: () async {
               await StorageService.setLanguagePreference(value);
+              // Drop any horoscope cache entries from the previous
+              // language so the next horoscope view fetches a fresh
+              // copy in the newly-selected language. Without this
+              // users would keep seeing yesterday's Hinglish copy
+              // after switching to English until midnight rollover.
+              await AiService.clearStaleHoroscopeCache();
               ref.read(languageProvider.notifier).state = value;
               if (ctx.mounted) Navigator.pop(ctx);
             },

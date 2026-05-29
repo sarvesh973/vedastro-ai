@@ -132,7 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         for (final key in ['overall', 'career', 'love', 'health']) {
           final v = data[key];
           if (v is String && v.trim().isNotEmpty) {
-            picks.add(_firstSentence(v));
+            picks.add(_shortPoint(v));
             if (picks.length == 3) break;
           }
         }
@@ -147,13 +147,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// Trim a horoscope blob to a single sentence (under ~110 chars).
+  /// Short bullet point — punchy, no explanations. Truncates at the
+  /// first sentence break and hard-caps at ~55 chars so the Daily
+  /// Vibe card reads as one-glance bullets, not paragraphs.
   /// Drops em-dashes per user preference, swaps to commas.
-  String _firstSentence(String raw) {
+  String _shortPoint(String raw) {
     final clean = raw.replaceAll('—', ',').replaceAll('–', ',').trim();
     final dotIdx = clean.indexOf(RegExp(r'[.!?]'));
-    var s = dotIdx > 20 ? clean.substring(0, dotIdx + 1) : clean;
-    if (s.length > 110) s = '${s.substring(0, 107).trimRight()}...';
+    var s = dotIdx > 10 && dotIdx < 60
+        ? clean.substring(0, dotIdx).trim()
+        : clean;
+    if (s.length > 55) {
+      // Trim to last word boundary under 55 chars so we don't end mid-word.
+      final cut = s.substring(0, 55);
+      final lastSpace = cut.lastIndexOf(' ');
+      s = lastSpace > 30 ? cut.substring(0, lastSpace) : cut;
+    }
     return s;
   }
 
@@ -923,6 +932,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Daily Vibe card — 3 short snippets from today's horoscope.
   /// Tappable to open the full horoscope screen. Loaded async via
   /// _loadDailyVibe(); shows shimmer rows until data lands.
+  ///
+  /// Dark, minimal aesthetic. No rotating sun, no drifting stars —
+  /// the card should read as a quiet ritual, not a casino. Deep
+  /// charcoal surface with a thin gold accent stroke on the left edge
+  /// and a single small gold dot per bullet. One subtle fade-in on
+  /// mount and nothing else animates.
   Widget _buildDailyVibeCard(BuildContext context) {
     final points = _dailyVibePoints;
     final isReady = points != null && points.isNotEmpty;
@@ -936,320 +951,159 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _buildPageRoute(const HoroscopeScreen()),
           );
         },
-        child: Stack(
-          children: [
-            // Main card body
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.purpleAccent.withOpacity(0.22),
-                    AppColors.surface.withOpacity(0.92),
-                    AppColors.gold.withOpacity(0.14),
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
-                ),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: AppColors.gold.withOpacity(0.38),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.gold.withOpacity(0.22),
-                    blurRadius: 24,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header row — title + chevron hint
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.goldLight.withOpacity(0.45),
-                              AppColors.goldLight.withOpacity(0.08),
-                            ],
-                          ),
-                          border: Border.all(
-                            color: AppColors.gold.withOpacity(0.55),
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.wb_sunny_rounded,
-                          color: AppColors.goldLight,
-                          size: 16,
-                        ),
-                      )
-                          .animate(
-                            onPlay: (c) => c.repeat(reverse: true),
-                          )
-                          .scaleXY(
-                            begin: 1.0,
-                            end: 1.12,
-                            duration: 1600.ms,
-                            curve: Curves.easeInOut,
-                          ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'TODAY\'S COSMIC MOOD',
-                              style: TextStyle(
-                                color: AppColors.goldLight,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.6,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _todayDateString(),
-                              style: TextStyle(
-                                color:
-                                    AppColors.textMuted.withOpacity(0.78),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: AppColors.goldLight.withOpacity(0.14),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: AppColors.goldLight.withOpacity(0.32),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'Full reading',
-                              style: TextStyle(
-                                color: AppColors.goldLight,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              color: AppColors.goldLight.withOpacity(0.85),
-                              size: 12,
-                            ),
-                          ],
-                        ),
-                      ),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            // Deep charcoal with the faintest warm tint — sits dark
+            // against the starfield without going black, picks up
+            // a whisper of gold so it feels intentional not flat.
+            color: const Color(0xFF0E0D14),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: AppColors.gold.withOpacity(0.14),
+              width: 0.6,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Left gold accent stripe — single deliberate stroke,
+              // does all the visual identity work on this card.
+              Container(
+                width: 2.5,
+                margin: const EdgeInsets.symmetric(vertical: 18),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppColors.gold.withOpacity(0.0),
+                      AppColors.goldLight.withOpacity(0.85),
+                      AppColors.gold.withOpacity(0.0),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 18, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header — label only, no icon, no date. Just
+                      // type. Chevron on the right hints tappability.
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              "TODAY'S COSMIC MOOD",
+                              style: TextStyle(
+                                color: AppColors.goldLight.withOpacity(0.78),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 2.2,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            color: AppColors.goldLight.withOpacity(0.55),
+                            size: 14,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
 
-                  // 3 points
-                  if (isReady)
-                    ...List.generate(points.length, (i) {
-                      return Padding(
-                        padding: EdgeInsets.only(
-                            bottom: i == points.length - 1 ? 0 : 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              margin: const EdgeInsets.only(top: 6),
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.goldLight,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.goldLight
-                                        .withOpacity(0.65),
-                                    blurRadius: 6,
-                                    spreadRadius: 1,
+                      // 3 points — punchy bullets, no explanations.
+                      if (isReady)
+                        ...List.generate(points.length, (i) {
+                          return Padding(
+                            padding: EdgeInsets.only(
+                                bottom: i == points.length - 1 ? 0 : 9),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.only(top: 7),
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        AppColors.goldLight.withOpacity(0.85),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    points[i],
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary
+                                          .withOpacity(0.88),
+                                      fontSize: 13.5,
+                                      height: 1.4,
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: 0.1,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        })
+                      else
+                        // Shimmer placeholder while loading. Stays dark.
+                        Column(
+                          children: List.generate(3, (i) {
+                            return Padding(
+                              padding:
+                                  EdgeInsets.only(bottom: i == 2 ? 0 : 9),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 7),
+                                    width: 4,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: AppColors.goldLight
+                                          .withOpacity(0.35),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Container(
+                                      height: 10,
+                                      width: i == 1 ? 200 : double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.06),
+                                        borderRadius:
+                                            BorderRadius.circular(5),
+                                      ),
+                                    )
+                                        .animate(onPlay: (c) => c.repeat())
+                                        .shimmer(
+                                          duration: 1800.ms,
+                                          color: AppColors.goldLight
+                                              .withOpacity(0.14),
+                                        ),
                                   ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                points[i],
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 13.5,
-                                  height: 1.45,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
+                            );
+                          }),
                         ),
-                      )
-                          .animate()
-                          .fadeIn(
-                            duration: 500.ms,
-                            delay: (100 + i * 120).ms,
-                          )
-                          .slideX(begin: -0.05, end: 0, duration: 500.ms);
-                    })
-                  else
-                    // Shimmer placeholder while loading
-                    Column(
-                      children: List.generate(3, (i) {
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: i == 2 ? 0 : 10),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.only(top: 6),
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppColors.goldLight.withOpacity(0.4),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Container(
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceLight
-                                        .withOpacity(0.55),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                )
-                                    .animate(
-                                      onPlay: (c) => c.repeat(),
-                                    )
-                                    .shimmer(
-                                      duration: 1400.ms,
-                                      color: AppColors.goldLight
-                                          .withOpacity(0.25),
-                                    ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ),
-                ],
-              ),
-            ),
-
-            // Rotating zodiac glyph in the top-right corner — pure
-            // Flutter (no Lottie dep). Slow continuous rotation, soft
-            // gold tint, sits behind the chevron so it's atmospheric
-            // not in-your-face.
-            Positioned(
-              right: 18,
-              top: -14,
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: 0.55,
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          AppColors.goldLight.withOpacity(0.30),
-                          AppColors.goldLight.withOpacity(0.0),
-                        ],
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.brightness_high,
-                      color: AppColors.goldLight,
-                      size: 30,
-                    ),
-                  )
-                      .animate(onPlay: (c) => c.repeat())
-                      .rotate(duration: 22000.ms),
+                    ],
+                  ),
                 ),
               ),
-            ),
-
-            // 3 tiny drifting sparkle stars — give the card subtle
-            // life without overloading it. Each one fades + drifts on
-            // its own loop with a different delay.
-            _driftingStar(top: 22, left: 60, delayMs: 0),
-            _driftingStar(top: 70, left: 200, delayMs: 1200),
-            _driftingStar(top: 110, left: 130, delayMs: 2400),
-          ],
+            ],
+          ),
         ),
       ),
-    )
-        .animate()
-        .fadeIn(duration: 700.ms, delay: 750.ms)
-        .slideY(
-          begin: 0.12,
-          end: 0,
-          duration: 700.ms,
-          delay: 750.ms,
-        );
-  }
-
-  Widget _driftingStar({
-    required double top,
-    required double left,
-    required int delayMs,
-  }) {
-    return Positioned(
-      top: top,
-      left: left,
-      child: IgnorePointer(
-        child: Icon(
-          Icons.auto_awesome,
-          size: 9,
-          color: AppColors.goldLight.withOpacity(0.7),
-        )
-            .animate(onPlay: (c) => c.repeat())
-            .fadeIn(duration: 1200.ms, delay: delayMs.ms)
-            .then()
-            .fadeOut(duration: 1500.ms)
-            .moveY(begin: 0, end: -10, duration: 2700.ms),
-      ),
-    );
-  }
-
-  String _todayDateString() {
-    final now = DateTime.now();
-    const days = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',
-    ];
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
+    ).animate().fadeIn(duration: 700.ms, delay: 750.ms);
   }
 
   Widget _buildDidYouKnowCard() {
