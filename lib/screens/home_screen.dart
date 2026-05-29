@@ -975,34 +975,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // a whisper of gold so it feels intentional not flat.
             color: const Color(0xFF0E0D14),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: AppColors.gold.withOpacity(0.14),
-              width: 0.6,
+            // Left-side gold accent + thin overall border combined into
+            // one BoxDecoration. Previously this was a stretched Row
+            // with a sibling stripe Container, which under a
+            // SingleChildScrollView produced unbounded vertical
+            // constraints and turned the home screen into an infinite
+            // scroller. Using border-only avoids the layout cycle.
+            border: const Border(
+              left: BorderSide(color: AppColors.goldLight, width: 2.5),
+              top: BorderSide(color: Color(0x24E2C97A), width: 0.6),
+              right: BorderSide(color: Color(0x24E2C97A), width: 0.6),
+              bottom: BorderSide(color: Color(0x24E2C97A), width: 0.6),
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Left gold accent stripe — single deliberate stroke,
-              // does all the visual identity work on this card.
-              Container(
-                width: 2.5,
-                margin: const EdgeInsets.symmetric(vertical: 18),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.gold.withOpacity(0.0),
-                      AppColors.goldLight.withOpacity(0.85),
-                      AppColors.gold.withOpacity(0.0),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Expanded(
-                child: Padding(
+          child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 18, 18, 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1114,9 +1100,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     ).animate().fadeIn(duration: 700.ms, delay: 750.ms);
