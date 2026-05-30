@@ -56,6 +56,11 @@ class _ZodiacWheelState extends State<ZodiacWheel>
     // the colored emoji font.
     final glyphStyle = TextStyle(
       fontFamily: 'NotoSansSymbols2',
+      // Belt-and-suspenders: explicit fallback chain that prefers
+      // serif/sans-serif text fonts. If for any reason Android can't
+      // find NotoSansSymbols2 in the bundle, these are tried BEFORE
+      // the default fallback (which would land on Noto Color Emoji).
+      fontFamilyFallback: const ['Roboto', 'sans-serif', 'serif'],
       color: widget.color.withOpacity(0.92),
       fontSize: widget.size * 0.16, // ~15px for a 96px wheel
       fontWeight: FontWeight.w500,
@@ -79,19 +84,26 @@ class _ZodiacWheelState extends State<ZodiacWheel>
 }
 
 class _ZodiacWheelPainter extends CustomPainter {
+  // Each zodiac glyph + U+FE0E (Variation Selector 15) which tells the
+  // text engine to use the TEXT presentation form, not the emoji form.
+  // Without VS15, Android renders these chars from Noto Color Emoji
+  // even when our text font has them. With VS15, the text engine is
+  // forced to use NotoSansSymbols2 — giving us the monochrome glyph
+  // we coloured ourselves.
+  static const _vs15 = '︎';
   static const _symbols = [
-    '♈', // Aries
-    '♉', // Taurus
-    '♊', // Gemini
-    '♋', // Cancer
-    '♌', // Leo
-    '♍', // Virgo
-    '♎', // Libra
-    '♏', // Scorpio
-    '♐', // Sagittarius
-    '♑', // Capricorn
-    '♒', // Aquarius
-    '♓', // Pisces
+    '♈$_vs15', // Aries
+    '♉$_vs15', // Taurus
+    '♊$_vs15', // Gemini
+    '♋$_vs15', // Cancer
+    '♌$_vs15', // Leo
+    '♍$_vs15', // Virgo
+    '♎$_vs15', // Libra
+    '♏$_vs15', // Scorpio
+    '♐$_vs15', // Sagittarius
+    '♑$_vs15', // Capricorn
+    '♒$_vs15', // Aquarius
+    '♓$_vs15', // Pisces
   ];
 
   final Color color;
