@@ -124,16 +124,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
       if (!mounted) return;
       if (data != null) {
-        // Pull 3 short snippets from the horoscope shape. Server returns
-        // a richer object (overall/love/career/health). We pick 3 with
-        // labels and truncate each to the first sentence so the card
-        // reads as bite-sized "today's vibe" hits, not paragraphs.
-        final picks = <String>[];
-        for (final key in ['overall', 'career', 'love', 'health']) {
-          final v = data[key];
-          if (v is String && v.trim().isNotEmpty) {
-            picks.add(_shortPoint(v));
-            if (picks.length == 3) break;
+        // Prefer the server's purpose-built `dailyVibe` list — 3 crisp,
+        // observable, real-life flavoured bullets ground-truthed in the
+        // same chart reading. Server formats these for the card already
+        // so we don't need to truncate or guess.
+        final List<String> picks = [];
+        final vibe = data['dailyVibe'];
+        if (vibe is List) {
+          for (final item in vibe) {
+            if (item is String && item.trim().isNotEmpty) {
+              picks.add(item.trim());
+              if (picks.length == 3) break;
+            }
+          }
+        }
+        // Fallback for older cached horoscopes that predate dailyVibe:
+        // truncate the first sentence of overall/career/love/health.
+        if (picks.isEmpty) {
+          for (final key in ['overall', 'career', 'love', 'health']) {
+            final v = data[key];
+            if (v is String && v.trim().isNotEmpty) {
+              picks.add(_shortPoint(v));
+              if (picks.length == 3) break;
+            }
           }
         }
         if (picks.isNotEmpty) {
@@ -949,11 +962,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Tappable to open the full horoscope screen. Loaded async via
   /// _loadDailyVibe(); shows shimmer rows until data lands.
   ///
-  /// Dark, minimal aesthetic. No rotating sun, no drifting stars —
-  /// the card should read as a quiet ritual, not a casino. Deep
-  /// charcoal surface with a thin gold accent stroke on the left edge
-  /// and a single small gold dot per bullet. One subtle fade-in on
-  /// mount and nothing else animates.
+  /// Reference layout from competitor app: large dark card with a
+  /// glowing orb in the top-right, headline label, 3 bullets, and
+  /// a "Read more" pill anchored bottom-right. No date strip.
   Widget _buildDailyVibeCard(BuildContext context) {
     final points = _dailyVibePoints;
     final isReady = points != null && points.isNotEmpty;
@@ -970,139 +981,272 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            // Deep charcoal with the faintest warm tint — sits dark
-            // against the starfield without going black, picks up
-            // a whisper of gold so it feels intentional not flat.
-            color: const Color(0xFF0E0D14),
-            borderRadius: BorderRadius.circular(18),
-            // Left-side gold accent + thin overall border combined into
-            // one BoxDecoration. Previously this was a stretched Row
-            // with a sibling stripe Container, which under a
-            // SingleChildScrollView produced unbounded vertical
-            // constraints and turned the home screen into an infinite
-            // scroller. Using border-only avoids the layout cycle.
-            border: const Border(
-              left: BorderSide(color: AppColors.goldLight, width: 2.5),
-              top: BorderSide(color: Color(0x24E2C97A), width: 0.6),
-              right: BorderSide(color: Color(0x24E2C97A), width: 0.6),
-              bottom: BorderSide(color: Color(0x24E2C97A), width: 0.6),
+            // Deep navy with a faint purple lift on top edge so the
+            // glowing orb sits in a "sky", matching the reference's
+            // cosmic feel without being noisy.
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF13101F),
+                Color(0xFF0B0912),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.purpleAccent.withOpacity(0.22),
+              width: 0.8,
             ),
           ),
-          child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 18, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header — label only, no icon, no date. Just
-                      // type. Chevron on the right hints tappability.
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              "TODAY'S COSMIC MOOD",
-                              style: TextStyle(
-                                color: AppColors.goldLight.withOpacity(0.78),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 2.2,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            Icons.arrow_forward_rounded,
-                            color: AppColors.goldLight.withOpacity(0.55),
-                            size: 14,
-                          ),
-                        ],
+          child: Stack(
+            children: [
+              // Card content
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Headline label — small caps, gold, single line.
+                    // Padded right so the glowing orb doesn't overlap.
+                    Padding(
+                      padding: const EdgeInsets.only(right: 70),
+                      child: Text(
+                        "TODAY'S COSMIC MOOD",
+                        style: TextStyle(
+                          color: AppColors.goldLight.withOpacity(0.85),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2.2,
+                        ),
                       ),
-                      const SizedBox(height: 14),
+                    ),
+                    const SizedBox(height: 16),
 
-                      // 3 points — punchy bullets, no explanations.
-                      if (isReady)
-                        ...List.generate(points.length, (i) {
-                          return Padding(
-                            padding: EdgeInsets.only(
-                                bottom: i == points.length - 1 ? 0 : 9),
-                            child: Row(
+                    // 3 points — keep right padding so they don't run
+                    // into the orb on the first row.
+                    Padding(
+                      padding: const EdgeInsets.only(right: 70),
+                      child: isReady
+                          ? Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  margin: const EdgeInsets.only(top: 7),
-                                  width: 4,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color:
-                                        AppColors.goldLight.withOpacity(0.85),
+                              children: List.generate(points.length, (i) {
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                      bottom: i == points.length - 1 ? 0 : 9),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 7),
+                                        width: 4,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppColors.goldLight
+                                              .withOpacity(0.85),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          points[i],
+                                          style: TextStyle(
+                                            color: AppColors.textPrimary
+                                                .withOpacity(0.92),
+                                            fontSize: 13.5,
+                                            height: 1.4,
+                                            fontWeight: FontWeight.w400,
+                                            letterSpacing: 0.1,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    points[i],
-                                    style: TextStyle(
-                                      color: AppColors.textPrimary
-                                          .withOpacity(0.88),
-                                      fontSize: 13.5,
-                                      height: 1.4,
-                                      fontWeight: FontWeight.w400,
-                                      letterSpacing: 0.1,
-                                    ),
+                                );
+                              }),
+                            )
+                          : Column(
+                              children: List.generate(3, (i) {
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                      bottom: i == 2 ? 0 : 9),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 7),
+                                        width: 4,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppColors.goldLight
+                                              .withOpacity(0.35),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Container(
+                                          height: 10,
+                                          width: i == 1
+                                              ? 200
+                                              : double.infinity,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white
+                                                .withOpacity(0.06),
+                                            borderRadius:
+                                                BorderRadius.circular(5),
+                                          ),
+                                        )
+                                            .animate(
+                                                onPlay: (c) => c.repeat())
+                                            .shimmer(
+                                              duration: 1800.ms,
+                                              color: AppColors.goldLight
+                                                  .withOpacity(0.14),
+                                            ),
+                                      ),
+                                    ],
                                   ),
-                                ),
+                                );
+                              }),
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Read more pill — anchored bottom-right via Row.
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.purpleAccent.withOpacity(0.25),
+                                AppColors.goldLight.withOpacity(0.18),
                               ],
                             ),
-                          );
-                        })
-                      else
-                        // Shimmer placeholder while loading. Stays dark.
-                        Column(
-                          children: List.generate(3, (i) {
-                            return Padding(
-                              padding:
-                                  EdgeInsets.only(bottom: i == 2 ? 0 : 9),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 7),
-                                    width: 4,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppColors.goldLight
-                                          .withOpacity(0.35),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Container(
-                                      height: 10,
-                                      width: i == 1 ? 200 : double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.06),
-                                        borderRadius:
-                                            BorderRadius.circular(5),
-                                      ),
-                                    )
-                                        .animate(onPlay: (c) => c.repeat())
-                                        .shimmer(
-                                          duration: 1800.ms,
-                                          color: AppColors.goldLight
-                                              .withOpacity(0.14),
-                                        ),
-                                  ),
-                                ],
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.goldLight.withOpacity(0.35),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Read more',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary
+                                      .withOpacity(0.92),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.3,
+                                ),
                               ),
-                            );
-                          }),
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 13,
+                                color: AppColors.goldLight,
+                              ),
+                            ],
+                          ),
                         ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
+              ),
+
+              // Glowing orb top-right — purely decorative cosmic accent.
+              // Stack of radial gradients gives the soft halo + brighter
+              // core look without any image asset.
+              Positioned(
+                top: 14,
+                right: 14,
+                child: IgnorePointer(child: _buildCosmicOrb()),
+              ),
+            ],
+          ),
         ),
       ),
     ).animate().fadeIn(duration: 700.ms, delay: 750.ms);
+  }
+
+  /// Glowing cosmic orb — 56px circle with a violet→pink radial core
+  /// and an outer gold halo. Subtle pulse so it feels alive without
+  /// distracting from the bullets.
+  Widget _buildCosmicOrb() {
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Outer soft halo
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  AppColors.goldLight.withOpacity(0.18),
+                  AppColors.goldLight.withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+          // Mid violet ring
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  AppColors.purpleAccent.withOpacity(0.55),
+                  AppColors.purpleAccent.withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+          // Bright core
+          Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.white.withOpacity(0.95),
+                  AppColors.purpleSoft.withOpacity(0.65),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.purpleAccent.withOpacity(0.55),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
+        ],
+      )
+          .animate(onPlay: (c) => c.repeat(reverse: true))
+          .scaleXY(
+            begin: 0.96,
+            end: 1.06,
+            duration: 2400.ms,
+            curve: Curves.easeInOut,
+          ),
+    );
   }
 
   Widget _buildDidYouKnowCard() {
