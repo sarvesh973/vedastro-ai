@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'services/storage_service.dart';
@@ -94,6 +95,13 @@ void main() async {
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
+
+    // Precache Noto Sans Symbols 2 — used by the home screen's zodiac
+    // wheel to render the ♈♉♊… glyphs as monochrome text instead of
+    // letting Android fall back to colored emoji. Fire-and-forget;
+    // first paint after this kicks off the download in the background
+    // (subsequent app launches read from local cache).
+    GoogleFonts.notoSansSymbols2();
 
     runApp(const ProviderScope(child: VedAstroApp()));
   }, (error, stack) {
