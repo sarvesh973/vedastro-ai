@@ -1,18 +1,23 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 /// Slowly rotating wheel showing all 12 zodiac signs as monochrome
 /// glyphs around a double ring, with a 6-pointed star (shatkona /
 /// hexagram) in the center.
 ///
-/// IMPLEMENTATION NOTE: We use FontAwesome icons (not Unicode zodiac
-/// chars ♈♉♊…) because the Unicode zodiac codepoints render as
-/// colored EMOJI on Android — the OS overrides any text font we
-/// specify, even with the U+FE0E text-variation selector. FontAwesome
-/// icons live in the Unicode Private Use Area (0xf640 etc), which
-/// can't be routed to emoji rendering, so they always render in the
-/// colour we ask for.
+/// IMPLEMENTATION NOTE: zodiac glyphs are drawn from hand-built Path
+/// shapes via CustomPainter, NOT from text/Unicode/icon fonts:
+///   * Unicode zodiac codepoints ♈♉♊… are routed to the emoji font
+///     on Android, even with U+FE0E and an explicit fontFamily — so
+///     the wheel ended up rendering as colourful emoji, not the
+///     monochrome blue we want.
+///   * FontAwesome's zodiac glyphs are Pro-only (not in the Free
+///     font_awesome_flutter package), and the package itself fights
+///     newer Flutter SDKs by extending `IconData` (now sealed).
+/// CustomPainter paths solve both problems at once — every stroke is
+/// painted in `widget.color`, no font fallback can hijack it, no
+/// external asset/font is required, and the build doesn't break on
+/// every Flutter bump.
 ///
 /// Designed as a low-attention decorative accent — pick a low alpha
 /// colour and a long period (default 90s/rev) so it reads as
@@ -36,21 +41,6 @@ class ZodiacWheel extends StatefulWidget {
 class _ZodiacWheelState extends State<ZodiacWheel>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-
-  static const _icons = <IconData>[
-    FontAwesomeIcons.aries,
-    FontAwesomeIcons.taurus,
-    FontAwesomeIcons.gemini,
-    FontAwesomeIcons.cancer,
-    FontAwesomeIcons.leo,
-    FontAwesomeIcons.virgo,
-    FontAwesomeIcons.libra,
-    FontAwesomeIcons.scorpio,
-    FontAwesomeIcons.sagittarius,
-    FontAwesomeIcons.capricorn,
-    FontAwesomeIcons.aquarius,
-    FontAwesomeIcons.pisces,
-  ];
 
   @override
   void initState() {
@@ -85,14 +75,13 @@ class _ZodiacWheelState extends State<ZodiacWheel>
           alignment: Alignment.center,
           children: [
             // Painted background — rings, spokes, hexagram, center dot.
-            // All monochrome; no zodiac chars in this painter.
             CustomPaint(
               size: Size.square(widget.size),
               painter: _WheelBackgroundPainter(color: wheelColor),
             ),
-            // 12 zodiac icons positioned around the ring's mid-radius.
+            // 12 zodiac glyphs positioned around the ring's mid-radius.
             for (int i = 0; i < 12; i++)
-              _positionedIcon(
+              _positionedGlyph(
                 index: i,
                 centerOffset: Offset(widget.size / 2, widget.size / 2),
                 radius: symbolRadius,
@@ -105,16 +94,16 @@ class _ZodiacWheelState extends State<ZodiacWheel>
     );
   }
 
-  Widget _positionedIcon({
+  Widget _positionedGlyph({
     required int index,
     required Offset centerOffset,
     required double radius,
     required double glyphSize,
     required Color color,
   }) {
-    // Place each icon at the midpoint of its sector arc, on the
+    // Place each glyph at the midpoint of its sector arc, on the
     // ring mid-radius. Sectors start at the top (-pi/2) and go
-    // clockwise. The half-offset (+0.5) puts the icon BETWEEN
+    // clockwise. The half-offset (+0.5) puts the glyph BETWEEN
     // dividers, not on top of them.
     final angle = ((index + 0.5) / 12) * 2 * math.pi - math.pi / 2;
     final x = centerOffset.dx + math.cos(angle) * radius;
@@ -124,12 +113,8 @@ class _ZodiacWheelState extends State<ZodiacWheel>
       top: y - glyphSize / 2 - 2,
       width: glyphSize + 4,
       height: glyphSize + 4,
-      child: Center(
-        child: FaIcon(
-          _icons[index],
-          color: color,
-          size: glyphSize,
-        ),
+      child: CustomPaint(
+        painter: _ZodiacGlyphPainter(signIndex: index, color: color),
       ),
     );
   }
@@ -203,4 +188,238 @@ class _WheelBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WheelBackgroundPainter old) => old.color != color;
+}
+
+/// Draws one of the 12 zodiac glyphs as monochrome strokes inside the
+/// painter's bounds. Each glyph is normalised to a 20×20 design grid
+/// then scaled to the actual paint area so they render crisply at any
+/// size. Strokes use round caps/joins so the small glyphs read cleanly.
+class _ZodiacGlyphPainter extends CustomPainter {
+  final int signIndex;
+  final Color color;
+
+  _ZodiacGlyphPainter({required this.signIndex, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 20×20 design grid → scale into actual paint size.
+    final scale = size.shortestSide / 20.0;
+    canvas.save();
+    canvas.translate((size.width - 20 * scale) / 2,
+        (size.height - 20 * scale) / 2);
+    canvas.scale(scale);
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    switch (signIndex) {
+      case 0:
+        _aries(canvas, paint);
+        break;
+      case 1:
+        _taurus(canvas, paint);
+        break;
+      case 2:
+        _gemini(canvas, paint);
+        break;
+      case 3:
+        _cancer(canvas, paint);
+        break;
+      case 4:
+        _leo(canvas, paint);
+        break;
+      case 5:
+        _virgo(canvas, paint);
+        break;
+      case 6:
+        _libra(canvas, paint);
+        break;
+      case 7:
+        _scorpio(canvas, paint);
+        break;
+      case 8:
+        _sagittarius(canvas, paint);
+        break;
+      case 9:
+        _capricorn(canvas, paint);
+        break;
+      case 10:
+        _aquarius(canvas, paint);
+        break;
+      case 11:
+        _pisces(canvas, paint);
+        break;
+    }
+
+    canvas.restore();
+  }
+
+  // ─── Glyph paths (20×20 design grid) ─────────────────────────
+  //
+  // Each glyph is a simplified, recognisable stroke version of the
+  // traditional zodiac symbol. Designed at 20×20 with strokes ~1.6
+  // so they read clearly at the 12-13px size used on the wheel.
+
+  void _aries(Canvas c, Paint p) {
+    // Ram horns: two outward-curling arcs meeting at the top.
+    final path = Path()
+      ..moveTo(10, 18)
+      ..lineTo(10, 8)
+      ..moveTo(10, 8)
+      ..cubicTo(8, 4, 4, 4, 4, 8)
+      ..moveTo(10, 8)
+      ..cubicTo(12, 4, 16, 4, 16, 8);
+    c.drawPath(path, p);
+  }
+
+  void _taurus(Canvas c, Paint p) {
+    // Bull head: full circle with two upward horns.
+    c.drawCircle(const Offset(10, 13), 4, p);
+    final horns = Path()
+      ..moveTo(6, 10)
+      ..cubicTo(4, 6, 8, 4, 10, 6)
+      ..cubicTo(12, 4, 16, 6, 14, 10);
+    c.drawPath(horns, p);
+  }
+
+  void _gemini(Canvas c, Paint p) {
+    // Roman numeral II with top + bottom caps (joined twins).
+    final path = Path()
+      ..moveTo(7, 4)
+      ..lineTo(7, 16)
+      ..moveTo(13, 4)
+      ..lineTo(13, 16)
+      ..moveTo(5, 4)
+      ..lineTo(15, 4)
+      ..moveTo(5, 16)
+      ..lineTo(15, 16);
+    c.drawPath(path, p);
+  }
+
+  void _cancer(Canvas c, Paint p) {
+    // Two opposing curls (yin-yang of crab claws).
+    final path = Path()
+      ..moveTo(15, 8)
+      ..cubicTo(11, 6, 5, 8, 5, 10)
+      ..moveTo(5, 12)
+      ..cubicTo(9, 14, 15, 12, 15, 10);
+    c.drawPath(path, p);
+    c.drawCircle(const Offset(13, 8), 1.4, Paint()..color = color);
+    c.drawCircle(const Offset(7, 12), 1.4, Paint()..color = color);
+  }
+
+  void _leo(Canvas c, Paint p) {
+    // Lion's tail: small circle, then a sweeping curl up + right.
+    c.drawCircle(const Offset(7, 9), 3, p);
+    final tail = Path()
+      ..moveTo(9.5, 11)
+      ..cubicTo(12, 14, 14, 18, 17, 16)
+      ..cubicTo(18, 15, 17, 13, 15, 14);
+    c.drawPath(tail, p);
+  }
+
+  void _virgo(Canvas c, Paint p) {
+    // M-shape with a small inner loop on the right (the maiden).
+    final path = Path()
+      ..moveTo(3, 16)
+      ..lineTo(3, 5)
+      ..lineTo(8, 14)
+      ..lineTo(13, 5)
+      ..lineTo(13, 16)
+      ..moveTo(13, 16)
+      ..cubicTo(17, 16, 17, 11, 13, 11);
+    c.drawPath(path, p);
+  }
+
+  void _libra(Canvas c, Paint p) {
+    // Scales: base line + dome with a small flat segment on top.
+    final path = Path()
+      ..moveTo(3, 16)
+      ..lineTo(17, 16)
+      ..moveTo(4, 12)
+      ..cubicTo(4, 6, 16, 6, 16, 12)
+      ..moveTo(8, 11)
+      ..lineTo(12, 11);
+    c.drawPath(path, p);
+  }
+
+  void _scorpio(Canvas c, Paint p) {
+    // M-shape with an arrow stinger tail going up-right.
+    final path = Path()
+      ..moveTo(3, 14)
+      ..lineTo(3, 6)
+      ..lineTo(7, 14)
+      ..lineTo(11, 6)
+      ..lineTo(11, 14)
+      ..moveTo(11, 14)
+      ..lineTo(15, 14)
+      ..lineTo(15, 8)
+      ..moveTo(13, 10)
+      ..lineTo(15, 8)
+      ..lineTo(17, 10);
+    c.drawPath(path, p);
+  }
+
+  void _sagittarius(Canvas c, Paint p) {
+    // Diagonal arrow with crossbar on the shaft.
+    final path = Path()
+      ..moveTo(4, 16)
+      ..lineTo(16, 4)
+      ..moveTo(10, 4)
+      ..lineTo(16, 4)
+      ..lineTo(16, 10)
+      ..moveTo(7, 9)
+      ..lineTo(11, 13);
+    c.drawPath(path, p);
+  }
+
+  void _capricorn(Canvas c, Paint p) {
+    // Stylised goat-fish: V into a curl at the bottom.
+    final path = Path()
+      ..moveTo(3, 5)
+      ..lineTo(7, 14)
+      ..lineTo(11, 5)
+      ..lineTo(13, 14)
+      ..cubicTo(13, 17, 17, 17, 17, 14)
+      ..cubicTo(17, 12, 15, 12, 15, 14);
+    c.drawPath(path, p);
+  }
+
+  void _aquarius(Canvas c, Paint p) {
+    // Two parallel zigzags (water waves).
+    final w1 = Path()
+      ..moveTo(3, 8)
+      ..lineTo(7, 6)
+      ..lineTo(10, 8)
+      ..lineTo(13, 6)
+      ..lineTo(17, 8);
+    final w2 = Path()
+      ..moveTo(3, 13)
+      ..lineTo(7, 11)
+      ..lineTo(10, 13)
+      ..lineTo(13, 11)
+      ..lineTo(17, 13);
+    c.drawPath(w1, p);
+    c.drawPath(w2, p);
+  }
+
+  void _pisces(Canvas c, Paint p) {
+    // Two arcs (fish) tethered by a horizontal line.
+    final path = Path()
+      ..moveTo(5, 4)
+      ..cubicTo(2, 10, 2, 10, 5, 16)
+      ..moveTo(15, 4)
+      ..cubicTo(18, 10, 18, 10, 15, 16)
+      ..moveTo(4, 10)
+      ..lineTo(16, 10);
+    c.drawPath(path, p);
+  }
+
+  @override
+  bool shouldRepaint(_ZodiacGlyphPainter old) =>
+      old.signIndex != signIndex || old.color != color;
 }
