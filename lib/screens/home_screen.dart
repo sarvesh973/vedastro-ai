@@ -215,9 +215,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Palm / Horoscope) reachable from anywhere in the home flow.
       bottomNavigationBar: _buildBottomNav(context),
       extendBody: true,
+      extendBodyBehindAppBar: true,
       body: StarfieldBackground(
-        child: SafeArea(
-          child: Stack(
+        // No outer SafeArea — the sticky top bar extends BEHIND the
+        // status bar so its blurred background fills that area too,
+        // closing the dark gap that used to sit above the bar. Inner
+        // widgets each apply their own SafeArea insets where needed.
+        child: Stack(
             children: [
               // Shooting star — fires every 12s. Sits behind the content
               // (first child of the Stack) so it never blocks taps and
@@ -277,11 +281,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 28),
                       child: Column(
                         children: [
-                    // Spacer matches the sticky top bar's measured height
-                    // (~88px content + 12px breathing). Anything in this
-                    // scroll view starts BELOW the bar; content slides
-                    // under the bar on scroll and is blurred by it.
-                    const SizedBox(height: 100),
+                    // Spacer pushes content below the sticky top bar.
+                    // Bar now extends behind the system status bar so its
+                    // total height ≈ status bar inset (~28-44dp) + content
+                    // (~76dp). MediaQuery padding adapts per device so
+                    // we always clear the bar even on phones with notches.
+                    SizedBox(
+                      height: MediaQuery.of(context).padding.top + 86,
+                    ),
 
                     // Brand hero — Moksha wordmark sits on its own now
                     // (AI sparkle logo removed per user request, the
@@ -412,9 +419,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
               // Sticky top bar — sits OUTSIDE the scroll view, painted
               // last so it's on top of everything. BackdropFilter blurs
-              // whatever scrolls underneath. Container's translucent
-              // background gives the bar enough body to stay legible
-              // over busy content without feeling like a hard slab.
+              // whatever scrolls underneath. Bar extends behind the
+              // status bar so its translucent background fills that
+              // area too (no dark gap); SafeArea INSIDE the bar handles
+              // padding the actual content below the system inset.
               Positioned(
                 top: 0,
                 left: 0,
@@ -422,7 +430,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _buildStickyTopBar(context, profile),
               ),
             ],
-          ),
         ),
       ),
     );
@@ -442,60 +449,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Hamburger menu
-                GestureDetector(
-                  onTap: () {
-                    _scaffoldKey.currentState?.openDrawer();
-                  },
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.surfaceLight.withOpacity(0.85),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: const Icon(
-                      Icons.menu_rounded,
-                      color: AppColors.textSecondary,
-                      size: 22,
+          // SafeArea pads content below the system status bar while
+          // the Container background extends ABOVE it (covering the
+          // notch area with the same blurred surface).
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, 6, 28, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Hamburger menu
+                  GestureDetector(
+                    onTap: () {
+                      _scaffoldKey.currentState?.openDrawer();
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.surfaceLight.withOpacity(0.85),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: const Icon(
+                        Icons.menu_rounded,
+                        color: AppColors.textSecondary,
+                        size: 22,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: _buildProfileSwitcher(context, ref)),
-                if (profile != null) ...[
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _getGreeting(),
-                        style: const TextStyle(
-                          color: AppColors.goldLight,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildProfileSwitcher(context, ref)),
+                  if (profile != null) ...[
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _getGreeting(),
+                          style: const TextStyle(
+                            color: AppColors.goldLight,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        profile.name.split(' ').first,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(height: 2),
+                        Text(
+                          profile.name.split(' ').first,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -1040,7 +1053,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // Headline label — small caps, gold, single line.
                     // Right-padded so the wheel doesn't crash into it.
                     Padding(
-                      padding: const EdgeInsets.only(right: 84),
+                      padding: const EdgeInsets.only(right: 96),
                       child: Text(
                         "TODAY'S COSMIC MOOD",
                         style: TextStyle(
@@ -1056,7 +1069,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // 3 points — same right padding so the first
                     // bullet doesn't run into the wheel.
                     Padding(
-                      padding: const EdgeInsets.only(right: 84),
+                      padding: const EdgeInsets.only(right: 96),
                       child: isReady
                           ? Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1195,15 +1208,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
 
               // Zodiac wheel top-right — slow bluish rotation, low
-              // attention, replaces the previous gold/purple orb.
+              // attention. Hand-drawn glyphs (not Unicode emoji) so
+              // they're monochrome + bigger, with a 6-pointed star
+              // filling the inner space.
               Positioned(
-                top: 10,
-                right: 10,
+                top: 8,
+                right: 8,
                 child: IgnorePointer(
                   child: Opacity(
-                    opacity: 0.78,
+                    opacity: 0.82,
                     child: ZodiacWheel(
-                      size: 84,
+                      size: 96,
                       color: const Color(0xFF6FA8FF),
                       period: const Duration(seconds: 90),
                     ),
