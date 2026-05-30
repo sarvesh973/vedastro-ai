@@ -185,6 +185,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // whether this screen is still mounted.
     typingController.state = false;
 
+    // Server-side quota exhausted — don't render the 'limit reached'
+    // text as a chat bubble. Roll back the user's optimistic bubble
+    // (we already added it before sending), restore the text to the
+    // input field, and open the paywall sheet so they see upgrade
+    // options instead of a discouraging dead-end message. After
+    // dismissing the paywall they can retry from a clean state.
+    if (aiResponse.rateLimited && mounted) {
+      chatNotifier.removeLastMessage();
+      _messageController.text = text;
+      _showPaywall();
+      return;
+    }
+
     chatNotifier.addMessage(ChatMessage(
       text: aiResponse.text,
       role: MessageRole.ai,
