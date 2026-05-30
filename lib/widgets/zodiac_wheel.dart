@@ -1,16 +1,18 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 /// Slowly rotating wheel showing all 12 zodiac signs as monochrome
 /// glyphs around a double ring, with a 6-pointed star (shatkona /
 /// hexagram) in the center.
 ///
-/// The zodiac Unicode glyphs ♈♉♊… normally render as colored emoji
-/// on Android (Noto Color Emoji fallback). We force monochrome
-/// rendering by using NotoSansSymbols2, bundled as a local asset
-/// under assets/fonts/NotoSansSymbols2-Regular.ttf and registered in
-/// pubspec.yaml under flutter > fonts. Bundling means zero network
-/// dependency — wheel always renders correctly on first launch.
+/// IMPLEMENTATION NOTE: We use FontAwesome icons (not Unicode zodiac
+/// chars ♈♉♊…) because the Unicode zodiac codepoints render as
+/// colored EMOJI on Android — the OS overrides any text font we
+/// specify, even with the U+FE0E text-variation selector. FontAwesome
+/// icons live in the Unicode Private Use Area (0xf640 etc), which
+/// can't be routed to emoji rendering, so they always render in the
+/// colour we ask for.
 ///
 /// Designed as a low-attention decorative accent — pick a low alpha
 /// colour and a long period (default 90s/rev) so it reads as
@@ -35,6 +37,21 @@ class _ZodiacWheelState extends State<ZodiacWheel>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
 
+  static const _icons = <IconData>[
+    FontAwesomeIcons.aries,
+    FontAwesomeIcons.taurus,
+    FontAwesomeIcons.gemini,
+    FontAwesomeIcons.cancer,
+    FontAwesomeIcons.leo,
+    FontAwesomeIcons.virgo,
+    FontAwesomeIcons.libra,
+    FontAwesomeIcons.scorpio,
+    FontAwesomeIcons.sagittarius,
+    FontAwesomeIcons.capricorn,
+    FontAwesomeIcons.aquarius,
+    FontAwesomeIcons.pisces,
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -49,67 +66,78 @@ class _ZodiacWheelState extends State<ZodiacWheel>
 
   @override
   Widget build(BuildContext context) {
-    // Resolve the glyph text style ONCE. fontFamily 'NotoSansSymbols2'
-    // points at the bundled TTF (see pubspec.yaml > flutter > fonts).
-    // Android's text engine uses this font for the zodiac chars,
-    // rendering them as monochrome glyphs instead of falling back to
-    // the colored emoji font.
-    final glyphStyle = TextStyle(
-      fontFamily: 'NotoSansSymbols2',
-      // Belt-and-suspenders: explicit fallback chain that prefers
-      // serif/sans-serif text fonts. If for any reason Android can't
-      // find NotoSansSymbols2 in the bundle, these are tried BEFORE
-      // the default fallback (which would land on Noto Color Emoji).
-      fontFamilyFallback: const ['Roboto', 'sans-serif', 'serif'],
-      color: widget.color.withOpacity(0.92),
-      fontSize: widget.size * 0.16, // ~15px for a 96px wheel
-      fontWeight: FontWeight.w500,
-      height: 1.0,
-    );
+    final wheelColor = widget.color;
+    final glyphColor = widget.color.withOpacity(0.92);
+    final glyphSize = widget.size * 0.13; // ~12.5px @ 96px wheel
+
+    // Geometry — same outer/inner ring layout as before so the
+    // decorative rings + hexagram still anchor the design.
+    final outerR = widget.size / 2 - 1;
+    final innerR = outerR - 22;
+    final symbolRadius = (innerR + outerR) / 2;
 
     return RotationTransition(
       turns: _ctrl,
       child: SizedBox(
         width: widget.size,
         height: widget.size,
-        child: CustomPaint(
-          painter: _ZodiacWheelPainter(
-            color: widget.color,
-            glyphStyle: glyphStyle,
-          ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Painted background — rings, spokes, hexagram, center dot.
+            // All monochrome; no zodiac chars in this painter.
+            CustomPaint(
+              size: Size.square(widget.size),
+              painter: _WheelBackgroundPainter(color: wheelColor),
+            ),
+            // 12 zodiac icons positioned around the ring's mid-radius.
+            for (int i = 0; i < 12; i++)
+              _positionedIcon(
+                index: i,
+                centerOffset: Offset(widget.size / 2, widget.size / 2),
+                radius: symbolRadius,
+                glyphSize: glyphSize,
+                color: glyphColor,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _positionedIcon({
+    required int index,
+    required Offset centerOffset,
+    required double radius,
+    required double glyphSize,
+    required Color color,
+  }) {
+    // Place each icon at the midpoint of its sector arc, on the
+    // ring mid-radius. Sectors start at the top (-pi/2) and go
+    // clockwise. The half-offset (+0.5) puts the icon BETWEEN
+    // dividers, not on top of them.
+    final angle = ((index + 0.5) / 12) * 2 * math.pi - math.pi / 2;
+    final x = centerOffset.dx + math.cos(angle) * radius;
+    final y = centerOffset.dy + math.sin(angle) * radius;
+    return Positioned(
+      left: x - glyphSize / 2 - 2,
+      top: y - glyphSize / 2 - 2,
+      width: glyphSize + 4,
+      height: glyphSize + 4,
+      child: Center(
+        child: FaIcon(
+          _icons[index],
+          color: color,
+          size: glyphSize,
         ),
       ),
     );
   }
 }
 
-class _ZodiacWheelPainter extends CustomPainter {
-  // Each zodiac glyph + U+FE0E (Variation Selector 15) which tells the
-  // text engine to use the TEXT presentation form, not the emoji form.
-  // Without VS15, Android renders these chars from Noto Color Emoji
-  // even when our text font has them. With VS15, the text engine is
-  // forced to use NotoSansSymbols2 — giving us the monochrome glyph
-  // we coloured ourselves.
-  static const _vs15 = '︎';
-  static const _symbols = [
-    '♈$_vs15', // Aries
-    '♉$_vs15', // Taurus
-    '♊$_vs15', // Gemini
-    '♋$_vs15', // Cancer
-    '♌$_vs15', // Leo
-    '♍$_vs15', // Virgo
-    '♎$_vs15', // Libra
-    '♏$_vs15', // Scorpio
-    '♐$_vs15', // Sagittarius
-    '♑$_vs15', // Capricorn
-    '♒$_vs15', // Aquarius
-    '♓$_vs15', // Pisces
-  ];
-
+class _WheelBackgroundPainter extends CustomPainter {
   final Color color;
-  final TextStyle glyphStyle;
-
-  _ZodiacWheelPainter({required this.color, required this.glyphStyle});
+  _WheelBackgroundPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -136,11 +164,9 @@ class _ZodiacWheelPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
     final centerDotFill = Paint()..color = color.withOpacity(0.85);
 
-    // Outer + inner ring
     canvas.drawCircle(center, outerR, ringStroke);
     canvas.drawCircle(center, innerR, innerRingStroke);
 
-    // 12 dividers between sectors
     for (int i = 0; i < 12; i++) {
       final a = (i / 12) * 2 * math.pi - math.pi / 2;
       final p1 = Offset(
@@ -154,21 +180,7 @@ class _ZodiacWheelPainter extends CustomPainter {
       canvas.drawLine(p1, p2, spokeStroke);
     }
 
-    // 12 zodiac glyphs — monochrome via Noto Sans Symbols 2
-    final symbolRadius = (innerR + outerR) / 2;
-    for (int i = 0; i < 12; i++) {
-      final a = ((i + 0.5) / 12) * 2 * math.pi - math.pi / 2;
-      final x = center.dx + math.cos(a) * symbolRadius;
-      final y = center.dy + math.sin(a) * symbolRadius;
-
-      final tp = TextPainter(
-        text: TextSpan(text: _symbols[i], style: glyphStyle),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(x - tp.width / 2, y - tp.height / 2));
-    }
-
-    // Center decoration — 6-pointed star (kept; user approved)
+    // Hexagram (Shatkona / Star of David) — kept; user approved.
     final starR = innerR - 6;
     _drawHexStar(canvas, center, starR, innerDecorPaint);
     canvas.drawCircle(center, 1.6, centerDotFill);
@@ -190,6 +202,5 @@ class _ZodiacWheelPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ZodiacWheelPainter old) =>
-      old.color != color || old.glyphStyle != glyphStyle;
+  bool shouldRepaint(_WheelBackgroundPainter old) => old.color != color;
 }
