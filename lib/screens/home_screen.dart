@@ -834,17 +834,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Navigator.pop(ctx);
               // Save to Firestore 'feedback' collection
               // Viewable at Firebase Console -> Firestore -> feedback
-              final ok = await FirestoreService.saveFeedback(text: text);
+              final error = await FirestoreService.saveFeedback(text: text);
               controller.dispose();
               if (!context.mounted) return;
+              final ok = error == null;
+
+              // For admins, surface the technical reason — the misleading
+              // "check your internet" was hiding a Firestore permission
+              // error (security rules don't allow writes to /feedback).
+              final adminSuffix =
+                  (!ok && AuthService.isAdmin) ? '\n[admin] $error' : '';
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(ok
                       ? 'Thanks! Your feedback has been sent.'
-                      : 'Could not send. Please check your internet.'),
+                      : 'Could not send right now. Please try again in a moment.$adminSuffix'),
                   backgroundColor:
                       ok ? AppColors.success : AppColors.error,
                   behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: ok ? 3 : 6),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
