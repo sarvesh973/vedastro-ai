@@ -49,6 +49,16 @@ flutter:
     - assets/icon/
     - assets/legal/
 
+  # Bundled monochrome glyph font. Used by lib/widgets/zodiac_wheel.dart
+  # to render Unicode zodiac chars (♈ thru ♓) as proper text instead
+  # of letting Android fall back to colored emoji. Bundling locally
+  # means the wheel renders correctly on first launch with zero
+  # network dependency (Google Fonts CDN no longer involved).
+  fonts:
+    - family: NotoSansSymbols2
+      fonts:
+        - asset: assets/fonts/NotoSansSymbols2-Regular.ttf
+
 # ─── App Icon Config ──────────────────────────
 flutter_launcher_icons:
   android: true

@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Slowly rotating wheel showing all 12 zodiac signs as monochrome
 /// glyphs around a double ring, with a 6-pointed star (shatkona /
@@ -8,9 +7,10 @@ import 'package:google_fonts/google_fonts.dart';
 ///
 /// The zodiac Unicode glyphs ♈♉♊… normally render as colored emoji
 /// on Android (Noto Color Emoji fallback). We force monochrome
-/// rendering by using Noto Sans Symbols 2, which has these characters
-/// as proper text glyphs — fetched once via the google_fonts package
-/// and cached locally afterwards.
+/// rendering by using NotoSansSymbols2, bundled as a local asset
+/// under assets/fonts/NotoSansSymbols2-Regular.ttf and registered in
+/// pubspec.yaml under flutter > fonts. Bundling means zero network
+/// dependency — wheel always renders correctly on first launch.
 ///
 /// Designed as a low-attention decorative accent — pick a low alpha
 /// colour and a long period (default 90s/rev) so it reads as
@@ -49,11 +49,13 @@ class _ZodiacWheelState extends State<ZodiacWheel>
 
   @override
   Widget build(BuildContext context) {
-    // Resolve the glyph text style ONCE — GoogleFonts.notoSansSymbols2
-    // gives us a TextStyle wired to the proper fontFamily so Android's
-    // text engine renders these as monochrome glyphs instead of falling
-    // back to the colored emoji font.
-    final glyphStyle = GoogleFonts.notoSansSymbols2(
+    // Resolve the glyph text style ONCE. fontFamily 'NotoSansSymbols2'
+    // points at the bundled TTF (see pubspec.yaml > flutter > fonts).
+    // Android's text engine uses this font for the zodiac chars,
+    // rendering them as monochrome glyphs instead of falling back to
+    // the colored emoji font.
+    final glyphStyle = TextStyle(
+      fontFamily: 'NotoSansSymbols2',
       color: widget.color.withOpacity(0.92),
       fontSize: widget.size * 0.16, // ~15px for a 96px wheel
       fontWeight: FontWeight.w500,
