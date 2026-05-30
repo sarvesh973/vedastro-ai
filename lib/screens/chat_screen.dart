@@ -102,10 +102,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       chatHistory: ref.read(chatMessagesProvider).map((m) => m.text).toList(),
     );
 
+    // CRITICAL: store the AI reply into the chat-messages provider BEFORE
+    // touching any widget state. If the user navigated away during the
+    // await above, this State is disposed — calling setState() throws,
+    // which would abort the function before the message ever got
+    // recorded (the original "user comes back to chat and sees nothing"
+    // bug). The provider is global, so addMessage works regardless of
+    // whether this screen is still mounted.
     typingController.state = false;
-
-    // Add AI message and activate typewriter
-    setState(() => _isTypewriterActive = true);
 
     chatNotifier.addMessage(ChatMessage(
       text: aiResponse.text,
@@ -114,13 +118,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       sources: aiResponse.sources,
       details: aiResponse.details,
       debugRaw: aiResponse.debugRaw,
+      isOffline: aiResponse.isOffline,
     ));
-    // Sync AI response to cloud
-    FirestoreService.syncChatMessage(aiResponse.text, 'ai');
 
-    await StorageService.incrementChatQuestions();
-    ref.read(chatQuestionsUsedProvider.notifier).state =
-        StorageService.chatQuestionsUsed;
+    // Online-only side effects. Skip them when we served a template
+    // fallback (no real LLM call happened, so the user's quota should
+    // not be charged, and we don't want to permanently log generic
+    // template text into the cloud chat history as if it were a real
+    // personalised answer).
+    if (!aiResponse.isOffline) {
+      FirestoreService.syncChatMessage(aiResponse.text, 'ai');
+      await StorageService.incrementChatQuestions();
+    }
+
+    // The remaining work is UI-only: typewriter animation flag,
+    // provider-driven quota counter refresh, scroll positioning. Skip
+    // it entirely if the user has left the screen — those calls would
+    // either throw (`setState`/`ref.read` after dispose) or be visual
+    // no-ops anyway.
+    if (!mounted) return;
+
+    setState(() => _isTypewriterActive = true);
+
+    if (!aiResponse.isOffline) {
+      ref.read(chatQuestionsUsedProvider.notifier).state =
+          StorageService.chatQuestionsUsed;
+    }
 
     _scrollToBottom();
 

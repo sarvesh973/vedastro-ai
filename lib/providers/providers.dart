@@ -96,9 +96,13 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
       role: MessageRole.ai,
       timestamp: DateTime.now(),
       sources: aiResponse.sources,
+      isOffline: aiResponse.isOffline,
     ));
 
-    // Track usage
-    await StorageService.incrementChatQuestions();
+    // Track usage — but only for real LLM answers. Template fallbacks
+    // (offline) should not burn the user's quota.
+    if (!aiResponse.isOffline) {
+      await StorageService.incrementChatQuestions();
+    }
   }
 }

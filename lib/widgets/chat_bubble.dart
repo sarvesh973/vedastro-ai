@@ -93,6 +93,11 @@ class ChatBubble extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Offline-fallback indicator. Shown above the bubble when the
+        // answer came from the local template (network/server failed)
+        // so the user knows it's not a personalised AI reading and
+        // can reconnect for the real thing.
+        if (message.isOffline) _buildOfflineBadge(),
         // Long-press an AI answer to report it. Required by Google Play's
         // Generative AI policy — users must be able to flag offensive or
         // inappropriate AI-generated content from inside the app.
@@ -148,6 +153,47 @@ class ChatBubble extends StatelessWidget {
         // instead of cluttering the answer body.
         if (message.hasSources) _buildSourceCitations(),
       ],
+    );
+  }
+
+  /// Small pill above the AI bubble shown only when the answer came from
+  /// the offline template fallback (no real LLM call). Honest signal to
+  /// the user that the response isn't a personalised reading, and a
+  /// nudge to reconnect for the real thing.
+  Widget _buildOfflineBadge() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppColors.goldLight.withOpacity(0.45),
+            width: 0.7,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 12,
+              color: AppColors.goldLight.withOpacity(0.9),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Offline guidance · reconnect for personalised reading',
+              style: TextStyle(
+                color: AppColors.goldLight.withOpacity(0.92),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

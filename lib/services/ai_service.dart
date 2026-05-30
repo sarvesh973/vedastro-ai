@@ -43,11 +43,20 @@ class AiResponse {
   /// produced [text]. Surfaced via long-press for admin sign-ins.
   final String? debugRaw;
 
+  /// True when this answer came from the local template fallback rather
+  /// than the AI server. Used by the chat UI to:
+  ///   * show a "📡 Offline guidance" badge so the user isn't misled
+  ///     into thinking they got a personalised AI answer
+  ///   * skip ticking the chat quota — a generic template should not
+  ///     burn the user's daily/free chat allowance
+  final bool isOffline;
+
   const AiResponse({
     required this.text,
     this.sources = const [],
     this.details = const [],
     this.debugRaw,
+    this.isOffline = false,
   });
 }
 
@@ -489,18 +498,22 @@ class AiService {
     if (_lastError == 'AUTH_EXPIRED' ||
         _lastError == 'RATE_LIMITED' ||
         _lastError == 'SERVER_DOWN') {
+      // These are real server-side rejections — the user IS online and
+      // got a meaningful answer (auth nudge / rate-limit explainer /
+      // server-down notice). Not classified as offline-fallback.
       return AiResponse(text: lastDiagnosticError, debugRaw: fallbackDebug);
     }
 
-    // 3. Network or unknown error — show template guidance. The debug
-    // blob lets an admin long-press the bubble and see WHY the server
-    // failed (network exception, parse failure, empty answer, etc.)
-    // instead of having to guess from the generic template text.
+    // 3. Network or unknown error — show template guidance. Flagged
+    // isOffline:true so the chat UI can badge the bubble and skip
+    // ticking the chat quota for a generic template that didn't
+    // require a real LLM call.
     print('[FALLBACK] Server unreachable, using template response. '
         'lastError=$_lastError');
     return AiResponse(
       text: _getFallbackResponse(profile, userMessage),
       debugRaw: fallbackDebug,
+      isOffline: true,
     );
   }
 
