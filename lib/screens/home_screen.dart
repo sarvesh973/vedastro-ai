@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import '../widgets/starfield_background.dart';
 import '../widgets/shooting_star_overlay.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
+import '../services/ai_service.dart';
 import '../services/auth_service.dart';
 import '../providers/providers.dart';
 import 'user_details_screen.dart';
@@ -23,6 +26,7 @@ import '../models/subscription_status.dart';
 import '../models/user_profile.dart';
 import '../theme/m_page_route.dart';
 import '../widgets/moksha_wordmark_image.dart';
+import '../widgets/zodiac_wheel.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +38,18 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   double _overscrollAmount = 0.0;
+
+  // Tracks which bottom-nav item the user just pushed into. -1 = none
+  // active (sitting on home). Glow persists on that button while the
+  // pushed screen is up, fades back when the user pops to home.
+  int _activeNavIndex = -1;
+
+  // Daily Vibe card state — 3 short snippets pulled from today's
+  // horoscope. Cached aggressively (AiService.getHoroscope already
+  // checks SharedPreferences first) so this is effectively instant
+  // after the first launch of the day.
+  List<String>? _dailyVibePoints;
+  bool _dailyVibeLoading = false;
 
   // Rotates daily by day-of-year. Same fact for the full 24h so users
   // who reopen the app don't see it shuffle on every launch.
@@ -88,6 +104,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Kick off the daily vibe load after first frame so build() returns
+    // immediately. AiService.getHoroscope() will hit the local cache
+    // first (instant if cached today) before calling the server.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDailyVibe();
+    });
+  }
+
+  Future<void> _loadDailyVibe() async {
+    final profile = ref.read(userProfileProvider);
+    if (profile == null || _dailyVibeLoading) return;
+    setState(() => _dailyVibeLoading = true);
+    try {
+      final data = await AiService.getHoroscope(
+        profile: profile,
+        period: 'daily',
+      );
+      if (!mounted) return;
+      if (data != null) {
+        // Prefer the server's purpose-built `dailyVibe` list — 3 crisp,
+        // observable, real-life flavoured bullets ground-truthed in the
+        // same chart reading. Server formats these for the card already
+        // so we don't need to truncate or guess.
+        final List<String> picks = [];
+        final vibe = data['dailyVibe'];
+        if (vibe is List) {
+          for (final item in vibe) {
+            if (item is String && item.trim().isNotEmpty) {
+              picks.add(item.trim());
+              if (picks.length == 3) break;
+            }
+          }
+        }
+        // Fallback for older cached horoscopes that predate dailyVibe:
+        // truncate the first sentence of overall/career/love/health.
+        if (picks.isEmpty) {
+          for (final key in ['overall', 'career', 'love', 'health']) {
+            final v = data[key];
+            if (v is String && v.trim().isNotEmpty) {
+              picks.add(_shortPoint(v));
+              if (picks.length == 3) break;
+            }
+          }
+        }
+        if (picks.isNotEmpty) {
+          setState(() => _dailyVibePoints = picks);
+        }
+      }
+    } catch (_) {
+      // Silent — card just keeps showing the shimmer/placeholder.
+    } finally {
+      if (mounted) setState(() => _dailyVibeLoading = false);
+    }
+  }
+
+  /// Short bullet point — punchy, no explanations. Reads as a clean
+  /// thought, not a paragraph fragment. Strategy:
+  ///   1. Try first sentence (.!?) — ideal stop.
+  ///   2. If no sentence break in first 70 chars, stop at last
+  ///      comma before 60 chars — preserves clause integrity.
+  ///   3. If neither works, hard-trim at last word boundary
+  ///      under 55 chars so we never cut mid-word.
+  /// Drops em-dashes per user preference.
+  String _shortPoint(String raw) {
+    final clean = raw.replaceAll('—', ',').replaceAll('–', ',').trim();
+
+    // Strategy 1: first sentence end
+    final dotIdx = clean.indexOf(RegExp(r'[.!?]'));
+    if (dotIdx > 10 && dotIdx < 70) {
+      return clean.substring(0, dotIdx).trim();
+    }
+
+    // Strategy 2: last comma before 60 chars (clean clause boundary)
+    if (clean.length > 55) {
+      final head = clean.substring(0, clean.length > 60 ? 60 : clean.length);
+      final lastComma = head.lastIndexOf(',');
+      if (lastComma > 18) {
+        return head.substring(0, lastComma).trim();
+      }
+    }
+
+    // Strategy 3: hard trim at last word boundary under 55
+    if (clean.length > 55) {
+      final cut = clean.substring(0, 55);
+      final lastSpace = cut.lastIndexOf(' ');
+      return (lastSpace > 30 ? cut.substring(0, lastSpace) : cut).trim();
+    }
+    return clean;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
 
@@ -106,9 +215,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Palm / Horoscope) reachable from anywhere in the home flow.
       bottomNavigationBar: _buildBottomNav(context),
       extendBody: true,
+      extendBodyBehindAppBar: true,
       body: StarfieldBackground(
-        child: SafeArea(
-          child: Stack(
+        // No outer SafeArea — the sticky top bar extends BEHIND the
+        // status bar so its blurred background fills that area too,
+        // closing the dark gap that used to sit above the bar. Inner
+        // widgets each apply their own SafeArea insets where needed.
+        child: Stack(
             children: [
               // Shooting star — fires every 12s. Sits behind the content
               // (first child of the Stack) so it never blocks taps and
@@ -147,7 +260,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
 
-              // Main scrollable content
+              // Main scrollable content — top bar is rendered OUTSIDE
+              // this scroll view as a sticky overlay so it stays put
+              // and frosted-blurs anything scrolling underneath.
               NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
                   final overscroll = notification.metrics.pixels -
@@ -166,110 +281,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 28),
                       child: Column(
                         children: [
-                    const SizedBox(height: 8),
+                    // Spacer pushes content below the sticky top bar.
+                    // Bar now extends behind the system status bar so its
+                    // total height ≈ status bar inset (~28-44dp) + content
+                    // (~76dp). MediaQuery padding adapts per device so
+                    // we always clear the bar even on phones with notches.
+                    SizedBox(
+                      height: MediaQuery.of(context).padding.top + 86,
+                    ),
 
-                    // Top bar: hamburger + profiles + greeting
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Hamburger menu
-                        GestureDetector(
-                          onTap: () {
-                            _scaffoldKey.currentState?.openDrawer();
-                          },
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.surfaceLight,
-                              border: Border.all(color: AppColors.divider),
-                            ),
-                            child: const Icon(
-                              Icons.menu_rounded,
-                              color: AppColors.textSecondary,
-                              size: 22,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Profile switcher (takes remaining space)
-                        Expanded(
-                          child: _buildProfileSwitcher(context, ref),
-                        ),
-                        // Greeting on right
-                        if (profile != null) ...[
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _getGreeting(),
-                                style: const TextStyle(
-                                  color: AppColors.goldLight,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                profile.name.split(' ').first,
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    )
-                        .animate()
-                        .fadeIn(duration: 500.ms),
-
-                    const SizedBox(height: 16),
-
-                    // Brand hero cluster — AI logo + Moksha wordmark +
-                    // sun-sign chip read as one unit. Gaps deliberately
-                    // tight so they don't feel like separate components.
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            AppColors.purpleAccent.withOpacity(0.3),
-                            AppColors.purpleAccent.withOpacity(0.05),
-                          ],
-                        ),
-                        border: Border.all(
-                          color: AppColors.purpleAccent.withOpacity(0.3),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.auto_awesome,
-                        color: AppColors.goldLight,
-                        size: 40,
-                      ),
-                    )
-                        .animate()
-                        .fadeIn(duration: 800.ms)
-                        .scaleXY(
-                          begin: 0.8,
-                          end: 1.0,
-                          duration: 800.ms,
-                          curve: Curves.easeOut,
-                        ),
-
-                    // Wordmark sits flush against the logo. Crop bumped
-                    // tighter so the asset's transparent margin doesn't
-                    // reintroduce phantom whitespace.
+                    // Brand hero — Moksha wordmark sits on its own now
+                    // (AI sparkle logo removed per user request, the
+                    // wordmark IS the brand). Sun-sign chip ("sunshine
+                    // bar") sits flush beneath as a single identity unit.
                     const MokshaWordmarkImage(
-                      widthFactor: 0.72,
+                      widthFactor: 0.78,
                       crop: 0.34,
                     )
                         .animate()
@@ -333,10 +359,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                     const SizedBox(height: 18),
 
-                    // Daily astrology fact. Rotates once a day so the
-                    // home screen always has fresh content but doesn't
-                    // shuffle on every app open.
-                    _buildDidYouKnowCard(),
+                    // Daily Vibe card — 3 short snippets from today's
+                    // horoscope, tappable to open the full horoscope
+                    // screen. Cool gold-glow border, drifting stars,
+                    // rotating zodiac glyph in the corner. Replaces the
+                    // old Did-You-Know card.
+                    _buildDailyVibeCard(context),
 
                     // Email verification banner — only renders for
                     // email/password users with unverified addresses.
@@ -388,7 +416,100 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
+
+              // Sticky top bar — sits OUTSIDE the scroll view, painted
+              // last so it's on top of everything. BackdropFilter blurs
+              // whatever scrolls underneath. Bar extends behind the
+              // status bar so its translucent background fills that
+              // area too (no dark gap); SafeArea INSIDE the bar handles
+              // padding the actual content below the system inset.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildStickyTopBar(context, profile),
+              ),
             ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickyTopBar(BuildContext context, UserProfile? profile) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.background.withOpacity(0.55),
+            border: Border(
+              bottom: BorderSide(
+                color: AppColors.divider.withOpacity(0.35),
+                width: 0.5,
+              ),
+            ),
+          ),
+          // SafeArea pads content below the system status bar while
+          // the Container background extends ABOVE it (covering the
+          // notch area with the same blurred surface).
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, 6, 28, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Hamburger menu
+                  GestureDetector(
+                    onTap: () {
+                      _scaffoldKey.currentState?.openDrawer();
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.surfaceLight.withOpacity(0.85),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: const Icon(
+                        Icons.menu_rounded,
+                        color: AppColors.textSecondary,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildProfileSwitcher(context, ref)),
+                  if (profile != null) ...[
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _getGreeting(),
+                          style: const TextStyle(
+                            color: AppColors.goldLight,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          profile.name.split(' ').first,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -890,6 +1011,236 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// and the subscription banner — visible to all users, free or paid,
   /// every day. Picked by day-of-year so it stays stable across the
   /// day but feels fresh on a new visit.
+  /// Daily Vibe card — 3 short snippets from today's horoscope.
+  /// Tappable to open the full horoscope screen. Loaded async via
+  /// _loadDailyVibe(); shows shimmer rows until data lands.
+  ///
+  /// Reference layout from competitor app: large dark card with a
+  /// glowing orb in the top-right, headline label, 3 bullets, and
+  /// a "Read more" pill anchored bottom-right. No date strip.
+  Widget _buildDailyVibeCard(BuildContext context) {
+    final points = _dailyVibePoints;
+    final isReady = points != null && points.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          Navigator.of(context).push(
+            _buildPageRoute(const HoroscopeScreen()),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            // Translucent — lets the starfield show through subtly.
+            // alpha .35 keeps the bullets legible without feeling like
+            // a solid box dropped on the page.
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                const Color(0xFF13101F).withOpacity(0.35),
+                const Color(0xFF0B0912).withOpacity(0.45),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.purpleAccent.withOpacity(0.22),
+              width: 0.8,
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Card content
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Headline label — small caps, gold, single line.
+                    // Right-padded so the wheel doesn't crash into it.
+                    Padding(
+                      padding: const EdgeInsets.only(right: 96),
+                      child: Text(
+                        "TODAY'S COSMIC MOOD",
+                        style: TextStyle(
+                          color: AppColors.goldLight.withOpacity(0.85),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 3 points — same right padding so the first
+                    // bullet doesn't run into the wheel.
+                    Padding(
+                      padding: const EdgeInsets.only(right: 96),
+                      child: isReady
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: List.generate(points.length, (i) {
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                      bottom: i == points.length - 1 ? 0 : 9),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 7),
+                                        width: 4,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppColors.goldLight
+                                              .withOpacity(0.85),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          points[i],
+                                          style: TextStyle(
+                                            color: AppColors.textPrimary
+                                                .withOpacity(0.92),
+                                            fontSize: 13.5,
+                                            height: 1.4,
+                                            fontWeight: FontWeight.w400,
+                                            letterSpacing: 0.1,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            )
+                          : Column(
+                              children: List.generate(3, (i) {
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                      bottom: i == 2 ? 0 : 9),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 7),
+                                        width: 4,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppColors.goldLight
+                                              .withOpacity(0.35),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Container(
+                                          height: 10,
+                                          width: i == 1
+                                              ? 200
+                                              : double.infinity,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white
+                                                .withOpacity(0.06),
+                                            borderRadius:
+                                                BorderRadius.circular(5),
+                                          ),
+                                        )
+                                            .animate(
+                                                onPlay: (c) => c.repeat())
+                                            .shimmer(
+                                              duration: 1800.ms,
+                                              color: AppColors.goldLight
+                                                  .withOpacity(0.14),
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Read more pill — anchored bottom-right via Row.
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.purpleAccent.withOpacity(0.25),
+                                AppColors.goldLight.withOpacity(0.18),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.goldLight.withOpacity(0.35),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Read more',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary
+                                      .withOpacity(0.92),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 13,
+                                color: AppColors.goldLight,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Zodiac wheel top-right — slow bluish rotation, low
+              // attention. Hand-drawn glyphs (not Unicode emoji) so
+              // they're monochrome + bigger, with a 6-pointed star
+              // filling the inner space.
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.82,
+                    child: ZodiacWheel(
+                      size: 96,
+                      color: const Color(0xFF6FA8FF),
+                      period: const Duration(seconds: 90),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).animate().fadeIn(duration: 700.ms, delay: 750.ms);
+  }
+
   Widget _buildDidYouKnowCard() {
     final fact = _factOfTheDay();
     return Padding(
@@ -1498,101 +1849,135 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// makes them reachable from anywhere in the home flow with one
   /// thumb tap.
   Widget _buildBottomNav(BuildContext context) {
-    // Single accent (goldLight) shared across all three actions — the
-    // three are peer features, no hierarchy between them. Each icon
-    // sits inside a tinted chip so the buttons read as solid, tappable
-    // surfaces rather than thin glyphs.
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        height: 82,
-        decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: AppColors.gold.withValues(alpha: 0.28),
-            width: 1,
+    // Frosted glass bar — BackdropFilter blurs whatever is behind
+    // (scroll content, starfield, etc.). A thin tinted overlay (8%
+    // alpha) gives the bar just enough body to read against bright
+    // content without feeling boxed. Top hairline (subtle gold edge)
+    // gives a soft visual handoff so the bar doesn't float weirdly.
+    //
+    // Active button (whichever screen the user is currently inside)
+    // gets a glowing gold pill behind its icon + label. Inactive
+    // buttons are plain icon + label, no chip.
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface.withValues(alpha: 0.08),
+            border: Border(
+              top: BorderSide(
+                color: AppColors.gold.withValues(alpha: 0.18),
+                width: 0.5,
+              ),
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.gold.withValues(alpha: 0.16),
-              blurRadius: 22,
-              spreadRadius: 1,
-              offset: const Offset(0, -2),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              child: SizedBox(
+                height: 70,
+                child: Row(
+                  children: [
+                    _bottomNavItem(
+                      index: 0,
+                      icon: Icons.auto_awesome_mosaic_outlined,
+                      label: 'Kundli',
+                      destination: const KundliScreen(),
+                    ),
+                    _bottomNavItem(
+                      index: 1,
+                      icon: Icons.back_hand_outlined,
+                      label: 'Palm',
+                      destination: const PalmUploadScreen(),
+                    ),
+                    _bottomNavItem(
+                      index: 2,
+                      icon: Icons.stars_outlined,
+                      label: 'Horoscope',
+                      destination: const HoroscopeScreen(),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _bottomNavItem(
-              icon: Icons.auto_awesome_mosaic_outlined,
-              label: 'Kundli',
-              onTap: () => Navigator.of(context)
-                  .push(_buildPageRoute(const KundliScreen())),
-            ),
-            _bottomNavItem(
-              icon: Icons.back_hand_outlined,
-              label: 'Palm',
-              onTap: () => Navigator.of(context)
-                  .push(_buildPageRoute(const PalmUploadScreen())),
-            ),
-            _bottomNavItem(
-              icon: Icons.stars_outlined,
-              label: 'Horoscope',
-              onTap: () => Navigator.of(context)
-                  .push(_buildPageRoute(const HoroscopeScreen())),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _bottomNavItem({
+    required int index,
     required IconData icon,
     required String label,
-    required VoidCallback onTap,
+    required Widget destination,
   }) {
     const tone = AppColors.goldLight;
+    final isActive = _activeNavIndex == index;
+
     return Expanded(
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           splashColor: tone.withValues(alpha: 0.18),
           highlightColor: tone.withValues(alpha: 0.08),
-          onTap: () {
+          onTap: () async {
             HapticFeedback.selectionClick();
-            onTap();
+            // Set this item active, push the screen, clear when popped.
+            // setState is safe here — we own the state class.
+            setState(() => _activeNavIndex = index);
+            await Navigator.of(context).push(_buildPageRoute(destination));
+            if (mounted) {
+              setState(() => _activeNavIndex = -1);
+            }
           },
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Icon chip — gives each item visual weight without
-              // overloading the bar. Subtle border, gold tint inside.
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: tone.withValues(alpha: 0.14),
-                  border: Border.all(color: tone.withValues(alpha: 0.35)),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              color: isActive
+                  ? tone.withValues(alpha: 0.20)
+                  : Colors.transparent,
+              border: isActive
+                  ? Border.all(color: tone.withValues(alpha: 0.45), width: 1)
+                  : Border.all(color: Colors.transparent, width: 1),
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: tone.withValues(alpha: 0.35),
+                        blurRadius: 18,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: tone.withValues(alpha: isActive ? 1.0 : 0.78),
+                  size: 22,
                 ),
-                child: Icon(icon, color: tone, size: 20),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: tone,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: tone.withValues(alpha: isActive ? 1.0 : 0.78),
+                    fontSize: 11.5,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

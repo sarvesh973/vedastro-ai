@@ -504,11 +504,32 @@ class AiService {
     );
   }
 
+  /// Wipes every cached horoscope entry from SharedPreferences. Called
+  /// when the user switches language so the next horoscope view fetches
+  /// in the newly-selected language instead of serving the previously
+  /// cached one. Cheap: just iterates string keys with our prefix.
+  static Future<void> clearStaleHoroscopeCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stale = prefs.getKeys().where((k) => k.startsWith('horoscope_'));
+      for (final k in stale) {
+        await prefs.remove(k);
+      }
+      print('[HOROSCOPE-CACHE] Cleared ${stale.length} entries on language switch');
+    } catch (e) {
+      print('[HOROSCOPE-CACHE] Clear error: $e');
+    }
+  }
+
   /// Get horoscope data. Tries cached endpoint -> live server -> direct Gemini -> static fallback.
   /// Build cache key for horoscope. Different key per sign/period/date-bucket
-  /// so Today refreshes daily, Tomorrow daily, Weekly weekly, Monthly monthly.
-  static String _horoscopeCacheKey(String sign, String period) {
+  /// AND language so switching Pure English ↔ Hinglish in Settings instantly
+  /// fetches the right-language copy (previously the cache key was language-
+  /// blind so the cached Hinglish copy kept showing after switching to
+  /// English until the date bucket rolled over).
+  static String _horoscopeCacheKey(String sign, String period, [String? lang]) {
     final now = DateTime.now();
+    final language = lang ?? StorageService.languagePreference;
     String bucket;
     switch (period) {
       case 'daily':
@@ -528,7 +549,7 @@ class AiService {
       default:
         bucket = '${now.year}-${now.month}-${now.day}';
     }
-    return 'horoscope_${sign.toLowerCase()}_${period}_$bucket';
+    return 'horoscope_${sign.toLowerCase()}_${period}_${language}_$bucket';
   }
 
   static Future<Map<String, dynamic>?> getHoroscope({

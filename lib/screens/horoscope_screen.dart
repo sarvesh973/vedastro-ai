@@ -81,6 +81,19 @@ class _HoroscopeScreenState extends ConsumerState<HoroscopeScreen>
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
+
+    // Watch language preference: if the user just switched English ↔
+    // Hinglish in Settings, ai_service.clearStaleHoroscopeCache() will
+    // have wiped the SharedPrefs cache. We also need to drop our local
+    // _horoscopeData and trigger a re-fetch so the screen rebuilds in
+    // the new language instantly (otherwise it keeps showing whatever
+    // was last loaded). Done via ref.listen so it only fires on change.
+    ref.listen<String>(languageProvider, (prev, next) {
+      if (prev != null && prev != next && mounted) {
+        setState(() => _horoscopeData = null);
+        _loadHoroscope();
+      }
+    });
     // Use the SAME sign system the AI fetches with (Vedic / sunSign), so
     // header and content always agree. Old code used westernSign for the
     // header but sunSign for the data — that's why some users saw a

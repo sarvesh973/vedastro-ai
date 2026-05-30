@@ -33,6 +33,11 @@ dependencies:
   google_sign_in: ^6.2.2
   razorpay_flutter: ^1.3.7
   share_plus: ^10.0.0
+  # Note: zodiac glyphs used to come from font_awesome_flutter, but its
+  # zodiac icons are Pro-only and the package itself breaks on newer
+  # Flutter SDKs (extends the now-sealed IconData). They're drawn as
+  # CustomPainter paths in widgets/zodiac_wheel.dart instead — single
+  # colour guaranteed, no dependency, no emoji fallback.
 
 dev_dependencies:
   flutter_test:
@@ -48,6 +53,10 @@ flutter:
     - assets/
     - assets/icon/
     - assets/legal/
+
+  # No custom fonts needed — zodiac wheel uses FontAwesome icons (via
+  # font_awesome_flutter package), which live in the Unicode Private
+  # Use Area so they can't be routed to colored emoji rendering.
 
 # ─── App Icon Config ──────────────────────────
 flutter_launcher_icons:
