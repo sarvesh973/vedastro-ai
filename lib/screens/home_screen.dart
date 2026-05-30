@@ -26,6 +26,7 @@ import '../models/subscription_status.dart';
 import '../models/user_profile.dart';
 import '../theme/m_page_route.dart';
 import '../widgets/moksha_wordmark_image.dart';
+import '../widgets/zodiac_wheel.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -255,7 +256,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
 
-              // Main scrollable content
+              // Main scrollable content — top bar is rendered OUTSIDE
+              // this scroll view as a sticky overlay so it stays put
+              // and frosted-blurs anything scrolling underneath.
               NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
                   final overscroll = notification.metrics.pixels -
@@ -274,70 +277,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 28),
                       child: Column(
                         children: [
-                    const SizedBox(height: 8),
-
-                    // Top bar: hamburger + profiles + greeting
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Hamburger menu
-                        GestureDetector(
-                          onTap: () {
-                            _scaffoldKey.currentState?.openDrawer();
-                          },
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.surfaceLight,
-                              border: Border.all(color: AppColors.divider),
-                            ),
-                            child: const Icon(
-                              Icons.menu_rounded,
-                              color: AppColors.textSecondary,
-                              size: 22,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Profile switcher (takes remaining space)
-                        Expanded(
-                          child: _buildProfileSwitcher(context, ref),
-                        ),
-                        // Greeting on right
-                        if (profile != null) ...[
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _getGreeting(),
-                                style: const TextStyle(
-                                  color: AppColors.goldLight,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                profile.name.split(' ').first,
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    )
-                        .animate()
-                        .fadeIn(duration: 500.ms),
-
-                    const SizedBox(height: 28),
+                    // Spacer matches the sticky top bar's measured height
+                    // (~88px content + 12px breathing). Anything in this
+                    // scroll view starts BELOW the bar; content slides
+                    // under the bar on scroll and is blurred by it.
+                    const SizedBox(height: 100),
 
                     // Brand hero — Moksha wordmark sits on its own now
                     // (AI sparkle logo removed per user request, the
@@ -465,7 +409,94 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
+
+              // Sticky top bar — sits OUTSIDE the scroll view, painted
+              // last so it's on top of everything. BackdropFilter blurs
+              // whatever scrolls underneath. Container's translucent
+              // background gives the bar enough body to stay legible
+              // over busy content without feeling like a hard slab.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildStickyTopBar(context, profile),
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickyTopBar(BuildContext context, UserProfile? profile) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.background.withOpacity(0.55),
+            border: Border(
+              bottom: BorderSide(
+                color: AppColors.divider.withOpacity(0.35),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Hamburger menu
+                GestureDetector(
+                  onTap: () {
+                    _scaffoldKey.currentState?.openDrawer();
+                  },
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.surfaceLight.withOpacity(0.85),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: const Icon(
+                      Icons.menu_rounded,
+                      color: AppColors.textSecondary,
+                      size: 22,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: _buildProfileSwitcher(context, ref)),
+                if (profile != null) ...[
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _getGreeting(),
+                        style: const TextStyle(
+                          color: AppColors.goldLight,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        profile.name.split(' ').first,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -981,15 +1012,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            // Deep navy with a faint purple lift on top edge so the
-            // glowing orb sits in a "sky", matching the reference's
-            // cosmic feel without being noisy.
-            gradient: const LinearGradient(
+            // Translucent — lets the starfield show through subtly.
+            // alpha .35 keeps the bullets legible without feeling like
+            // a solid box dropped on the page.
+            gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF13101F),
-                Color(0xFF0B0912),
+                const Color(0xFF13101F).withOpacity(0.35),
+                const Color(0xFF0B0912).withOpacity(0.45),
               ],
             ),
             borderRadius: BorderRadius.circular(20),
@@ -1002,14 +1033,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               // Card content
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Headline label — small caps, gold, single line.
-                    // Padded right so the glowing orb doesn't overlap.
+                    // Right-padded so the wheel doesn't crash into it.
                     Padding(
-                      padding: const EdgeInsets.only(right: 70),
+                      padding: const EdgeInsets.only(right: 84),
                       child: Text(
                         "TODAY'S COSMIC MOOD",
                         style: TextStyle(
@@ -1020,12 +1051,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                    // 3 points — keep right padding so they don't run
-                    // into the orb on the first row.
+                    // 3 points — same right padding so the first
+                    // bullet doesn't run into the wheel.
                     Padding(
-                      padding: const EdgeInsets.only(right: 70),
+                      padding: const EdgeInsets.only(right: 84),
                       child: isReady
                           ? Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1113,7 +1144,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               }),
                             ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
 
                     // Read more pill — anchored bottom-right via Row.
                     Row(
@@ -1163,90 +1194,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
 
-              // Glowing orb top-right — purely decorative cosmic accent.
-              // Stack of radial gradients gives the soft halo + brighter
-              // core look without any image asset.
+              // Zodiac wheel top-right — slow bluish rotation, low
+              // attention, replaces the previous gold/purple orb.
               Positioned(
-                top: 14,
-                right: 14,
-                child: IgnorePointer(child: _buildCosmicOrb()),
+                top: 10,
+                right: 10,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.78,
+                    child: ZodiacWheel(
+                      size: 84,
+                      color: const Color(0xFF6FA8FF),
+                      period: const Duration(seconds: 90),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
       ),
     ).animate().fadeIn(duration: 700.ms, delay: 750.ms);
-  }
-
-  /// Glowing cosmic orb — 56px circle with a violet→pink radial core
-  /// and an outer gold halo. Subtle pulse so it feels alive without
-  /// distracting from the bullets.
-  Widget _buildCosmicOrb() {
-    return SizedBox(
-      width: 56,
-      height: 56,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Outer soft halo
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.goldLight.withOpacity(0.18),
-                  AppColors.goldLight.withOpacity(0.0),
-                ],
-              ),
-            ),
-          ),
-          // Mid violet ring
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.purpleAccent.withOpacity(0.55),
-                  AppColors.purpleAccent.withOpacity(0.0),
-                ],
-              ),
-            ),
-          ),
-          // Bright core
-          Container(
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  Colors.white.withOpacity(0.95),
-                  AppColors.purpleSoft.withOpacity(0.65),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.purpleAccent.withOpacity(0.55),
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-          ),
-        ],
-      )
-          .animate(onPlay: (c) => c.repeat(reverse: true))
-          .scaleXY(
-            begin: 0.96,
-            end: 1.06,
-            duration: 2400.ms,
-            curve: Curves.easeInOut,
-          ),
-    );
   }
 
   Widget _buildDidYouKnowCard() {
