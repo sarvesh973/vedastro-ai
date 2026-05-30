@@ -13,12 +13,20 @@ class ChatBubble extends StatelessWidget {
   final bool isLatestAiMessage;
   final VoidCallback? onTypewriterComplete;
 
+  /// When non-null AND this is an offline-fallback message, the offline
+  /// badge renders a tappable "Retry" affordance that re-issues the
+  /// failed request. The chat screen wires this only on the most recent
+  /// offline bubble — older ones stay static so a retry never confuses
+  /// the conversation context.
+  final VoidCallback? onRetry;
+
   const ChatBubble({
     super.key,
     required this.message,
     this.animate = true,
     this.isLatestAiMessage = false,
     this.onTypewriterComplete,
+    this.onRetry,
   });
 
   @override
@@ -93,6 +101,11 @@ class ChatBubble extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Offline-fallback indicator. Shown above the bubble when the
+        // answer came from the local template (network/server failed)
+        // so the user knows it's not a personalised AI reading and
+        // can reconnect for the real thing.
+        if (message.isOffline) _buildOfflineBadge(),
         // Long-press an AI answer to report it. Required by Google Play's
         // Generative AI policy — users must be able to flag offensive or
         // inappropriate AI-generated content from inside the app.
@@ -148,6 +161,99 @@ class ChatBubble extends StatelessWidget {
         // instead of cluttering the answer body.
         if (message.hasSources) _buildSourceCitations(),
       ],
+    );
+  }
+
+  /// Small pill above the AI bubble shown only when the answer came from
+  /// the offline template fallback (no real LLM call). Honest signal to
+  /// the user that the response isn't a personalised reading, and a
+  /// nudge to reconnect for the real thing.
+  ///
+  /// On the latest offline bubble, a Retry chip is appended — taps re-
+  /// issue the request through [onRetry], which the chat screen wires
+  /// to its retry-the-last-offline-message helper.
+  Widget _buildOfflineBadge() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceLight,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.goldLight.withOpacity(0.45),
+                width: 0.7,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.cloud_off_rounded,
+                  size: 12,
+                  color: AppColors.goldLight.withOpacity(0.9),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Offline guidance · reconnect for personalised reading',
+                  style: TextStyle(
+                    color: AppColors.goldLight.withOpacity(0.92),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onRetry != null)
+            Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: onRetry,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldLight.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.goldLight.withOpacity(0.55),
+                      width: 0.7,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.refresh_rounded,
+                        size: 12,
+                        color: AppColors.goldLight,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Retry',
+                        style: TextStyle(
+                          color: AppColors.goldLight,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

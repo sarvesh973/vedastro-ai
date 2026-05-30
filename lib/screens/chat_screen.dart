@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../models/chat_message.dart';
+import '../models/user_profile.dart';
 import '../providers/providers.dart';
 import '../services/ai_service.dart';
 import '../services/storage_service.dart';
@@ -20,7 +21,8 @@ class ChatScreen extends ConsumerStatefulWidget {
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends ConsumerState<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen>
+    with WidgetsBindingObserver {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   bool _hasInitialized = false;
@@ -31,10 +33,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String _lastUserQuestion = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Observe app lifecycle so we can auto-retry a recent offline reply
+    // when the user returns from the recent-apps switcher. Android often
+    // kills the in-flight HTTP socket when the app is backgrounded, so
+    // a request that would have succeeded gets falsely classified as
+    // "offline" by the AI service. On resume, if we see a fresh offline
+    // bubble, we silently re-issue it.
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!mounted) return;
+
+    final messages = ref.read(chatMessagesProvider);
+    if (messages.isEmpty) return;
+    final last = messages.last;
+    if (!last.isAi || !last.isOffline) return;
+    // Only auto-retry if the offline reply was issued recently. Older
+    // ones probably reflect a genuinely-offline session — leaving them
+    // alone respects what the user actually saw and the user can always
+    // use the in-bubble Retry button.
+    final age = DateTime.now().difference(last.timestamp);
+    if (age > const Duration(seconds: 90)) return;
+    _retryLastOfflineMessage();
   }
 
   void _scrollToBottom() {
@@ -77,7 +110,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _lastUserQuestion = text;
 
     final chatNotifier = ref.read(chatMessagesProvider.notifier);
-    final typingController = ref.read(isAiTypingProvider.notifier);
 
     // Add user message
     chatNotifier.addMessage(ChatMessage(
@@ -89,6 +121,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     FirestoreService.syncChatMessage(text, 'user');
     _scrollToBottom();
 
+    await _requestAndStoreAiReply(
+      profile: profile,
+      visibleText: text,
+      serverPromptOverride: serverPromptOverride,
+    );
+  }
+
+  /// Drop the most-recent offline AI bubble (if any) and re-issue the
+  /// request for the user message that preceded it. Used both by the
+  /// in-bubble Retry button and by the auto-resume hook above.
+  Future<void> _retryLastOfflineMessage() async {
+    final profile = ref.read(userProfileProvider);
+    if (profile == null) return;
+
+    final messages = ref.read(chatMessagesProvider);
+    final offlineIdx = messages.lastIndexWhere((m) => m.isAi && m.isOffline);
+    if (offlineIdx <= 0) return;
+    final userMsg = messages[offlineIdx - 1];
+    if (!userMsg.isUser) return;
+
+    _lastUserQuestion = userMsg.text;
+    ref.read(chatMessagesProvider.notifier).removeLastOfflineAi();
+    _scrollToBottom();
+
+    await _requestAndStoreAiReply(
+      profile: profile,
+      visibleText: userMsg.text,
+      serverPromptOverride: null,
+    );
+  }
+
+  /// Shared "ask the AI" path used by send + retry. Pulled out so a
+  /// retry doesn't re-add the user's question bubble — only the live
+  /// AI request and its result-handling.
+  Future<void> _requestAndStoreAiReply({
+    required UserProfile profile,
+    required String visibleText,
+    required String? serverPromptOverride,
+  }) async {
+    final chatNotifier = ref.read(chatMessagesProvider.notifier);
+    final typingController = ref.read(isAiTypingProvider.notifier);
+
     // Show typing
     typingController.state = true;
     _scrollToBottom();
@@ -98,14 +172,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // need a richer context-laden prompt than the user's visible bubble.
     final aiResponse = await AiService.getAstrologyResponse(
       profile: profile,
-      userMessage: serverPromptOverride ?? text,
+      userMessage: serverPromptOverride ?? visibleText,
       chatHistory: ref.read(chatMessagesProvider).map((m) => m.text).toList(),
     );
 
+    // CRITICAL: store the AI reply into the chat-messages provider BEFORE
+    // touching any widget state. If the user navigated away during the
+    // await above, this State is disposed — calling setState() throws,
+    // which would abort the function before the message ever got
+    // recorded (the original "user comes back to chat and sees nothing"
+    // bug). The provider is global, so addMessage works regardless of
+    // whether this screen is still mounted.
     typingController.state = false;
-
-    // Add AI message and activate typewriter
-    setState(() => _isTypewriterActive = true);
 
     chatNotifier.addMessage(ChatMessage(
       text: aiResponse.text,
@@ -114,13 +192,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       sources: aiResponse.sources,
       details: aiResponse.details,
       debugRaw: aiResponse.debugRaw,
+      isOffline: aiResponse.isOffline,
     ));
-    // Sync AI response to cloud
-    FirestoreService.syncChatMessage(aiResponse.text, 'ai');
 
-    await StorageService.incrementChatQuestions();
-    ref.read(chatQuestionsUsedProvider.notifier).state =
-        StorageService.chatQuestionsUsed;
+    // Online-only side effects. Skip them when we served a template
+    // fallback (no real LLM call happened, so the user's quota should
+    // not be charged, and we don't want to permanently log generic
+    // template text into the cloud chat history as if it were a real
+    // personalised answer).
+    if (!aiResponse.isOffline) {
+      FirestoreService.syncChatMessage(aiResponse.text, 'ai');
+      await StorageService.incrementChatQuestions();
+    }
+
+    // The remaining work is UI-only: typewriter animation flag,
+    // provider-driven quota counter refresh, scroll positioning. Skip
+    // it entirely if the user has left the screen — those calls would
+    // either throw (`setState`/`ref.read` after dispose) or be visual
+    // no-ops anyway.
+    if (!mounted) return;
+
+    setState(() => _isTypewriterActive = true);
+
+    if (!aiResponse.isOffline) {
+      ref.read(chatQuestionsUsedProvider.notifier).state =
+          StorageService.chatQuestionsUsed;
+    }
 
     _scrollToBottom();
 
@@ -287,6 +384,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       final isLastAi =
                           msg.isAi && isLastMessage && _isTypewriterActive;
 
+                      // Only the most-recent offline AI bubble offers a
+                      // Retry tap — older ones are historical and a retry
+                      // would only confuse the conversation context.
+                      final isLastOfflineAi = msg.isAi &&
+                          msg.isOffline &&
+                          isLastMessage;
+
                       final bubble = ChatBubble(
                         message: msg,
                         animate: index >= messages.length - 2,
@@ -296,6 +400,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             setState(() => _isTypewriterActive = false);
                           }
                         },
+                        onRetry: isLastOfflineAi
+                            ? _retryLastOfflineMessage
+                            : null,
                       );
 
                       // Follow-up suggestion chips appear below the latest

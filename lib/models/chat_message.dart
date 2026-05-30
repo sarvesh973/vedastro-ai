@@ -61,6 +61,12 @@ class ChatMessage {
   /// lets us see exactly what came back when parsing went sideways.
   final String? debugRaw;
 
+  /// True for AI replies that came from the local template fallback
+  /// (no network / server unreachable). The bubble renders a small
+  /// "Offline guidance" badge so the user knows the answer isn't a
+  /// personalised AI reading.
+  final bool isOffline;
+
   const ChatMessage({
     required this.text,
     required this.role,
@@ -68,6 +74,7 @@ class ChatMessage {
     this.sources = const [],
     this.details = const [],
     this.debugRaw,
+    this.isOffline = false,
   });
 
   bool get isUser => role == MessageRole.user;

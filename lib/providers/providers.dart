@@ -61,6 +61,18 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
     state = [...state, message];
   }
 
+  /// Drop the most recent AI message whose `isOffline == true`. Used by
+  /// the chat-screen retry path to swap an offline-fallback bubble out
+  /// when the live request succeeds the second time around. Returns the
+  /// removed message (or null if there isn't one).
+  ChatMessage? removeLastOfflineAi() {
+    final idx = state.lastIndexWhere((m) => m.isAi && m.isOffline);
+    if (idx < 0) return null;
+    final removed = state[idx];
+    state = [...state.sublist(0, idx), ...state.sublist(idx + 1)];
+    return removed;
+  }
+
   void clear() {
     state = [];
   }
@@ -96,9 +108,13 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
       role: MessageRole.ai,
       timestamp: DateTime.now(),
       sources: aiResponse.sources,
+      isOffline: aiResponse.isOffline,
     ));
 
-    // Track usage
-    await StorageService.incrementChatQuestions();
+    // Track usage — but only for real LLM answers. Template fallbacks
+    // (offline) should not burn the user's quota.
+    if (!aiResponse.isOffline) {
+      await StorageService.incrementChatQuestions();
+    }
   }
 }
