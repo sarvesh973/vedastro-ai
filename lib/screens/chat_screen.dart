@@ -193,6 +193,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       details: aiResponse.details,
       debugRaw: aiResponse.debugRaw,
       isOffline: aiResponse.isOffline,
+      debugMeta: aiResponse.debugMeta,
     ));
 
     // Online-only side effects. Skip them when we served a template

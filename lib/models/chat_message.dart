@@ -67,6 +67,13 @@ class ChatMessage {
   /// personalised AI reading.
   final bool isOffline;
 
+  /// Admin-only inline diagnostic — the topic/focus/tone the server
+  /// classifier picked for THIS question, plus the chunk books it
+  /// pulled. Rendered as a small bluish summary line under the bubble
+  /// (only when AuthService.isAdmin is true) so we can verify the
+  /// classifier is routing questions correctly without opening logs.
+  final ChatDebugMeta? debugMeta;
+
   const ChatMessage({
     required this.text,
     required this.role,
@@ -75,6 +82,7 @@ class ChatMessage {
     this.details = const [],
     this.debugRaw,
     this.isOffline = false,
+    this.debugMeta,
   });
 
   bool get isUser => role == MessageRole.user;
@@ -82,4 +90,41 @@ class ChatMessage {
   bool get hasSources => sources.isNotEmpty;
   bool get hasDetails => details.isNotEmpty;
   bool get hasDebug => debugRaw != null && debugRaw!.isNotEmpty;
+  bool get hasDebugMeta => debugMeta != null;
+}
+
+/// Tiny inline classifier diagnostic. Only built when the server's
+/// chat response includes a `_debug` block — older deploys / non-RAG
+/// fallbacks leave this null and the bubble renders without it.
+class ChatDebugMeta {
+  final String topic;
+  final String topicSource; // 'llm' | 'regex'
+  final String tone;
+  final String focus;
+  final List<String> books;
+  final List<String> chunks;
+  final int classifyMs;
+
+  const ChatDebugMeta({
+    required this.topic,
+    required this.topicSource,
+    required this.tone,
+    required this.focus,
+    required this.books,
+    required this.chunks,
+    required this.classifyMs,
+  });
+
+  static ChatDebugMeta? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    return ChatDebugMeta(
+      topic: (raw['topic'] as String?) ?? 'general',
+      topicSource: (raw['topicSource'] as String?) ?? 'regex',
+      tone: (raw['tone'] as String?) ?? 'neutral',
+      focus: (raw['focus'] as String?) ?? '',
+      books: (raw['books'] as List?)?.whereType<String>().toList() ?? const [],
+      chunks: (raw['chunks'] as List?)?.whereType<String>().toList() ?? const [],
+      classifyMs: (raw['classifyMs'] as int?) ?? 0,
+    );
+  }
 }

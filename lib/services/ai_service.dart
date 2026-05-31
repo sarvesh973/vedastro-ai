@@ -51,12 +51,25 @@ class AiResponse {
   ///     burn the user's daily/free chat allowance
   final bool isOffline;
 
+  /// True when the server returned 429 (plan quota exhausted). The chat
+  /// screen reads this flag to open the paywall sheet immediately
+  /// instead of rendering the canned 'limit reached' message as a chat
+  /// bubble — gives the user upgrade options the moment they hit the cap.
+  final bool rateLimited;
+
+  /// Admin-only classifier diagnostic — topic/focus/tone + retrieved
+  /// chunks for THIS answer. Surfaced under the chat bubble for admin
+  /// sign-ins (chat_bubble.dart gates the render).
+  final ChatDebugMeta? debugMeta;
+
   const AiResponse({
     required this.text,
     this.sources = const [],
     this.details = const [],
     this.debugRaw,
     this.isOffline = false,
+    this.rateLimited = false,
+    this.debugMeta,
   });
 }
 
@@ -238,6 +251,10 @@ class AiService {
           sources: sources,
           details: details,
           debugRaw: debugRaw,
+          // Parse server's _debug block — only present on the latest
+          // server deploy. Older deploys leave it null and the bubble
+          // just doesn't render the inline diagnostic line.
+          debugMeta: ChatDebugMeta.fromJson(data['_debug']),
         );
       } else if (response.statusCode == 401) {
         // Token expired or invalid — surface user-friendly message and signal re-login
