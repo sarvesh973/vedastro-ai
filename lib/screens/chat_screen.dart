@@ -205,7 +205,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // dismissing the paywall they can retry from a clean state.
     if (aiResponse.rateLimited && mounted) {
       chatNotifier.removeLastMessage();
-      _messageController.text = text;
+      // Restore the user's typed question to the input field so they
+      // don't have to retype after the paywall closes. `visibleText` is
+      // what showed in their bubble (overrides like the follow-up-chip
+      // "Explain more" use serverPromptOverride internally — we restore
+      // the visible variant for UX).
+      _messageController.text = visibleText;
       _showPaywall();
       return;
     }
