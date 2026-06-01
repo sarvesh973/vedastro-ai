@@ -21,6 +21,13 @@ class VedicSource {
       similarity: (json['similarity'] as num?)?.toDouble() ?? 0.0,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'book': book,
+        'chapter': chapter,
+        'chapter_name': chapterName,
+        'similarity': similarity,
+      };
 }
 
 /// One expandable "chapter" behind a summary point. The chat bubble shows
@@ -82,4 +89,37 @@ class ChatMessage {
   bool get hasSources => sources.isNotEmpty;
   bool get hasDetails => details.isNotEmpty;
   bool get hasDebug => debugRaw != null && debugRaw!.isNotEmpty;
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'role': role == MessageRole.user ? 'user' : 'ai',
+        'timestamp': timestamp.toIso8601String(),
+        'sources': sources.map((s) => s.toJson()).toList(),
+        'details': details
+            .map((d) => {'chapter': d.chapter, 'explanation': d.explanation})
+            .toList(),
+        if (debugRaw != null) 'debugRaw': debugRaw,
+        'isOffline': isOffline,
+      };
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final sourcesJson = (json['sources'] as List?) ?? const [];
+    final detailsJson = (json['details'] as List?) ?? const [];
+    return ChatMessage(
+      text: json['text']?.toString() ?? '',
+      role: json['role'] == 'user' ? MessageRole.user : MessageRole.ai,
+      timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ??
+          DateTime.now(),
+      sources: sourcesJson
+          .whereType<Map<String, dynamic>>()
+          .map(VedicSource.fromJson)
+          .toList(),
+      details: detailsJson
+          .whereType<Map<String, dynamic>>()
+          .map(ChapterDetail.fromJson)
+          .toList(),
+      debugRaw: json['debugRaw']?.toString(),
+      isOffline: json['isOffline'] == true,
+    );
+  }
 }

@@ -42,6 +42,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // "offline" by the AI service. On resume, if we see a fresh offline
     // bubble, we silently re-issue it.
     WidgetsBinding.instance.addObserver(this);
+    // When the screen opens with pre-existing messages (rehydrated from
+    // local cache after process kill, or just returning from Home), we want
+    // the user to land on the most recent reply — not at the top of an old
+    // thread. The list is built first frame; jump after layout.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
   }
 
   @override
@@ -68,6 +73,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final age = DateTime.now().difference(last.timestamp);
     if (age > const Duration(seconds: 90)) return;
     _retryLastOfflineMessage();
+  }
+
+  /// Instant jump (no animation) — used on first build to land at the latest
+  /// message without a visible scroll. The animated variant is _scrollToBottom.
+  void _jumpToBottom() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
   void _scrollToBottom() {

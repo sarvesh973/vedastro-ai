@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_profile.dart';
 import '../models/chat_message.dart';
@@ -55,10 +56,40 @@ final languageProvider =
     StateProvider<String>((ref) => StorageService.languagePreference);
 
 class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
-  ChatMessagesNotifier() : super([]);
+  /// Cap to keep SharedPreferences small even if a user chats forever.
+  static const int _maxPersistedMessages = 200;
+
+  ChatMessagesNotifier() : super(_loadInitial());
+
+  /// Rehydrate from SharedPreferences. Returns [] if nothing saved or the
+  /// blob is malformed (we don't want a corrupt cache to brick the screen).
+  static List<ChatMessage> _loadInitial() {
+    final raw = StorageService.chatThreadRaw;
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map(ChatMessage.fromJson)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  void _persist() {
+    // Trim to the most recent N messages so a runaway thread can't bloat prefs.
+    final toSave = state.length > _maxPersistedMessages
+        ? state.sublist(state.length - _maxPersistedMessages)
+        : state;
+    final encoded = jsonEncode(toSave.map((m) => m.toJson()).toList());
+    // Fire-and-forget: persistence is best-effort, never block the UI on it.
+    StorageService.saveChatThreadRaw(encoded);
+  }
 
   void addMessage(ChatMessage message) {
     state = [...state, message];
+    _persist();
   }
 
   /// Drop the most recent AI message whose `isOffline == true`. Used by
@@ -75,6 +106,7 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
 
   void clear() {
     state = [];
+    StorageService.clearChatThread();
   }
 
   Future<void> sendMessageAndGetResponse({

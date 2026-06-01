@@ -30,6 +30,11 @@ class StorageService {
   // once the webhook lands; this is just the fallback for those few seconds
   // (or longer if the webhook fails).
   static const String _keyLastPurchasedPlan = 'last_purchased_plan';
+  // Local cache of the in-app chat thread, JSON-encoded list of ChatMessage.
+  // Persisted on every add so the conversation survives process kill (user
+  // swiping the app out of recents). Wiped on sign-in/sign-out so two
+  // accounts never see each other's chats on the same device.
+  static const String _keyChatThread = 'chat_thread_json';
 
   /// Initialize SharedPreferences (call once at app start)
   static Future<void> init() async {
@@ -250,6 +255,19 @@ class StorageService {
   static bool get canDoPalmReading =>
       isPremium || palmReadingsUsed < freePalmLimit;
 
+  // ─── Chat thread persistence ────────────────────
+  // Stored as a single JSON string. We cap at the most recent 200 messages
+  // so a long-running thread can't blow up SharedPreferences.
+  static String? get chatThreadRaw => _prefs?.getString(_keyChatThread);
+
+  static Future<void> saveChatThreadRaw(String json) async {
+    await _prefs?.setString(_keyChatThread, json);
+  }
+
+  static Future<void> clearChatThread() async {
+    await _prefs?.remove(_keyChatThread);
+  }
+
   static Future<void> incrementChatQuestions() async {
     final current = chatQuestionsUsed + 1;
     await _prefs?.setInt(_keyChatUsed, current);
@@ -318,5 +336,6 @@ class StorageService {
     await _prefs?.remove(_keyPalmUsed);
     await _prefs?.remove(_keyIsPremium);
     await _prefs?.remove(_keyLastPurchasedPlan);
+    await _prefs?.remove(_keyChatThread);
   }
 }
