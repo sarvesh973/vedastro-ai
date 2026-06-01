@@ -101,6 +101,22 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
       return;
     }
 
+    if (_timeController.text.trim().isEmpty) {
+      // Birth time is required: without it the server cannot compute
+      // Lagna, houses, or dasha, and the LLM falls back to confident
+      // hallucination. Blocking entry here is cheaper than letting a
+      // user get a wrong reading and lose trust.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please select your time of birth — needed for an accurate chart'),
+          backgroundColor: AppColors.purpleSoft,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
     if (_placeController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -116,9 +132,8 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
     final profile = UserProfile(
       name: _nameController.text.trim(),
       dateOfBirth: _selectedDate!,
-      timeOfBirth: _timeController.text.trim().isNotEmpty
-          ? _timeController.text.trim()
-          : null,
+      // Birth time is now required (validated above).
+      timeOfBirth: _timeController.text.trim(),
       placeOfBirth: _placeController.text.trim(),
     );
 
@@ -272,8 +287,8 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
 
               const SizedBox(height: 24),
 
-              // Time of Birth (optional)
-              _buildLabel('Time of Birth', optional: true)
+              // Time of Birth (required — needed for Lagna/houses/dasha)
+              _buildLabel('Time of Birth', optional: false)
                   .animate()
                   .fadeIn(duration: 400.ms, delay: 400.ms),
               const SizedBox(height: 8),
