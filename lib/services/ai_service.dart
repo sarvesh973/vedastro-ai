@@ -51,12 +51,19 @@ class AiResponse {
   ///     burn the user's daily/free chat allowance
   final bool isOffline;
 
+  /// True when the server returned 429 (plan quota exhausted). The chat
+  /// screen reads this flag to open the paywall sheet immediately
+  /// instead of rendering the canned 'limit reached' message as a chat
+  /// bubble — gives the user upgrade options the moment they hit the cap.
+  final bool rateLimited;
+
   const AiResponse({
     required this.text,
     this.sources = const [],
     this.details = const [],
     this.debugRaw,
     this.isOffline = false,
+    this.rateLimited = false,
   });
 }
 
@@ -249,7 +256,11 @@ class AiService {
           await FirebaseAuth.instance.currentUser?.getIdToken(true);
         } catch (_) {}
       } else if (response.statusCode == 429) {
-        // Rate limit hit — parse server's friendly message
+        // Rate limit hit — parse server's friendly message. We flag the
+        // response so the chat screen opens the paywall sheet right away
+        // instead of putting the canned 'limit reached' text into the
+        // chat bubble. The bubble that briefly shows the text is now
+        // discarded by the caller before display.
         _lastError = 'RATE_LIMITED';
         try {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -259,7 +270,11 @@ class AiService {
           lastDiagnosticError = 'Daily chat limit reached. Upgrade your plan for more questions.';
         }
         print('[RAG] 429 Rate limited — $lastDiagnosticError');
-        return AiResponse(text: lastDiagnosticError, sources: const []);
+        return AiResponse(
+          text: lastDiagnosticError,
+          sources: const [],
+          rateLimited: true,
+        );
       } else if (response.statusCode == 503) {
         _lastError = 'SERVER_DOWN';
         lastDiagnosticError = 'Our astrology service is briefly unavailable. Please try again in a moment.';
