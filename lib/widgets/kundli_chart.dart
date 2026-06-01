@@ -111,37 +111,47 @@ class _KundliPainter extends CustomPainter {
     canvas.drawLine(const Offset(0, 0), Offset(s, s), linePaint);
     canvas.drawLine(Offset(s, 0), Offset(0, s), linePaint);
 
-    // House center positions (for sign abbreviation placement)
-    // North Indian: House 1 is top diamond, going clockwise
+    // House center positions (for sign abbreviation placement).
+    //
+    // North Indian convention: H1 is the top diamond, and houses run
+    // ANTI-CLOCKWISE — H2 to the top-LEFT, H4 is the LEFT diamond,
+    // H7 the bottom diamond, H10 the RIGHT diamond. The earlier layout
+    // ran clockwise (H2 top-right, H4 right, H10 left), which mirrored
+    // every chart vs. how it appears in any printed kundli or other
+    // astrology app. Real-user feedback flagged this as a credibility
+    // bug. Underlying house assignments are unaffected; this is purely
+    // a placement swap of the on-screen slots.
     final signPositions = [
-      Offset(s * 0.50, s * 0.14), // H1 - top diamond
-      Offset(s * 0.76, s * 0.07), // H2 - top-right upper
-      Offset(s * 0.92, s * 0.24), // H3 - top-right lower
-      Offset(s * 0.85, s * 0.50), // H4 - right diamond
-      Offset(s * 0.92, s * 0.76), // H5 - bottom-right upper
-      Offset(s * 0.76, s * 0.92), // H6 - bottom-right lower
-      Offset(s * 0.50, s * 0.86), // H7 - bottom diamond
-      Offset(s * 0.24, s * 0.92), // H8 - bottom-left lower
-      Offset(s * 0.08, s * 0.76), // H9 - bottom-left upper
-      Offset(s * 0.15, s * 0.50), // H10 - left diamond
-      Offset(s * 0.08, s * 0.24), // H11 - top-left lower
-      Offset(s * 0.24, s * 0.07), // H12 - top-left upper
+      Offset(s * 0.50, s * 0.14), // H1  - top diamond
+      Offset(s * 0.24, s * 0.07), // H2  - top-left upper
+      Offset(s * 0.08, s * 0.24), // H3  - top-left lower
+      Offset(s * 0.15, s * 0.50), // H4  - left diamond
+      Offset(s * 0.08, s * 0.76), // H5  - bottom-left upper
+      Offset(s * 0.24, s * 0.92), // H6  - bottom-left lower
+      Offset(s * 0.50, s * 0.86), // H7  - bottom diamond
+      Offset(s * 0.76, s * 0.92), // H8  - bottom-right lower
+      Offset(s * 0.92, s * 0.76), // H9  - bottom-right upper
+      Offset(s * 0.85, s * 0.50), // H10 - right diamond
+      Offset(s * 0.92, s * 0.24), // H11 - top-right lower
+      Offset(s * 0.76, s * 0.07), // H12 - top-right upper
     ];
 
-    // Planet text positions (slightly below sign abbreviation)
+    // Planet text positions (slightly inside the diamond from the sign).
+    // Mirror of the signPositions reassignment above so planet glyphs
+    // land in the same triangle as their house's sign label.
     final planetPositions = [
       Offset(s * 0.50, s * 0.22), // H1
-      Offset(s * 0.74, s * 0.14), // H2
-      Offset(s * 0.88, s * 0.30), // H3
-      Offset(s * 0.82, s * 0.50), // H4
-      Offset(s * 0.88, s * 0.70), // H5
-      Offset(s * 0.74, s * 0.86), // H6
+      Offset(s * 0.26, s * 0.14), // H2
+      Offset(s * 0.12, s * 0.30), // H3
+      Offset(s * 0.18, s * 0.50), // H4
+      Offset(s * 0.12, s * 0.70), // H5
+      Offset(s * 0.26, s * 0.86), // H6
       Offset(s * 0.50, s * 0.78), // H7
-      Offset(s * 0.26, s * 0.86), // H8
-      Offset(s * 0.12, s * 0.70), // H9
-      Offset(s * 0.18, s * 0.50), // H10
-      Offset(s * 0.12, s * 0.30), // H11
-      Offset(s * 0.26, s * 0.14), // H12
+      Offset(s * 0.74, s * 0.86), // H8
+      Offset(s * 0.88, s * 0.70), // H9
+      Offset(s * 0.82, s * 0.50), // H10
+      Offset(s * 0.88, s * 0.30), // H11
+      Offset(s * 0.74, s * 0.14), // H12
     ];
 
     // Draw each house
