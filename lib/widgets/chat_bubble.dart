@@ -160,7 +160,66 @@ class ChatBubble extends StatelessWidget {
         // being typed — so users see citations in the dedicated section
         // instead of cluttering the answer body.
         if (message.hasSources) _buildSourceCitations(),
+        // Admin-only inline diagnostic — surfaces the topic/focus the
+        // classifier picked for THIS reply. Hidden for non-admin users
+        // so it never leaks to real customers.
+        if (AuthService.isAdmin && message.hasDebugMeta) _buildAdminDebugMeta(),
       ],
+    );
+  }
+
+  Widget _buildAdminDebugMeta() {
+    final d = message.debugMeta!;
+    final src = d.topicSource == 'llm' ? 'LLM' : 'regex';
+    final books = d.books.isEmpty ? 'none' : d.books.join('+');
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFF6FA8FF).withOpacity(0.07),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFF6FA8FF).withOpacity(0.28),
+            width: 0.6,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.science_outlined,
+                    size: 13, color: Color(0xFF6FA8FF)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'topic: ${d.topic}  ·  via $src  ·  tone: ${d.tone}  ·  books: $books  ·  ${d.classifyMs}ms',
+                    style: const TextStyle(
+                      color: Color(0xFF9FC4FF),
+                      fontSize: 10.5,
+                      fontFamily: 'monospace',
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (d.focus.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'focus: ${d.focus}',
+                style: const TextStyle(
+                  color: Color(0xFF9FC4FF),
+                  fontSize: 10.5,
+                  fontFamily: 'monospace',
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
