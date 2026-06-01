@@ -109,6 +109,15 @@ class ChatMessagesNotifier extends StateNotifier<List<ChatMessage>> {
     StorageService.clearChatThread();
   }
 
+  /// Pops the last chat bubble. Used by chat_screen when the server
+  /// returns 429 (quota exhausted) — we roll back the optimistic user
+  /// bubble that was added before the request so the chat doesn't
+  /// keep a question with no answer.
+  void removeLastMessage() {
+    if (state.isEmpty) return;
+    state = state.sublist(0, state.length - 1);
+  }
+
   Future<void> sendMessageAndGetResponse({
     required String text,
     required UserProfile profile,

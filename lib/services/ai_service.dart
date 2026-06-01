@@ -266,7 +266,11 @@ class AiService {
           await FirebaseAuth.instance.currentUser?.getIdToken(true);
         } catch (_) {}
       } else if (response.statusCode == 429) {
-        // Rate limit hit — parse server's friendly message
+        // Rate limit hit — parse server's friendly message. We flag the
+        // response so the chat screen opens the paywall sheet right away
+        // instead of putting the canned 'limit reached' text into the
+        // chat bubble. The bubble that briefly shows the text is now
+        // discarded by the caller before display.
         _lastError = 'RATE_LIMITED';
         try {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -276,7 +280,11 @@ class AiService {
           lastDiagnosticError = 'Daily chat limit reached. Upgrade your plan for more questions.';
         }
         print('[RAG] 429 Rate limited — $lastDiagnosticError');
-        return AiResponse(text: lastDiagnosticError, sources: const []);
+        return AiResponse(
+          text: lastDiagnosticError,
+          sources: const [],
+          rateLimited: true,
+        );
       } else if (response.statusCode == 503) {
         _lastError = 'SERVER_DOWN';
         lastDiagnosticError = 'Our astrology service is briefly unavailable. Please try again in a moment.';
