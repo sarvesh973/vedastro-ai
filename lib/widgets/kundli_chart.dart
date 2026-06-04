@@ -170,37 +170,38 @@ class _KundliPainter extends CustomPainter {
         fontWeight: isAscendant ? FontWeight.w700 : FontWeight.w400,
       );
 
-      // Draw planets in this house
+      // Draw planets in this house — one per line so they never look
+      // smashed together (was "MaRa(R)" before; now Ma and Ra(R) on
+      // separate rows, with retrograde marker hugging its own planet).
       final planets = housePlanets[i + 1] ?? [];
       if (planets.isNotEmpty) {
-        // Build planet text: "Su Mo" or "Su(R) Ma"
         final planetTexts = planets.map((p) {
           return p.isRetrograde ? '${p.abbr}(R)' : p.abbr;
         }).toList();
 
-        // Split into rows if too many planets
-        if (planetTexts.length <= 3) {
+        // 2 columns × N rows layout when 4+ planets, else 1 column
+        final useTwoCols = planetTexts.length > 3;
+        const rowHeight = 12.0;
+        const colOffset = 18.0;
+        final totalRows = useTwoCols
+            ? (planetTexts.length / 2).ceil()
+            : planetTexts.length;
+        final startY =
+            planetPositions[i].dy - (totalRows - 1) * rowHeight / 2;
+
+        for (int p = 0; p < planetTexts.length; p++) {
+          final row = useTwoCols ? p ~/ 2 : p;
+          final col = useTwoCols ? (p % 2 == 0 ? -1 : 1) : 0;
           _drawText(
             canvas,
-            planetTexts.join(' '),
-            planetPositions[i],
+            planetTexts[p],
+            Offset(
+              planetPositions[i].dx + col * colOffset / 2,
+              startY + row * rowHeight,
+            ),
             fontSize: 10,
             color: AppColors.purpleLight,
             fontWeight: FontWeight.w600,
-          );
-        } else {
-          // Split into two rows
-          final row1 = planetTexts.sublist(0, 3).join(' ');
-          final row2 = planetTexts.sublist(3).join(' ');
-          _drawText(
-            canvas, row1,
-            Offset(planetPositions[i].dx, planetPositions[i].dy - 6),
-            fontSize: 10, color: AppColors.purpleLight, fontWeight: FontWeight.w600,
-          );
-          _drawText(
-            canvas, row2,
-            Offset(planetPositions[i].dx, planetPositions[i].dy + 6),
-            fontSize: 10, color: AppColors.purpleLight, fontWeight: FontWeight.w600,
           );
         }
       }
