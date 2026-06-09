@@ -136,22 +136,22 @@ class _KundliPainter extends CustomPainter {
       Offset(s * 0.76, s * 0.07), // H12 - top-right upper
     ];
 
-    // Planet text positions (slightly inside the diamond from the sign).
-    // Mirror of the signPositions reassignment above so planet glyphs
-    // land in the same triangle as their house's sign label.
+    // Planet text positions — pushed deeper into each house's "fat" zone
+    // (away from where diagonals converge) so multi-planet stacks don't
+    // bleed into neighbouring houses or sign labels.
     final planetPositions = [
-      Offset(s * 0.50, s * 0.22), // H1
-      Offset(s * 0.26, s * 0.14), // H2
-      Offset(s * 0.12, s * 0.30), // H3
-      Offset(s * 0.18, s * 0.50), // H4
-      Offset(s * 0.12, s * 0.70), // H5
-      Offset(s * 0.26, s * 0.86), // H6
-      Offset(s * 0.50, s * 0.78), // H7
-      Offset(s * 0.74, s * 0.86), // H8
-      Offset(s * 0.88, s * 0.70), // H9
-      Offset(s * 0.82, s * 0.50), // H10
-      Offset(s * 0.88, s * 0.30), // H11
-      Offset(s * 0.74, s * 0.14), // H12
+      Offset(s * 0.50, s * 0.27), // H1 - top diamond
+      Offset(s * 0.32, s * 0.16), // H2
+      Offset(s * 0.16, s * 0.32), // H3
+      Offset(s * 0.23, s * 0.50), // H4 - left diamond
+      Offset(s * 0.16, s * 0.68), // H5
+      Offset(s * 0.32, s * 0.84), // H6
+      Offset(s * 0.50, s * 0.73), // H7 - bottom diamond
+      Offset(s * 0.68, s * 0.84), // H8
+      Offset(s * 0.84, s * 0.68), // H9
+      Offset(s * 0.77, s * 0.50), // H10 - right diamond
+      Offset(s * 0.84, s * 0.32), // H11
+      Offset(s * 0.68, s * 0.16), // H12
     ];
 
     // Draw each house
@@ -176,9 +176,11 @@ class _KundliPainter extends CustomPainter {
       // bleeding into neighbouring houses or the sign label.
       final planets = housePlanets[i + 1] ?? [];
       if (planets.isNotEmpty) {
-        final planetTexts = planets.map((p) {
-          return p.isRetrograde ? '${p.abbr}(R)' : p.abbr;
-        }).toList();
+        // Drop the "(R)" suffix in the chart cells — was tripling planet
+        // width and causing overlap. Retrograde is still shown in the
+        // planet-abbreviations legend below the chart; here we keep it
+        // minimal so 6 planets in one house still fit.
+        final planetTexts = planets.map((p) => p.abbr).toList();
 
         const fontSize = 8.5;
         const rowHeight = 9.5;
