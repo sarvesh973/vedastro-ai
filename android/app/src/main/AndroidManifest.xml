@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
+    <!-- Meta (Facebook) Ads attribution: the SDK reads the Google
+         Advertising ID to attribute installs + events to ad campaigns.
+         Required on Android 13+ for app-install ad optimisation. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
+
     <!-- For palm reading via camera capture path -->
     <uses-permission android:name="android.permission.CAMERA"/>
 
@@ -56,6 +61,28 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- ─── Meta (Facebook) App Events SDK ──────────────────────
+             App ID + Client Token are NOT secrets (they ship inside every
+             app's APK and are safe to commit). Values live in
+             res/values/strings.xml. Until the real Meta app is created
+             they hold placeholder zeros and the SDK simply no-ops — it
+             does not crash the app. Replace the strings.xml values with
+             the real App ID + Client Token from the Meta app dashboard. -->
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id" />
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="@string/facebook_client_token" />
+        <!-- Auto-log install ("activate app") + session events so Meta can
+             attribute installs to campaigns without extra code. -->
+        <meta-data
+            android:name="com.facebook.sdk.AutoLogAppEventsEnabled"
+            android:value="true" />
+        <meta-data
+            android:name="com.facebook.sdk.AdvertiserIDCollectionEnabled"
+            android:value="true" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
