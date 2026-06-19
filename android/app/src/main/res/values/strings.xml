@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ─── Meta (Facebook) App Events ───────────────────────────────
+         Referenced by AndroidManifest.xml. These are NOT secret
+         (Facebook App IDs + Client Tokens ship inside every app's APK),
+         so they are safe to commit.
+
+         TODO before the next AAB: replace the two placeholder values
+         below with the REAL values from the Meta app dashboard:
+           Meta app dashboard → App settings → Basic →
+             • App ID         → facebook_app_id
+             • Client Token   → facebook_client_token  (Advanced section)
+
+         While these stay as placeholder zeros, the SDK initialises but
+         reports nothing (safe no-op) — the app still runs normally. -->
+    <string name="facebook_app_id">000000000000000</string>
+    <string name="facebook_client_token">0000000000000000000000000000000000</string>
+</resources>

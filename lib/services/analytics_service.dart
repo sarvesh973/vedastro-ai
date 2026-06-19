@@ -1,20 +1,34 @@
+import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-/// Centralized Firebase Analytics wrapper for VedAstro AI.
+/// Centralized analytics wrapper for VedAstro AI.
 ///
 /// Why: gives us one place to:
 ///   1. Standardize event names (Play Console / Firebase looks at these)
 ///   2. Sanitize PII from event params (Vedic data is sensitive)
 ///   3. Disable analytics on web preview / test builds
-///   4. Forward to multiple destinations later (Mixpanel, etc.)
+///   4. Fan out to multiple destinations — currently Firebase Analytics
+///      AND Meta (Facebook) App Events for ad attribution.
 ///
-/// Naming convention: snake_case verbs in past tense.
+/// Meta App Events: the key acquisition events (registration, trial start,
+/// purchase) are also reported to Meta so App-Install / App-Promotion ad
+/// campaigns can optimise toward people likely to convert, and so we can
+/// see real cost-per-install / cost-per-trial in Ads Manager. The install
+/// ("activate app") event is auto-logged by the native SDK via the
+/// AndroidManifest meta-data — no code needed for that one.
+///
+/// Naming convention: snake_case verbs in past tense (Firebase). Meta gets
+/// its own standard event names (CompleteRegistration, StartTrial, Purchase).
 /// Param values: never include name, email, phone, exact birth date, or chat
 /// content. Use bucketed values (age range, sun sign) instead.
 class Analytics {
   static FirebaseAnalytics? _instance;
   static FirebaseAnalyticsObserver? _observer;
+
+  /// Meta (Facebook) App Events. No-ops safely until a real Facebook App ID
+  /// is set in android/app/src/main/res/values/strings.xml.
+  static final FacebookAppEvents _fb = FacebookAppEvents();
 
   /// Call once after Firebase.initializeApp()
   static Future<void> init() async {
@@ -24,14 +38,32 @@ class Analytics {
     try {
       await _instance!.setAnalyticsCollectionEnabled(true);
     } catch (_) {}
+    // Meta App Events: enable auto-logging (install/session) + advertiser
+    // tracking. Wrapped so a missing/placeholder App ID never breaks boot.
+    try {
+      await _fb.setAutoLogAppEventsEnabled(true);
+      await _fb.setAdvertiserTracking(enabled: true);
+    } catch (_) {}
+  }
+
+  /// Fire a Meta App Event. Best-effort; never throws into the app.
+  static Future<void> _fbLog(String name,
+      {Map<String, dynamic>? params, double? valueToSum}) async {
+    try {
+      await _fb.logEvent(name: name, parameters: params, valueToSum: valueToSum);
+    } catch (_) {}
   }
 
   /// Hook this into MaterialApp to auto-track screen views.
   static FirebaseAnalyticsObserver? get observer => _observer;
 
   // ─── USER LIFECYCLE ─────────────────────────────────────────
-  static Future<void> signupCompleted({required String method}) =>
-      _log('signup_completed', {'method': method});
+  static Future<void> signupCompleted({required String method}) {
+    // Meta standard event: CompleteRegistration — a key upper-funnel
+    // optimisation signal for app campaigns.
+    _fbLog('CompleteRegistration', params: {'fb_registration_method': method});
+    return _log('signup_completed', {'method': method});
+  }
 
   static Future<void> loginCompleted({required String method}) =>
       _log('login_completed', {'method': method});
@@ -80,11 +112,40 @@ class Analytics {
   static Future<void> subscriptionStarted({
     required String plan,
     required String paymentMethod,
-  }) =>
-      _log('subscription_started', {
-        'plan': plan,
-        'payment_method': paymentMethod,
+  }) {
+    // Meta standard event: StartTrial with the plan's monthly value so the
+    // ad algorithm can optimise toward higher-value subscribers. Value is
+    // the recurring price in INR (trial=99, standard=199, premium=499); the
+    // first real charge happens server-side on day 7, but reporting the
+    // intended value now gives Meta a usable signal.
+    const planValueInr = {'trial': 99.0, 'standard': 199.0, 'premium': 499.0};
+    final value = planValueInr[plan] ?? 0.0;
+    _fbLog('StartTrial',
+        params: {'fb_currency': 'INR', 'fb_order_id': plan},
+        valueToSum: value);
+    return _log('subscription_started', {
+      'plan': plan,
+      'payment_method': paymentMethod,
+    });
+  }
+
+  /// Fire when a subscription becomes a real paid conversion (the day-7
+  /// charge succeeds). Reports a Meta Purchase with the plan's value so
+  /// App-Promotion campaigns can optimise for paying users / ROAS.
+  /// NOTE: the charge happens server-side, so ideally this is also sent via
+  /// Meta Conversions API from the webhook; calling it here covers the case
+  /// where the app observes the active/charged state on resume.
+  static Future<void> subscriptionPurchased({required String plan}) {
+    const planValueInr = {'trial': 99.0, 'standard': 199.0, 'premium': 499.0};
+    final value = planValueInr[plan] ?? 0.0;
+    try {
+      _fb.logPurchase(amount: value, currency: 'INR', parameters: {
+        'fb_content_type': 'subscription',
+        'fb_content_id': plan,
       });
+    } catch (_) {}
+    return _log('subscription_purchased', {'plan': plan});
+  }
 
   static Future<void> subscriptionCancelled({required String plan}) =>
       _log('subscription_cancelled', {'plan': plan});
