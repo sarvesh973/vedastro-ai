@@ -13,6 +13,6 @@
 
          While these stay as placeholder zeros, the SDK initialises but
          reports nothing (safe no-op) — the app still runs normally. -->
-    <string name="facebook_app_id">000000000000000</string>
-    <string name="facebook_client_token">0000000000000000000000000000000000</string>
+    <string name="facebook_app_id">1323136406015939</string>
+    <string name="facebook_client_token">40db77d94182be00af5f6fdbee1744d3</string>
 </resources>
