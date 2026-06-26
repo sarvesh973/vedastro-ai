@@ -40,6 +40,14 @@ class SubscriptionStatus {
   /// End of current paid billing period. Renews automatically unless cancelled.
   final DateTime? currentPeriodEndsAt;
 
+  /// When a one-time Starter Pass expires (7 days after purchase). Null for
+  /// recurring plans. After this, the pass lapses back to free.
+  final DateTime? passExpiresAt;
+
+  /// True if this is a one-time pass (Starter Pass) rather than a recurring
+  /// subscription. Server sets `isOneTime: true` on the pass doc.
+  final bool isOneTime;
+
   /// When the user clicked Cancel, if applicable.
   final DateTime? cancelledAt;
 
@@ -59,6 +67,8 @@ class SubscriptionStatus {
     this.razorpaySubscriptionId,
     this.trialEndsAt,
     this.currentPeriodEndsAt,
+    this.passExpiresAt,
+    this.isOneTime = false,
     this.cancelledAt,
     this.failedAttempts = 0,
     this.chatUsedThisCycle = 0,
@@ -74,6 +84,12 @@ class SubscriptionStatus {
   /// True if the user currently has paid features unlocked.
   /// (Trialing or active or cancelled-but-still-paid-up.)
   bool get isActive {
+    // One-time Starter Pass: active only until passExpiresAt, then it lapses
+    // back to free (no auto-renewal). Mirrors the server's verifyAuth check.
+    if (isOneTime) {
+      if (passExpiresAt == null) return false;
+      return passExpiresAt!.isAfter(DateTime.now());
+    }
     if (state == SubscriptionState.trialing) return true;
     if (state == SubscriptionState.active) return true;
     if (state == SubscriptionState.cancelledPending &&
@@ -120,6 +136,8 @@ class SubscriptionStatus {
         'razorpaySubscriptionId': razorpaySubscriptionId,
         'trialEndsAt': trialEndsAt?.toIso8601String(),
         'currentPeriodEndsAt': currentPeriodEndsAt?.toIso8601String(),
+        'passExpiresAt': passExpiresAt?.toIso8601String(),
+        'isOneTime': isOneTime,
         'cancelledAt': cancelledAt?.toIso8601String(),
         'failedAttempts': failedAttempts,
         'chatUsedThisCycle': chatUsedThisCycle,
@@ -136,6 +154,8 @@ class SubscriptionStatus {
       razorpaySubscriptionId: json['razorpaySubscriptionId'] as String?,
       trialEndsAt: _parseDate(json['trialEndsAt']),
       currentPeriodEndsAt: _parseDate(json['currentPeriodEndsAt']),
+      passExpiresAt: _parseDate(json['passExpiresAt']),
+      isOneTime: (json['isOneTime'] as bool?) ?? false,
       cancelledAt: _parseDate(json['cancelledAt']),
       failedAttempts: (json['failedAttempts'] as int?) ?? 0,
       chatUsedThisCycle: (json['chatUsedThisCycle'] as int?) ?? 0,
@@ -156,6 +176,8 @@ class SubscriptionStatus {
     String? razorpaySubscriptionId,
     DateTime? trialEndsAt,
     DateTime? currentPeriodEndsAt,
+    DateTime? passExpiresAt,
+    bool? isOneTime,
     DateTime? cancelledAt,
     int? failedAttempts,
     int? chatUsedThisCycle,
@@ -168,6 +190,8 @@ class SubscriptionStatus {
           razorpaySubscriptionId ?? this.razorpaySubscriptionId,
       trialEndsAt: trialEndsAt ?? this.trialEndsAt,
       currentPeriodEndsAt: currentPeriodEndsAt ?? this.currentPeriodEndsAt,
+      passExpiresAt: passExpiresAt ?? this.passExpiresAt,
+      isOneTime: isOneTime ?? this.isOneTime,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       failedAttempts: failedAttempts ?? this.failedAttempts,
       chatUsedThisCycle: chatUsedThisCycle ?? this.chatUsedThisCycle,

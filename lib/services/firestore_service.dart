@@ -46,6 +46,7 @@ class FirestoreService {
         ...data,
         'trialEndsAt': _tsToIso(data['trialEndsAt']),
         'currentPeriodEndsAt': _tsToIso(data['currentPeriodEndsAt']),
+        'passExpiresAt': _tsToIso(data['passExpiresAt']),
         'cancelledAt': _tsToIso(data['cancelledAt']),
       };
       return SubscriptionStatus.fromJson(normalized);
@@ -78,6 +79,7 @@ class FirestoreService {
         ...data,
         'trialEndsAt': _tsToIso(data['trialEndsAt']),
         'currentPeriodEndsAt': _tsToIso(data['currentPeriodEndsAt']),
+        'passExpiresAt': _tsToIso(data['passExpiresAt']),
         'cancelledAt': _tsToIso(data['cancelledAt']),
       };
       return SubscriptionStatus.fromJson(normalized);

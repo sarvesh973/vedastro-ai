@@ -118,7 +118,7 @@ class Analytics {
     // the recurring price in INR (trial=99, standard=199, premium=499); the
     // first real charge happens server-side on day 7, but reporting the
     // intended value now gives Meta a usable signal.
-    const planValueInr = {'trial': 99.0, 'standard': 199.0, 'premium': 499.0};
+    const planValueInr = {'trial': 49.0, 'standard': 199.0, 'premium': 499.0};
     final value = planValueInr[plan] ?? 0.0;
     _fbLog('StartTrial',
         params: {'fb_currency': 'INR', 'fb_order_id': plan},
@@ -136,11 +136,12 @@ class Analytics {
   /// Meta Conversions API from the webhook; calling it here covers the case
   /// where the app observes the active/charged state on resume.
   static Future<void> subscriptionPurchased({required String plan}) {
-    const planValueInr = {'trial': 99.0, 'standard': 199.0, 'premium': 499.0};
+    // trial = the one-time ₹49 Starter Pass; standard/premium = monthly.
+    const planValueInr = {'trial': 49.0, 'standard': 199.0, 'premium': 499.0};
     final value = planValueInr[plan] ?? 0.0;
     try {
       _fb.logPurchase(amount: value, currency: 'INR', parameters: {
-        'fb_content_type': 'subscription',
+        'fb_content_type': plan == 'trial' ? 'one_time_pass' : 'subscription',
         'fb_content_id': plan,
       });
     } catch (_) {}

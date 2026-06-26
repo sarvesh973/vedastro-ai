@@ -44,6 +44,10 @@ class PaymentService {
   static PaymentFailureCallback? _onFailure;
   static SubscriptionPlan? _currentPlan;
   static String? _currentSubscriptionId;
+  // True while a one-time Starter Pass (₹49) order is in flight, so the
+  // success handler verifies it via /order/verify instead of treating it as
+  // a recurring subscription.
+  static bool _isOneTimeFlow = false;
 
   /// Initialize Razorpay (call once)
   static void init() {
@@ -190,6 +194,125 @@ class PaymentService {
     }
   }
 
+  // ─── Starter Pass — one-time ₹49 / 7-day order ────────────────────
+
+  /// Open Razorpay checkout for the ONE-TIME ₹49 Starter Pass.
+  ///
+  /// Unlike [openSubscriptionCheckout], this uses the Razorpay Orders API
+  /// (no e-mandate, no auto-renewal):
+  ///   1. POST /order/create → server makes a Razorpay order, returns orderId
+  ///   2. App opens checkout with `order_id` (NOT subscription_id)
+  ///   3. User pays ₹49 once
+  ///   4. _handlePaymentSuccess → POST /order/verify (server checks the
+  ///      signature and grants a 7-day pass), then unlocks locally
+  static Future<void> openStarterPassCheckout({
+    required PaymentSuccessCallback onSuccess,
+    required PaymentFailureCallback onFailure,
+  }) async {
+    if (_razorpay == null) init();
+
+    _onSuccess = onSuccess;
+    _onFailure = onFailure;
+    _currentPlan = SubscriptionPlan.trial; // the ₹49 pass
+    _isOneTimeFlow = true;
+    _currentSubscriptionId = null;
+
+    final userEmail = AuthService.userEmail ?? '';
+    final uid = AuthService.currentUser?.uid ?? '';
+    final userName = StorageService.currentProfile?.name ?? 'Moksha User';
+
+    if (AuthService.needsEmailVerification) {
+      onFailure('Please verify your email before purchasing. '
+          'Check your inbox or tap the banner on the home screen to resend.');
+      return;
+    }
+
+    // Step 1 — ask our server to create a one-time Razorpay order
+    final Map<String, dynamic> serverResp;
+    try {
+      final headers = await _authHeaders();
+      final resp = await http
+          .post(
+            Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/order/create'),
+            headers: headers,
+            body: jsonEncode({'plan': SubscriptionPlan.trial.id}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (resp.statusCode != 200) {
+        onFailure('Server error (${resp.statusCode}): ${resp.body}');
+        return;
+      }
+      serverResp = jsonDecode(resp.body) as Map<String, dynamic>;
+    } catch (e) {
+      onFailure('Could not reach server. Check internet and try again.');
+      return;
+    }
+
+    // Admin email → unlock without payment
+    if (serverResp['admin'] == true) {
+      await StorageService.upgradeToPremium();
+      await StorageService.setLastPurchasedPlan(SubscriptionPlan.trial.id);
+      final uidForCloud = AuthService.currentUser?.uid;
+      if (uidForCloud != null) {
+        await FirestoreService.setPremium(uidForCloud, true);
+      }
+      onSuccess('admin_bypass', SubscriptionPlan.trial.id);
+      return;
+    }
+
+    final orderId = serverResp['orderId'] as String?;
+    if (orderId == null || orderId.isEmpty) {
+      onFailure('Server did not return an order. ${serverResp['error'] ?? ''}');
+      return;
+    }
+
+    // Step 2 — open Razorpay with order_id (one-time, no subscription/mandate)
+    final options = <String, dynamic>{
+      'key': serverResp['keyId'] ?? ApiConfig.razorpayKeyId,
+      'order_id': orderId,
+      'amount': serverResp['amount'] ?? SubscriptionPlan.trial.firstChargePaise,
+      'currency': serverResp['currency'] ?? 'INR',
+      'name': ApiConfig.razorpayCompanyName,
+      'description': 'Starter Pass — ₹49 for 7 days',
+      'prefill': {
+        'email': userEmail.isNotEmpty ? userEmail : 'user@vedastro.ai',
+      },
+      'notes': {'plan': SubscriptionPlan.trial.id, 'user': userName, 'uid': uid},
+      'theme': {'color': '#7C3AED'},
+      'modal': {'confirm_close': true},
+    };
+
+    try {
+      _razorpay!.open(options);
+    } catch (e) {
+      onFailure('Could not open payment sheet: $e');
+    }
+  }
+
+  /// Verify a completed Starter Pass payment with the server (signature
+  /// check) and grant the 7-day pass. Returns true on success.
+  static Future<bool> _verifyStarterPass(
+      PaymentSuccessResponse response) async {
+    try {
+      final headers = await _authHeaders();
+      final resp = await http
+          .post(
+            Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/order/verify'),
+            headers: headers,
+            body: jsonEncode({
+              'razorpay_order_id': response.orderId,
+              'razorpay_payment_id': response.paymentId,
+              'razorpay_signature': response.signature,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+      return resp.statusCode == 200;
+    } catch (e) {
+      print('[PAYMENT] Starter Pass verify failed: $e');
+      return false;
+    }
+  }
+
   // ─── Legacy one-time payment flow (kept for backward compat) ─────
 
   /// Open Razorpay checkout for a one-time premium purchase (NOT recurring).
@@ -291,7 +414,42 @@ class PaymentService {
   static void _handlePaymentSuccess(PaymentSuccessResponse response) async {
     final paymentId = response.paymentId ?? 'unknown';
     final planId = _currentPlan?.id ?? 'unknown';
-    print('[PAYMENT] Success! paymentId=$paymentId, plan=$planId, sub=${_currentSubscriptionId ?? "n/a"}');
+    print('[PAYMENT] Success! paymentId=$paymentId, plan=$planId, '
+        'oneTime=$_isOneTimeFlow, sub=${_currentSubscriptionId ?? "n/a"}');
+
+    // One-time Starter Pass: verify the signature server-side BEFORE we grant
+    // anything locally — a valid Razorpay callback isn't proof of payment on
+    // its own. The server checks the HMAC and writes the 7-day pass.
+    if (_isOneTimeFlow) {
+      final ok = await _verifyStarterPass(response);
+      if (!ok) {
+        _isOneTimeFlow = false;
+        _onFailure?.call(
+            'Payment received but could not be verified. If money was '
+            'deducted it will be auto-refunded; please contact support.');
+        return;
+      }
+      // ₹49 one-time purchase → Meta Purchase event (not a trial).
+      Analytics.subscriptionPurchased(plan: planId);
+      final uidA = AuthService.currentUser?.uid;
+      if (uidA != null) Analytics.setUser(uid: uidA, plan: planId);
+
+      await StorageService.upgradeToPremium();
+      await StorageService.setLastPurchasedPlan(planId);
+      final uid = AuthService.currentUser?.uid;
+      if (uid != null) {
+        await FirestoreService.setPremium(uid, true);
+        await FirestoreService.savePaymentRecord(
+          uid: uid,
+          paymentId: paymentId,
+          plan: planId,
+          amount: SubscriptionPlan.trial.firstChargePaise,
+        );
+      }
+      _isOneTimeFlow = false;
+      _onSuccess?.call(paymentId, planId);
+      return;
+    }
 
     // Analytics: subscription started
     Analytics.subscriptionStarted(plan: planId, paymentMethod: 'razorpay');

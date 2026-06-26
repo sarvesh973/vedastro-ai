@@ -1,40 +1,53 @@
 /// Subscription plans for VedAstro AI.
 /// All pricing is in INR (paise).
 ///
-/// Compliance notes:
-///  - All plans use Razorpay Subscriptions API (not one-time payments) so
-///    RBI e-mandate rules and India CCPA dark-pattern guidelines are
-///    enforced by Razorpay's checkout UI automatically.
-///  - The Trial plan auto-converts to ₹99/month after 7 days. This MUST
-///    be disclosed in BOLD on the paywall before payment, and the user
-///    must be able to cancel in one tap from Settings.
+/// Monetization model:
+///  - FREE: 1 chat total (lifetime), 0 palm. Then the paywall appears.
+///  - STARTER PASS (the `trial` enum — name kept for plumbing compat):
+///    ONE-TIME ₹49 payment granting 7 days of access, 5 chats/day, NO palm.
+///    No auto-renewal / no e-mandate. After 7 days the user reverts to Free
+///    and may buy the pass again.
+///  - STANDARD ₹199/mo and PREMIUM ₹499/mo: recurring (Razorpay Subscriptions
+///    API + e-mandate autopay), cancellable in one tap from Settings.
+///
+/// So the Starter Pass uses the Razorpay Orders API (one-time), while
+/// Standard/Premium use the Subscriptions API (recurring). [isOneTime]
+/// distinguishes them for the payment layer.
 enum SubscriptionPlan {
-  /// Free tier — 1 chat, 0 palm readings. No subscription.
+  /// Free tier — 1 chat total (lifetime), 0 palm readings.
   free,
 
-  /// Free 7 days, then ₹99/month auto-debit. 10 chats during the trial.
+  /// Starter Pass — ONE-TIME ₹49 for 7 days, 5 chats/day, no palm.
+  /// (Enum symbol kept as `trial` so server plan-ids / Firestore plan tags
+  /// don't need a cross-repo rename; it is NOT a free trial anymore.)
   trial,
 
-  /// ₹199/month. 30 chats + 5 palm readings per month.
+  /// ₹199/month recurring. 30 chats + 5 palm readings per month.
   standard,
 
-  /// ₹499/month. Unlimited chats + unlimited palm readings (soft cap 100/day
-  /// to prevent abuse) + family profiles + detailed predictions.
+  /// ₹499/month recurring. Unlimited chats + unlimited palm readings
+  /// (soft cap 100/day) + family profiles + detailed predictions.
   premium,
 }
 
 extension SubscriptionPlanInfo on SubscriptionPlan {
-  /// Plan ID configured in Razorpay dashboard.
-  /// These MUST match the plan IDs you create on dashboard.razorpay.com
-  /// → Subscriptions → Plans. Replace before going live.
+  /// True for one-time purchases (the Starter Pass). Standard/Premium are
+  /// recurring subscriptions. Drives which Razorpay flow the app uses.
+  bool get isOneTime => this == SubscriptionPlan.trial;
+
+  /// Days of access granted by a one-time pass. 0 for recurring plans.
+  int get accessDays => this == SubscriptionPlan.trial ? 7 : 0;
+
+  /// Razorpay subscription plan ID — ONLY used by recurring plans
+  /// (Standard/Premium). The Starter Pass is a one-time order, so it has
+  /// no plan ID. Replace with the real dashboard IDs before going live.
   String get razorpayPlanId {
     switch (this) {
-      case SubscriptionPlan.trial:
-        return 'plan_trial_99';      // ₹99/month after 7-day ₹1 trial
       case SubscriptionPlan.standard:
         return 'plan_standard_199';  // ₹199/month
       case SubscriptionPlan.premium:
         return 'plan_premium_499';   // ₹499/month
+      case SubscriptionPlan.trial:   // one-time order, no plan id
       case SubscriptionPlan.free:
         return '';
     }
@@ -46,7 +59,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return 'Free';
       case SubscriptionPlan.trial:
-        return 'Free 7-Day Trial';
+        return 'Starter Pass';
       case SubscriptionPlan.standard:
         return 'Standard';
       case SubscriptionPlan.premium:
@@ -54,13 +67,13 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
-  /// Headline price label (e.g. "₹199/month", "Free 7 days, then ₹99/month")
+  /// Headline price label.
   String get priceLabel {
     switch (this) {
       case SubscriptionPlan.free:
         return 'Free';
       case SubscriptionPlan.trial:
-        return 'Free 7 days, then ₹99/month';
+        return '₹49 for 7 days';
       case SubscriptionPlan.standard:
         return '₹199/month';
       case SubscriptionPlan.premium:
@@ -72,9 +85,9 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
   String get subtitle {
     switch (this) {
       case SubscriptionPlan.free:
-        return 'Limited free chats';
+        return '1 free chat';
       case SubscriptionPlan.trial:
-        return 'No charge today — auto-renews ₹99/month after 7 days';
+        return '5 chats/day for 7 days · one-time, no auto-renewal';
       case SubscriptionPlan.standard:
         return 'For regular seekers';
       case SubscriptionPlan.premium:
@@ -82,15 +95,14 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
-  /// Amount in PAISE that Razorpay should charge for the FIRST debit.
-  /// For free trial = 0 (mandate setup only, first charge happens day 7).
-  /// For monthly plans = monthly price.
+  /// Amount in PAISE charged immediately.
+  /// Starter Pass = ₹49 one-time. Standard/Premium = first month's charge.
   int get firstChargePaise {
     switch (this) {
       case SubscriptionPlan.free:
         return 0;
       case SubscriptionPlan.trial:
-        return 0;         // Free trial — no charge today
+        return 4900;      // ₹49 one-time
       case SubscriptionPlan.standard:
         return 19900;     // ₹199
       case SubscriptionPlan.premium:
@@ -98,14 +110,13 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
-  /// Recurring monthly amount in paise.
-  /// For trial, this is what gets charged on day 7.
+  /// Recurring monthly amount in paise. 0 for one-time plans.
   int get recurringPaise {
     switch (this) {
       case SubscriptionPlan.free:
         return 0;
       case SubscriptionPlan.trial:
-        return 9900;      // ₹99 after trial
+        return 0;         // one-time, never recurs
       case SubscriptionPlan.standard:
         return 19900;     // ₹199
       case SubscriptionPlan.premium:
@@ -113,18 +124,18 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
-  /// Trial duration in days. 0 means no trial.
-  int get trialDays {
-    return this == SubscriptionPlan.trial ? 7 : 0;
-  }
+  /// Free-trial duration in days. We no longer offer a free trial, so 0
+  /// for every plan. (Pass access duration is [accessDays], not a trial.)
+  int get trialDays => 0;
 
-  /// Chat questions allowed per billing cycle. -1 means unlimited.
+  /// Chat questions allowed PER DAY for paid plans; for Free this is the
+  /// LIFETIME total. -1 means unlimited.
   int get chatLimit {
     switch (this) {
       case SubscriptionPlan.free:
-        return 1;
+        return 1;          // 1 chat total (lifetime)
       case SubscriptionPlan.trial:
-        return 10;
+        return 5;          // 5 chats per day for the 7-day pass
       case SubscriptionPlan.standard:
         return 30;
       case SubscriptionPlan.premium:
@@ -132,14 +143,14 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
-  /// Palm readings allowed per billing cycle. -1 means unlimited.
-  /// Free plan: 0 — palm reading is a paid-only feature.
+  /// Palm readings allowed. -1 = unlimited. Palm is NOT part of the
+  /// Starter Pass (0) — only Standard/Premium include it.
   int get palmLimit {
     switch (this) {
       case SubscriptionPlan.free:
         return 0;
       case SubscriptionPlan.trial:
-        return 2;
+        return 0;          // Starter Pass does NOT include palm reading
       case SubscriptionPlan.standard:
         return 5;
       case SubscriptionPlan.premium:
@@ -168,10 +179,10 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
         return ['1 free chat', 'Daily horoscope'];
       case SubscriptionPlan.trial:
         return [
-          '10 chats during the 7-day trial',
-          '2 palm readings',
-          'No charge today — cancel anytime',
-          'Auto-renews ₹99/month after day 7',
+          '5 AI astrology chats every day',
+          '7 days of full access',
+          'One-time ₹49 — no auto-renewal',
+          'Daily, weekly & monthly horoscope',
         ];
       case SubscriptionPlan.standard:
         return [
@@ -193,9 +204,6 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
   }
 
   /// Plans the user can upgrade *to* from their current plan.
-  /// Empty list means there's nothing higher to sell.
-  /// Used by the paywall to hide irrelevant cards (e.g. a Trial user
-  /// shouldn't see the Trial card again, but should see Standard + Premium).
   List<SubscriptionPlan> get upgradeOptions {
     switch (this) {
       case SubscriptionPlan.free:
