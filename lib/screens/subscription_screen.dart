@@ -243,6 +243,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       headlineSub = periodEnds != null
           ? 'Premium ends on ${df.format(periodEnds)}'
           : 'Premium ends at the end of your current period';
+    } else if (sub.plan.isOneTime) {
+      // Starter Pass — one-time ₹49, no renewal. Show its expiry instead of
+      // a fake "renews monthly" line.
+      headlineLabel = '${sub.plan.displayName} — Active';
+      headlineSub = periodEnds != null
+          ? 'Access until ${df.format(periodEnds)} • does not renew'
+          : '5 chats/day for 7 days • one-time, does not renew';
     } else {
       headlineLabel = '${sub.plan.displayName} — Active';
       headlineSub = periodEnds != null
@@ -364,8 +371,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
         // ─── Cancel button (the legal requirement) ─────────────
         // Hidden if subscription is already cancelled-pending — there's
-        // nothing to cancel twice. Stays visible for trialing + active.
-        if (!isCancelled)
+        // nothing to cancel twice. Also hidden for the one-time Starter
+        // Pass: there's no mandate/auto-renewal to cancel — it just lapses
+        // after 7 days.
+        if (!isCancelled && !sub.plan.isOneTime)
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -551,11 +560,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 "charges are not returned.",
           ),
           _faqItem(
-            'Can I cancel during my free trial?',
-            "Yes — cancel anytime during the 7-day trial and you'll "
-                "never be charged. The auto-debit only activates if you "
-                "don't cancel before day 7. This is the safest way to "
-                "explore the app.",
+            'How does the ₹49 Starter Pass work?',
+            "It's a one-time ₹49 payment that unlocks 5 AI chats per day "
+                "for 7 days (palm reading not included). There's no "
+                "auto-renewal — when the 7 days end you simply go back to "
+                "the free plan, and you can buy the pass again whenever you "
+                "like.",
           ),
           _faqItem(
             'I was charged by mistake, what do I do?',

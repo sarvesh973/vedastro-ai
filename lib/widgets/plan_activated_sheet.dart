@@ -164,7 +164,7 @@ class PlanActivatedSheet extends StatelessWidget {
   static String _titleFor(SubscriptionPlan p) {
     switch (p) {
       case SubscriptionPlan.trial:
-        return '7-Day Free Trial Activated!';
+        return 'Starter Pass Activated!';
       case SubscriptionPlan.standard:
         return 'Standard Plan Activated!';
       case SubscriptionPlan.premium:
@@ -177,7 +177,7 @@ class PlanActivatedSheet extends StatelessWidget {
   static String _subtitleFor(SubscriptionPlan p) {
     switch (p) {
       case SubscriptionPlan.trial:
-        return 'Free for 7 days, then ₹99/month auto-renew.\nCancel anytime in Settings.';
+        return '5 chats a day for 7 days. One-time ₹49 — no auto-renewal.\nBuy again anytime after it ends.';
       case SubscriptionPlan.standard:
         return '₹199/month — auto-renews monthly. Cancel anytime in Settings.';
       case SubscriptionPlan.premium:
@@ -374,11 +374,11 @@ class _FeaturesCard extends StatelessWidget {
     switch (p) {
       case SubscriptionPlan.trial:
         return const [
-          '10 AI chats during the 7-day trial',
-          '2 palm readings',
+          '5 AI chats every day for 7 days',
           'Daily / weekly / monthly horoscope',
           'Full Kundli chart with D9 + D10',
-          'No charge today — cancel before day 7 to skip ₹99',
+          'One-time ₹49 — no auto-renewal',
+          'Palm reading not included (Standard & Premium only)',
         ];
       case SubscriptionPlan.standard:
         return const [

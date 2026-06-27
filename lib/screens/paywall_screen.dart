@@ -390,7 +390,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   String? _badgeFor(SubscriptionPlan plan) {
     switch (plan) {
       case SubscriptionPlan.trial:
-        return '7 DAYS FREE';
+        return 'BEST TO START';
       case SubscriptionPlan.premium:
         return _plansToShow.contains(SubscriptionPlan.standard)
             ? 'BEST VALUE'
@@ -431,7 +431,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   String _subscribeButtonLabel() {
     switch (_selectedPlan) {
       case SubscriptionPlan.trial:
-        return 'Start Free 7-Day Trial';
+        return 'Get Starter Pass — ₹49';
       case SubscriptionPlan.standard:
         return 'Subscribe — ₹199/month';
       case SubscriptionPlan.premium:
@@ -447,46 +447,53 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   void _handleSubscribe() async {
     if (_isProcessing) return;
 
-    // Step 1 — popup with bold autopay disclosure + required checkbox.
-    final confirmed = await showAutopayConfirmSheet(
-      context: context,
-      plan: _selectedPlan,
-    );
-    if (!confirmed || !mounted) return;
+    // The Starter Pass is a ONE-TIME ₹49 charge — no e-mandate / autopay,
+    // so it skips the autopay-consent sheet entirely and goes straight to
+    // Razorpay's one-time Orders checkout. Standard/Premium are recurring
+    // and still require the bold autopay disclosure + tick first.
+    final isOneTime = _selectedPlan.isOneTime;
+    if (!isOneTime) {
+      final confirmed = await showAutopayConfirmSheet(
+        context: context,
+        plan: _selectedPlan,
+      );
+      if (!confirmed || !mounted) return;
+    }
 
-    // Step 2 — open Razorpay (only after consent given in the popup).
     setState(() => _isProcessing = true);
+
+    final onSuccess = (String paymentId, String planId) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ref.read(isPremiumProvider.notifier).state = StorageService.isPremium;
+      _showPlanActivatedSheet(_selectedPlan);
+    };
+    final onFailure = (String message) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    };
+
+    if (isOneTime) {
+      await PaymentService.openStarterPassCheckout(
+        onSuccess: onSuccess,
+        onFailure: onFailure,
+      );
+      return;
+    }
 
     await PaymentService.openSubscriptionCheckout(
       plan: _selectedPlan,
-      onSuccess: (paymentId, planId) {
-        if (!mounted) return;
-        setState(() => _isProcessing = false);
-
-        // Reflect the new premium state in Riverpod immediately so the
-        // home screen / chat / paywall close-state pick it up.
-        ref.read(isPremiumProvider.notifier).state =
-            StorageService.isPremium;
-
-        // Show the polished plan-activated sheet instead of a toast.
-        // Tells the user EXACTLY which plan they got, lists features,
-        // and offers one-tap upgrades to higher tiers (no upsell on
-        // premium since it's the highest).
-        _showPlanActivatedSheet(_selectedPlan);
-      },
-      onFailure: (message) {
-        if (!mounted) return;
-        setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      },
+      onSuccess: onSuccess,
+      onFailure: onFailure,
     );
   }
 

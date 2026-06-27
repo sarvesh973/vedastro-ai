@@ -153,7 +153,7 @@ class AutopayDisclosure extends StatelessWidget {
                   'SMS reminder 24 hours before every auto-debit',
                 ),
                 _bulletPoint(
-                  'Bank requires OTP for the first ₹99 charge',
+                  'Bank requires OTP for the first ₹${plan.firstChargePaise ~/ 100} charge',
                 ),
                 if (isTrial)
                   _bulletPoint(
