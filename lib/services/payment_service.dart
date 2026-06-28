@@ -187,6 +187,9 @@ class PaymentService {
       },
     };
 
+    // Meta InitiatedCheckout — user committed to paying for a recurring plan.
+    Analytics.checkoutInitiated(plan: plan.id);
+
     try {
       _razorpay!.open(options);
     } catch (e) {
@@ -281,6 +284,9 @@ class PaymentService {
       'theme': {'color': '#7C3AED'},
       'modal': {'confirm_close': true},
     };
+
+    // Meta InitiatedCheckout — user committed to buying the ₹49 Starter Pass.
+    Analytics.checkoutInitiated(plan: SubscriptionPlan.trial.id);
 
     try {
       _razorpay!.open(options);
