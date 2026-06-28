@@ -105,24 +105,57 @@ class Analytics {
   static Future<void> kundliViewed() => _log('kundli_viewed', {});
 
   // ─── MONETIZATION ───────────────────────────────────────────
-  static Future<void> paywallViewed({required String trigger}) =>
-      _log('paywall_viewed', {'trigger': trigger});
+  static Future<void> paywallViewed({required String trigger}) {
+    // Meta standard event: ViewContent — top-of-funnel signal that someone
+    // reached the paywall. Helps Meta find users likely to convert.
+    _fbLog('ViewContent',
+        params: {'fb_content_type': 'paywall', 'fb_content_id': trigger});
+    return _log('paywall_viewed', {'trigger': trigger});
+  }
   // trigger: 'free_chat_limit', 'free_palm_limit', 'settings', 'home'
+
+  /// Map plan id → INR value for Meta value-optimisation.
+  static const Map<String, double> _planValueInr = {
+    'trial': 49.0, // one-time Starter Pass
+    'standard': 199.0,
+    'premium': 499.0,
+  };
+
+  /// Fire when the user taps a plan and the Razorpay sheet opens.
+  /// Meta standard event: InitiatedCheckout — the key "intent to pay" signal.
+  static Future<void> checkoutInitiated({required String plan}) {
+    final value = _planValueInr[plan] ?? 0.0;
+    try {
+      _fb.logInitiatedCheckout(
+        totalPrice: value,
+        currency: 'INR',
+        contentId: plan,
+        numItems: 1,
+      );
+    } catch (_) {}
+    return _log('checkout_initiated', {'plan': plan});
+  }
 
   static Future<void> subscriptionStarted({
     required String plan,
     required String paymentMethod,
   }) {
-    // Meta standard event: StartTrial with the plan's monthly value so the
-    // ad algorithm can optimise toward higher-value subscribers. Value is
-    // the recurring price in INR (trial=99, standard=199, premium=499); the
-    // first real charge happens server-side on day 7, but reporting the
-    // intended value now gives Meta a usable signal.
-    const planValueInr = {'trial': 49.0, 'standard': 199.0, 'premium': 499.0};
-    final value = planValueInr[plan] ?? 0.0;
-    _fbLog('StartTrial',
+    // Recurring plan (Standard/Premium) just activated and the first month
+    // was charged immediately. There is NO free trial anymore, so we fire:
+    //   • Subscribe — the subscription-lifecycle signal (value = monthly INR)
+    //   • Purchase  — the actual first-charge revenue (same value)
+    // Monthly RENEWALS happen server-side and are NOT covered here — those
+    // need the Conversions API on the Razorpay webhook (Phase 2).
+    final value = _planValueInr[plan] ?? 0.0;
+    _fbLog('Subscribe',
         params: {'fb_currency': 'INR', 'fb_order_id': plan},
         valueToSum: value);
+    try {
+      _fb.logPurchase(amount: value, currency: 'INR', parameters: {
+        'fb_content_type': 'subscription',
+        'fb_content_id': plan,
+      });
+    } catch (_) {}
     return _log('subscription_started', {
       'plan': plan,
       'payment_method': paymentMethod,
