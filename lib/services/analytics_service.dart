@@ -60,8 +60,12 @@ class Analytics {
   // ─── USER LIFECYCLE ─────────────────────────────────────────
   static Future<void> signupCompleted({required String method}) {
     // Meta standard event: CompleteRegistration — a key upper-funnel
-    // optimisation signal for app campaigns.
-    _fbLog('CompleteRegistration', params: {'fb_registration_method': method});
+    // optimisation signal for app campaigns. MUST use the SDK's standard
+    // event-name constant (fb_mobile_complete_registration), NOT the string
+    // 'CompleteRegistration' — the latter registers as a CUSTOM event and
+    // can't be used for standard optimisation.
+    _fbLog(FacebookAppEvents.eventNameCompletedRegistration,
+        params: {'fb_registration_method': method});
     return _log('signup_completed', {'method': method});
   }
 
@@ -107,8 +111,9 @@ class Analytics {
   // ─── MONETIZATION ───────────────────────────────────────────
   static Future<void> paywallViewed({required String trigger}) {
     // Meta standard event: ViewContent — top-of-funnel signal that someone
-    // reached the paywall. Helps Meta find users likely to convert.
-    _fbLog('ViewContent',
+    // reached the paywall. Use the SDK's standard constant
+    // (fb_mobile_content_view); the string 'ViewContent' registers as custom.
+    _fbLog(FacebookAppEvents.eventNameViewedContent,
         params: {'fb_content_type': 'paywall', 'fb_content_id': trigger});
     return _log('paywall_viewed', {'trigger': trigger});
   }
@@ -147,7 +152,9 @@ class Analytics {
     // Monthly RENEWALS happen server-side and are NOT covered here — those
     // need the Conversions API on the Razorpay webhook (Phase 2).
     final value = _planValueInr[plan] ?? 0.0;
-    _fbLog('Subscribe',
+    // Use the SDK's standard Subscribe constant (kept explicit for clarity /
+    // version-safety — it resolves to Meta's standard "Subscribe" event).
+    _fbLog(FacebookAppEvents.eventNameSubscribe,
         params: {'fb_currency': 'INR', 'fb_order_id': plan},
         valueToSum: value);
     try {
