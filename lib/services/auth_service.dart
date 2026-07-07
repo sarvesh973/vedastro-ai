@@ -216,8 +216,7 @@ class AuthService {
         verificationCompleted: (credential) async {
           // Android auto-retrieval: Firebase already has the code
           try {
-            final userCredential = await _auth.signInWithCredential(credential);
-            await _trackPhoneSignIn(userCredential);
+            await _auth.signInWithCredential(credential);
             if (onAutoVerified != null) onAutoVerified(credential);
           } catch (e) {
             onFailed('Auto sign-in failed: $e');
@@ -249,27 +248,12 @@ class AuthService {
         smsCode: smsCode,
       );
       final userCredential = await _auth.signInWithCredential(credential);
-      await _trackPhoneSignIn(userCredential);
       return AuthResult(success: true, user: userCredential.user);
     } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: _getErrorMessage(e.code));
     } catch (e) {
       return AuthResult(success: false, error: 'OTP verification error: $e');
     }
-  }
-
-  /// Signup/login analytics for phone auth — mirrors the Google path so
-  /// phone signups also fire Meta CompleteRegistration (both the manual
-  /// verifyOtp path and Android's auto-retrieval path land here).
-  static Future<void> _trackPhoneSignIn(UserCredential userCredential) async {
-    if (userCredential.user == null) return;
-    final isNew = userCredential.additionalUserInfo?.isNewUser ?? false;
-    if (isNew) {
-      await Analytics.signupCompleted(method: 'phone');
-    } else {
-      await Analytics.loginCompleted(method: 'phone');
-    }
-    await Analytics.setUser(uid: userCredential.user!.uid);
   }
 
   // ─── Password Reset ──────────────────────────────
