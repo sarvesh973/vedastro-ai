@@ -5,14 +5,14 @@
          (Facebook App IDs + Client Tokens ship inside every app's APK),
          so they are safe to commit.
 
-         TODO before the next AAB: replace the two placeholder values
-         below with the REAL values from the Meta app dashboard:
+         Values come from the Meta app dashboard:
            Meta app dashboard → App settings → Basic →
              • App ID         → facebook_app_id
              • Client Token   → facebook_client_token  (Advanced section)
 
-         While these stay as placeholder zeros, the SDK initialises but
-         reports nothing (safe no-op) — the app still runs normally. -->
-    <string name="facebook_app_id">1323136406015939</string>
-    <string name="facebook_client_token">40db77d94182be00af5f6fdbee1744d3</string>
+         The dashboard-side Android platform config must match this build:
+         package com.mokshastro.ai, class com.mokshastro.ai.MainActivity,
+         plus the release + Play App Signing key hashes. -->
+    <string name="facebook_app_id">1962413884323678</string>
+    <string name="facebook_client_token">8f7a3e18fe2be8a10fd5d4e1ece90405</string>
 </resources>
