@@ -117,7 +117,8 @@ class Analytics {
         params: {'fb_content_type': 'paywall', 'fb_content_id': trigger});
     return _log('paywall_viewed', {'trigger': trigger});
   }
-  // trigger: 'free_chat_limit', 'free_palm_limit', 'settings', 'home'
+  // trigger: 'chat_limit', 'palm_limit', 'home_banner', 'drawer',
+  // 'drawer_upgrade', 'settings', 'settings_upgrade', 'post_purchase_upsell'
 
   /// Map plan id → INR value for Meta value-optimisation.
   static const Map<String, double> _planValueInr = {

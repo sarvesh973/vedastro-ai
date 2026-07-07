@@ -801,7 +801,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     Navigator.pop(context);
                     if (!isPremium) {
                       Navigator.of(context).push(
-                        _buildPageRoute(const PaywallScreen()),
+                        _buildPageRoute(
+                            const PaywallScreen(trigger: 'drawer')),
                       );
                     } else if (canUpgrade) {
                       _openUpgradePaywall(context, upgradeOptions);
@@ -992,7 +993,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            PaywallScreen(availablePlans: options),
+            PaywallScreen(availablePlans: options, trigger: 'drawer_upgrade'),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(
@@ -1568,7 +1569,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         Navigator.of(context).push(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) =>
-                const PaywallScreen(),
+                const PaywallScreen(trigger: 'home_banner'),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return SlideTransition(
                 position: Tween<Offset>(
