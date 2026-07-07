@@ -469,7 +469,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MPageRoute(
-                  page: const PaywallScreen(),
+                  page: const PaywallScreen(trigger: 'settings'),
                   transition: MTransition.modal,
                 ),
               );
@@ -613,7 +613,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   void _openUpgradePaywall(List<SubscriptionPlan> options) {
     Navigator.of(context).push(
       MPageRoute(
-        page: PaywallScreen(availablePlans: options),
+        page: PaywallScreen(
+            availablePlans: options, trigger: 'settings_upgrade'),
         transition: MTransition.modal,
       ),
     );

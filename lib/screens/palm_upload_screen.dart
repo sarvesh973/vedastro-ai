@@ -186,7 +186,7 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const PaywallScreen(),
+            const PaywallScreen(trigger: 'palm_limit'),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(

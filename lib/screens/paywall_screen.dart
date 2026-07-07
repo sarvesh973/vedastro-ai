@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_theme.dart';
 import '../models/subscription_plan.dart';
 import '../providers/providers.dart';
+import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
 import '../services/storage_service.dart';
@@ -30,7 +31,16 @@ class PaywallScreen extends ConsumerStatefulWidget {
   /// Premium card is shown so the user can upgrade).
   final List<SubscriptionPlan>? availablePlans;
 
-  const PaywallScreen({super.key, this.availablePlans});
+  /// Which surface opened the paywall (e.g. 'chat_limit', 'home_banner',
+  /// 'settings'). Reported as Meta ViewContent + Firebase paywall_viewed
+  /// so ad campaigns can see which surfaces drive conversions.
+  final String trigger;
+
+  const PaywallScreen({
+    super.key,
+    this.availablePlans,
+    this.trigger = 'unknown',
+  });
 
   @override
   ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
@@ -44,6 +54,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   void initState() {
     super.initState();
     PaymentService.init();
+    // Meta ViewContent + Firebase paywall_viewed. Admins see the bypass
+    // screen instead of plans, so their views would only pollute the funnel.
+    if (!AuthService.isAdmin) {
+      Analytics.paywallViewed(trigger: widget.trigger);
+    }
     // Default selection = first plan in the available list (so it works
     // for both "all 3" and "only premium" cases).
     _selectedPlan = (widget.availablePlans ?? _defaultPlanOrder).first;
@@ -515,7 +530,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             Navigator.of(ctx).pushReplacement(
               MaterialPageRoute(
                 builder: (_) =>
-                    PaywallScreen(availablePlans: [newPlan]),
+                    PaywallScreen(
+                        availablePlans: [newPlan],
+                        trigger: 'post_purchase_upsell'),
               ),
             );
           },

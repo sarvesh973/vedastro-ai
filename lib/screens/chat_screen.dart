@@ -291,7 +291,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            PaywallScreen(availablePlans: availablePlans),
+            PaywallScreen(
+                availablePlans: availablePlans, trigger: 'chat_limit'),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(
