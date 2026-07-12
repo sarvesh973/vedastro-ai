@@ -249,7 +249,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       headlineLabel = '${sub.plan.displayName} — Active';
       headlineSub = periodEnds != null
           ? 'Access until ${df.format(periodEnds)} • does not renew'
-          : '5 chats/day for 7 days • one-time, does not renew';
+          : '3 chats/day for 7 days • one-time, does not renew';
     } else {
       headlineLabel = '${sub.plan.displayName} — Active';
       headlineSub = periodEnds != null
@@ -561,7 +561,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           ),
           _faqItem(
             'How does the ₹49 Starter Pass work?',
-            "It's a one-time ₹49 payment that unlocks 5 AI chats per day "
+            "It's a one-time ₹49 payment that unlocks 3 AI chats per day "
                 "for 7 days (palm reading not included). There's no "
                 "auto-renewal — when the 7 days end you simply go back to "
                 "the free plan, and you can buy the pass again whenever you "
