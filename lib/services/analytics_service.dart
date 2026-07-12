@@ -66,6 +66,11 @@ class Analytics {
     // can't be used for standard optimisation.
     _fbLog(FacebookAppEvents.eventNameCompletedRegistration,
         params: {'fb_registration_method': method});
+    // GA4 standard event `sign_up` — Google Ads / App Campaigns read this
+    // (via the Firebase link) as the registration conversion.
+    try {
+      _instance?.logSignUp(signUpMethod: method);
+    } catch (_) {}
     return _log('signup_completed', {'method': method});
   }
 
@@ -139,6 +144,11 @@ class Analytics {
         numItems: 1,
       );
     } catch (_) {}
+    // GA4 standard event `begin_checkout` (value + currency) for Google App
+    // Campaign optimisation.
+    try {
+      _instance?.logBeginCheckout(currency: 'INR', value: value);
+    } catch (_) {}
     return _log('checkout_initiated', {'plan': plan});
   }
 
@@ -164,6 +174,11 @@ class Analytics {
         'fb_content_id': plan,
       });
     } catch (_) {}
+    // GA4 standard `purchase` (value + currency) → Google App Campaign
+    // purchase optimisation + value-based bidding.
+    try {
+      _instance?.logPurchase(currency: 'INR', value: value);
+    } catch (_) {}
     return _log('subscription_started', {
       'plan': plan,
       'payment_method': paymentMethod,
@@ -178,13 +193,17 @@ class Analytics {
   /// where the app observes the active/charged state on resume.
   static Future<void> subscriptionPurchased({required String plan}) {
     // trial = the one-time ₹49 Starter Pass; standard/premium = monthly.
-    const planValueInr = {'trial': 49.0, 'standard': 199.0, 'premium': 499.0};
-    final value = planValueInr[plan] ?? 0.0;
+    final value = _planValueInr[plan] ?? 0.0;
     try {
       _fb.logPurchase(amount: value, currency: 'INR', parameters: {
         'fb_content_type': plan == 'trial' ? 'one_time_pass' : 'subscription',
         'fb_content_id': plan,
       });
+    } catch (_) {}
+    // GA4 standard `purchase` (value + currency) → Google App Campaign
+    // purchase optimisation + value-based bidding.
+    try {
+      _instance?.logPurchase(currency: 'INR', value: value);
     } catch (_) {}
     return _log('subscription_purchased', {'plan': plan});
   }
