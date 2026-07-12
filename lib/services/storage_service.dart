@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
+import '../models/subscription_plan.dart';
 import 'firestore_service.dart';
 
 /// Persistent storage service using SharedPreferences
@@ -252,8 +253,15 @@ class StorageService {
   static bool get canAskChatQuestion =>
       isPremium || chatQuestionsUsed < freeChatLimit;
 
-  static bool get canDoPalmReading =>
-      isPremium || palmReadingsUsed < freePalmLimit;
+  /// Palm reading is a Standard/Premium feature ONLY. The ₹49 Starter Pass
+  /// sets isPremium=true but does NOT include palm (palmLimit 0), so we must
+  /// check the actual plan — not just the premium flag — otherwise pass users
+  /// would wrongly get palm access.
+  static bool get canDoPalmReading {
+    if (!isPremium) return palmReadingsUsed < freePalmLimit;
+    final plan = SubscriptionPlanInfo.fromId(lastPurchasedPlan);
+    return plan.palmLimit != 0; // pass(0)=false; standard(5)/premium(-1)=true
+  }
 
   // ─── Chat thread persistence ────────────────────
   // Stored as a single JSON string. We cap at the most recent 200 messages

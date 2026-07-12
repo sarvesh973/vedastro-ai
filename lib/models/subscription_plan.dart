@@ -4,7 +4,7 @@
 /// Monetization model:
 ///  - FREE: 1 chat total (lifetime), 0 palm. Then the paywall appears.
 ///  - STARTER PASS (the `trial` enum — name kept for plumbing compat):
-///    ONE-TIME ₹49 payment granting 7 days of access, 5 chats/day, NO palm.
+///    ONE-TIME ₹49 payment granting 7 days of access, 3 chats/day, NO palm.
 ///    No auto-renewal / no e-mandate. After 7 days the user reverts to Free
 ///    and may buy the pass again.
 ///  - STANDARD ₹199/mo and PREMIUM ₹499/mo: recurring (Razorpay Subscriptions
@@ -17,7 +17,7 @@ enum SubscriptionPlan {
   /// Free tier — 1 chat total (lifetime), 0 palm readings.
   free,
 
-  /// Starter Pass — ONE-TIME ₹49 for 7 days, 5 chats/day, no palm.
+  /// Starter Pass — ONE-TIME ₹49 for 7 days, 3 chats/day, no palm.
   /// (Enum symbol kept as `trial` so server plan-ids / Firestore plan tags
   /// don't need a cross-repo rename; it is NOT a free trial anymore.)
   trial,
@@ -87,7 +87,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return '1 free chat';
       case SubscriptionPlan.trial:
-        return '5 chats/day for 7 days · one-time, no auto-renewal';
+        return '3 chats/day for 7 days · one-time, no auto-renewal';
       case SubscriptionPlan.standard:
         return 'For regular seekers';
       case SubscriptionPlan.premium:
@@ -135,11 +135,11 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return 1;          // 1 chat total (lifetime)
       case SubscriptionPlan.trial:
-        return 5;          // 5 chats per day for the 7-day pass
+        return 3;          // 3 chats per day for the 7-day pass
       case SubscriptionPlan.standard:
-        return 30;
+        return 10;         // 10 chats per day
       case SubscriptionPlan.premium:
-        return -1; // unlimited (soft cap enforced server-side at 100/day)
+        return -1; // unlimited (soft cap enforced server-side)
     }
   }
 
@@ -179,14 +179,15 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
         return ['1 free chat', 'Daily horoscope'];
       case SubscriptionPlan.trial:
         return [
-          '5 AI astrology chats every day',
+          '3 AI astrology chats every day',
           '7 days of full access',
           'One-time ₹49 — no auto-renewal',
           'Daily, weekly & monthly horoscope',
         ];
       case SubscriptionPlan.standard:
         return [
-          '30 chats per month',
+          '10 chats per day',
+          'Palm reading included',
           '5 palm readings per month',
           '3 family profiles',
           'Daily / weekly / monthly horoscope',

@@ -57,6 +57,15 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
       vsync: this,
       duration: const Duration(milliseconds: 3000),
     );
+
+    // Palm reading is Standard/Premium only. If a Free or ₹49 Starter Pass
+    // user opens this screen, show the paywall immediately so they can
+    // upgrade — palm isn't part of their plan.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !StorageService.canDoPalmReading) {
+        _showPaywall();
+      }
+    });
   }
 
   @override

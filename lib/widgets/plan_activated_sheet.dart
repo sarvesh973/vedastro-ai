@@ -177,7 +177,7 @@ class PlanActivatedSheet extends StatelessWidget {
   static String _subtitleFor(SubscriptionPlan p) {
     switch (p) {
       case SubscriptionPlan.trial:
-        return '5 chats a day for 7 days. One-time ₹49 — no auto-renewal.\nBuy again anytime after it ends.';
+        return '3 chats a day for 7 days. One-time ₹49 — no auto-renewal.\nBuy again anytime after it ends.';
       case SubscriptionPlan.standard:
         return '₹199/month — auto-renews monthly. Cancel anytime in Settings.';
       case SubscriptionPlan.premium:
@@ -374,7 +374,7 @@ class _FeaturesCard extends StatelessWidget {
     switch (p) {
       case SubscriptionPlan.trial:
         return const [
-          '5 AI chats every day for 7 days',
+          '3 AI chats every day for 7 days',
           'Daily / weekly / monthly horoscope',
           'Full Kundli chart with D9 + D10',
           'One-time ₹49 — no auto-renewal',
