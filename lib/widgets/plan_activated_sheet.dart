@@ -164,11 +164,11 @@ class PlanActivatedSheet extends StatelessWidget {
   static String _titleFor(SubscriptionPlan p) {
     switch (p) {
       case SubscriptionPlan.trial:
-        return 'Starter Pass Activated!';
-      case SubscriptionPlan.standard:
         return 'Standard Plan Activated!';
-      case SubscriptionPlan.premium:
+      case SubscriptionPlan.standard:
         return 'Premium Plan Activated!';
+      case SubscriptionPlan.premium:
+        return 'Unlimited Plan Activated!';
       case SubscriptionPlan.free:
         return 'Free plan';
     }
@@ -177,11 +177,11 @@ class PlanActivatedSheet extends StatelessWidget {
   static String _subtitleFor(SubscriptionPlan p) {
     switch (p) {
       case SubscriptionPlan.trial:
-        return '3 chats a day for 7 days. One-time ₹49 — no auto-renewal.\nBuy again anytime after it ends.';
+        return '₹199/month — 35 chats + 2 palm readings. Auto-renews monthly. Cancel anytime in Settings.';
       case SubscriptionPlan.standard:
-        return '₹199/month — auto-renews monthly. Cancel anytime in Settings.';
+        return '₹499/month — 100 chats + 5 palm readings. Cancel anytime in Settings.';
       case SubscriptionPlan.premium:
-        return '₹499/month — the full Moksha experience. Cancel anytime in Settings.';
+        return '₹999/month — unlimited everything. Cancel anytime in Settings.';
       case SubscriptionPlan.free:
         return '';
     }
@@ -374,15 +374,14 @@ class _FeaturesCard extends StatelessWidget {
     switch (p) {
       case SubscriptionPlan.trial:
         return const [
-          '3 AI chats every day for 7 days',
+          '35 AI chats per month',
+          '2 palm readings per month',
           'Daily / weekly / monthly horoscope',
           'Full Kundli chart with D9 + D10',
-          'One-time ₹49 — no auto-renewal',
-          'Palm reading not included (Standard & Premium only)',
         ];
       case SubscriptionPlan.standard:
         return const [
-          '30 AI chats per month',
+          '100 AI chats per month',
           '5 palm readings per month',
           '3 family profiles',
           'Daily / weekly / monthly horoscope',

@@ -38,7 +38,10 @@ class AutopayDisclosure extends StatelessWidget {
   Widget build(BuildContext context) {
     if (plan == SubscriptionPlan.free) return const SizedBox.shrink();
 
-    final isTrial = plan == SubscriptionPlan.trial;
+    // No free trial anymore — every paid tier is a standard recurring
+    // subscription (charged today, then monthly). Keep this false so the
+    // disclosure never shows free-trial ("₹0 today, ₹X on day 7") copy.
+    const isTrial = false;
 
     return Container(
       width: double.infinity,
