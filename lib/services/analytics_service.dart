@@ -125,11 +125,12 @@ class Analytics {
   // trigger: 'chat_limit', 'palm_limit', 'home_banner', 'drawer',
   // 'drawer_upgrade', 'settings', 'settings_upgrade', 'post_purchase_upsell'
 
-  /// Map plan id → INR value for Meta value-optimisation.
+  /// Map plan id → INR value for Meta/GA4 value-optimisation.
+  /// Tiers: trial=₹199, standard=₹499, premium=₹999 (all recurring monthly).
   static const Map<String, double> _planValueInr = {
-    'trial': 49.0, // one-time Starter Pass
-    'standard': 199.0,
-    'premium': 499.0,
+    'trial': 199.0,
+    'standard': 499.0,
+    'premium': 999.0,
   };
 
   /// Fire when the user taps a plan and the Razorpay sheet opens.

@@ -180,11 +180,11 @@ class _AutopayConfirmContentState extends State<_AutopayConfirmContent> {
     if (!_acknowledged) return 'Tick above to continue';
     switch (widget.plan) {
       case SubscriptionPlan.trial:
-        return 'Start Free Trial';
-      case SubscriptionPlan.standard:
         return 'Subscribe — ₹199';
-      case SubscriptionPlan.premium:
+      case SubscriptionPlan.standard:
         return 'Subscribe — ₹499';
+      case SubscriptionPlan.premium:
+        return 'Subscribe — ₹999';
       case SubscriptionPlan.free:
         return '';
     }

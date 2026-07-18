@@ -560,12 +560,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 "charges are not returned.",
           ),
           _faqItem(
-            'How does the ₹49 Starter Pass work?',
-            "It's a one-time ₹49 payment that unlocks 3 AI chats per day "
-                "for 7 days (palm reading not included). There's no "
-                "auto-renewal — when the 7 days end you simply go back to "
-                "the free plan, and you can buy the pass again whenever you "
-                "like.",
+            'What do the plans include?',
+            "Standard (₹199/mo) gives 35 chats + 2 palm readings a month. "
+                "Premium (₹499/mo) gives 100 chats + 5 palm readings. "
+                "Unlimited (₹999/mo) gives unlimited chats + unlimited palm "
+                "readings. All plans auto-renew monthly and can be cancelled "
+                "anytime from this screen.",
           ),
           _faqItem(
             'I was charged by mistake, what do I do?',
