@@ -179,6 +179,8 @@ class _AutopayConfirmContentState extends State<_AutopayConfirmContent> {
   String _confirmButtonLabel() {
     if (!_acknowledged) return 'Tick above to continue';
     switch (widget.plan) {
+      case SubscriptionPlan.pass:
+        return 'Subscribe — ₹79/week';
       case SubscriptionPlan.trial:
         return 'Subscribe — ₹199';
       case SubscriptionPlan.standard:
