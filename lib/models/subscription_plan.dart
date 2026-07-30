@@ -6,7 +6,7 @@
 /// in one tap from Settings:
 ///  - FREE:      1 chat total (lifetime), 0 palm.
 ///  - PASS       ₹79/WEEK  — 21 chats/week, 0 palm  (the ad front-door)
-///  - STANDARD   ₹199/mo   — 35 chats/mo,  2 palm/mo
+///  - STANDARD   ₹199/mo   — 50 chats/mo,  2 palm/mo
 ///  - PREMIUM    ₹499/mo   — 100 chats/mo, 5 palm/mo
 ///  - UNLIMITED  ₹999/mo   — unlimited chats + unlimited palm
 ///
@@ -21,7 +21,7 @@ enum SubscriptionPlan {
   /// ₹79/week — 21 chats/week, 0 palm. Cheap weekly front-door.
   pass,
 
-  /// ₹199/month — 35 chats/mo, 2 palm/mo.
+  /// ₹199/month — 50 chats/mo, 2 palm/mo.
   trial,
 
   /// ₹499/month — 100 chats/mo, 5 palm/mo.
@@ -141,7 +141,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.pass:
         return 21;         // 21 chats per week
       case SubscriptionPlan.trial:
-        return 35;         // 35 chats per month
+        return 50;         // 50 chats per month
       case SubscriptionPlan.standard:
         return 100;        // 100 chats per month
       case SubscriptionPlan.premium:
@@ -196,7 +196,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
         ];
       case SubscriptionPlan.trial:
         return [
-          '35 AI astrology chats per month',
+          '50 AI astrology chats per month',
           '2 palm readings per month',
           'Daily / weekly / monthly horoscope',
           'Full Kundli chart',

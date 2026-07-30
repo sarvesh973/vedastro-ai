@@ -561,7 +561,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           ),
           _faqItem(
             'What do the plans include?',
-            "Standard (₹199/mo) gives 35 chats + 2 palm readings a month. "
+            "Standard (₹199/mo) gives 50 chats + 2 palm readings a month. "
                 "Premium (₹499/mo) gives 100 chats + 5 palm readings. "
                 "Unlimited (₹999/mo) gives unlimited chats + unlimited palm "
                 "readings. All plans auto-renew monthly and can be cancelled "

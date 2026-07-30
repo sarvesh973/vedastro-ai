@@ -181,7 +181,7 @@ class PlanActivatedSheet extends StatelessWidget {
       case SubscriptionPlan.pass:
         return '₹79/week — 21 chats a week. Auto-renews weekly. Cancel anytime in Settings.';
       case SubscriptionPlan.trial:
-        return '₹199/month — 35 chats + 2 palm readings. Auto-renews monthly. Cancel anytime in Settings.';
+        return '₹199/month — 50 chats + 2 palm readings. Auto-renews monthly. Cancel anytime in Settings.';
       case SubscriptionPlan.standard:
         return '₹499/month — 100 chats + 5 palm readings. Cancel anytime in Settings.';
       case SubscriptionPlan.premium:
@@ -395,7 +395,7 @@ class _FeaturesCard extends StatelessWidget {
         ];
       case SubscriptionPlan.trial:
         return const [
-          '35 AI chats per month',
+          '50 AI chats per month',
           '2 palm readings per month',
           'Daily / weekly / monthly horoscope',
           'Full Kundli chart with D9 + D10',
