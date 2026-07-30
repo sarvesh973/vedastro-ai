@@ -253,8 +253,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     } else {
       headlineLabel = '${sub.plan.displayName} — Active';
       headlineSub = periodEnds != null
-          ? 'Renews on ${df.format(periodEnds)} • ₹${sub.plan.recurringPaise ~/ 100}/mo'
-          : '₹${sub.plan.recurringPaise ~/ 100}/month';
+          ? 'Renews on ${df.format(periodEnds)} • ₹${sub.plan.recurringPaise ~/ 100}/${sub.plan.billingCycle}'
+          : '₹${sub.plan.recurringPaise ~/ 100}/${sub.plan.billingCycle}';
     }
 
     // Upgrades: only offered when there's a higher tier AND the sub isn't
