@@ -65,6 +65,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   static const List<SubscriptionPlan> _defaultPlanOrder = [
+    SubscriptionPlan.pass,
     SubscriptionPlan.trial,
     SubscriptionPlan.standard,
     SubscriptionPlan.premium,
@@ -404,8 +405,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   String? _badgeFor(SubscriptionPlan plan) {
     switch (plan) {
+      case SubscriptionPlan.pass:
+        return 'MOST POPULAR';
       case SubscriptionPlan.trial:
-        return 'BEST TO START';
+        return 'INCLUDES PALM';
       case SubscriptionPlan.premium:
         return _plansToShow.contains(SubscriptionPlan.standard)
             ? 'BEST VALUE'
@@ -417,6 +420,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   Color? _badgeColorFor(SubscriptionPlan plan) {
     switch (plan) {
+      case SubscriptionPlan.pass:
+        return AppColors.goldLight;
       case SubscriptionPlan.trial:
         return AppColors.success;
       case SubscriptionPlan.premium:
@@ -445,6 +450,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   String _subscribeButtonLabel() {
     switch (_selectedPlan) {
+      case SubscriptionPlan.pass:
+        return 'Subscribe — ₹79/week';
       case SubscriptionPlan.trial:
         return 'Subscribe — ₹199/month';
       case SubscriptionPlan.standard:

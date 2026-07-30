@@ -163,6 +163,8 @@ class PlanActivatedSheet extends StatelessWidget {
 
   static String _titleFor(SubscriptionPlan p) {
     switch (p) {
+      case SubscriptionPlan.pass:
+        return 'Starter Pass Activated!';
       case SubscriptionPlan.trial:
         return 'Standard Plan Activated!';
       case SubscriptionPlan.standard:
@@ -176,8 +178,10 @@ class PlanActivatedSheet extends StatelessWidget {
 
   static String _subtitleFor(SubscriptionPlan p) {
     switch (p) {
+      case SubscriptionPlan.pass:
+        return '₹79/week — 21 chats a week. Auto-renews weekly. Cancel anytime in Settings.';
       case SubscriptionPlan.trial:
-        return '₹199/month — 35 chats + 2 palm readings. Auto-renews monthly. Cancel anytime in Settings.';
+        return '₹199/month — 50 chats + 2 palm readings. Auto-renews monthly. Cancel anytime in Settings.';
       case SubscriptionPlan.standard:
         return '₹499/month — 100 chats + 5 palm readings. Cancel anytime in Settings.';
       case SubscriptionPlan.premium:
@@ -189,6 +193,8 @@ class PlanActivatedSheet extends StatelessWidget {
 
   static Color _tintFor(SubscriptionPlan p) {
     switch (p) {
+      case SubscriptionPlan.pass:
+        return AppColors.success;
       case SubscriptionPlan.trial:
         return AppColors.success;
       case SubscriptionPlan.standard:
@@ -204,6 +210,12 @@ class PlanActivatedSheet extends StatelessWidget {
   /// Empty for premium — that's the highest, no upsell shown.
   static List<SubscriptionPlan> _upgradePathFrom(SubscriptionPlan p) {
     switch (p) {
+      case SubscriptionPlan.pass:
+        return const [
+          SubscriptionPlan.trial,
+          SubscriptionPlan.standard,
+          SubscriptionPlan.premium,
+        ];
       case SubscriptionPlan.trial:
         return const [SubscriptionPlan.standard, SubscriptionPlan.premium];
       case SubscriptionPlan.standard:
@@ -290,6 +302,8 @@ class _HeroBadge extends StatelessWidget {
 
   static IconData _iconFor(SubscriptionPlan p) {
     switch (p) {
+      case SubscriptionPlan.pass:
+        return Icons.bolt_rounded;
       case SubscriptionPlan.trial:
         return Icons.local_fire_department_rounded;
       case SubscriptionPlan.standard:
@@ -372,9 +386,16 @@ class _FeaturesCard extends StatelessWidget {
   /// users want to know what they actually got.
   static List<String> _featureLinesFor(SubscriptionPlan p) {
     switch (p) {
+      case SubscriptionPlan.pass:
+        return const [
+          '21 AI chats every week',
+          'Billed ₹79/week — cancel anytime',
+          'Daily / weekly / monthly horoscope',
+          'Full Kundli chart with D9 + D10',
+        ];
       case SubscriptionPlan.trial:
         return const [
-          '35 AI chats per month',
+          '50 AI chats per month',
           '2 palm readings per month',
           'Daily / weekly / monthly horoscope',
           'Full Kundli chart with D9 + D10',

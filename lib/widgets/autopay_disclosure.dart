@@ -119,14 +119,14 @@ class AutopayDisclosure extends StatelessWidget {
                   _bigPriceBox(
                     label: 'CHARGED TODAY',
                     amount: '₹${plan.firstChargePaise ~/ 100}',
-                    subtitle: '${plan.displayName} — first month',
+                    subtitle: '${plan.displayName} — first ${plan.billingCycle}',
                     accentColor: AppColors.success,
                   ),
                   const SizedBox(height: 10),
                   _arrowDown(),
                   const SizedBox(height: 10),
                   _bigPriceBox(
-                    label: 'EVERY MONTH AFTER',
+                    label: 'EVERY ${plan.billingCycle.toUpperCase()} AFTER',
                     amount: '₹${plan.recurringPaise ~/ 100}',
                     subtitle: 'Auto-debited until you cancel',
                     accentColor: AppColors.goldLight,
@@ -210,7 +210,7 @@ class AutopayDisclosure extends StatelessWidget {
                           child: Text(
                             isTrial
                                 ? "I understand: today's trial is FREE, and ₹99/month will auto-debit from my bank starting day 7 unless I cancel during the trial."
-                                : "I understand: ₹${plan.recurringPaise ~/ 100} will be auto-debited every month from my bank until I cancel.",
+                                : "I understand: ₹${plan.recurringPaise ~/ 100} will be auto-debited every ${plan.billingCycle} from my bank until I cancel.",
                             style: const TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 13,
