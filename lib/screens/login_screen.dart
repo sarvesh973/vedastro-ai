@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../providers/providers.dart';
 import '../widgets/starfield_background.dart';
+import '../widgets/legal_footer.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
 import 'user_details_screen.dart';
@@ -478,7 +479,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       .animate()
                       .fadeIn(duration: 500.ms, delay: 700.ms),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 28),
+                  const LegalFooter(),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
