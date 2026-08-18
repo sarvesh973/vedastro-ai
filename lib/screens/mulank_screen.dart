@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/mulank_reading.dart';
 import '../models/mulank_profile.dart';
 import '../services/mulank_service.dart';
+import '../services/analytics_service.dart';
 import '../theme/app_theme.dart';
 import 'paywall_screen.dart';
 
@@ -68,6 +69,9 @@ class _MulankScreenState extends State<MulankScreen> {
       _readings[period] = r;
       _loadingPeriods.remove(period);
     });
+    if (r != null) {
+      Analytics.mulankPeriodViewed(period: period, locked: r.locked);
+    }
   }
 
   void _selectPeriod(String period) {
@@ -76,8 +80,9 @@ class _MulankScreenState extends State<MulankScreen> {
     _loadPeriod(period);
   }
 
-  void _openPaywall() {
+  void _openPaywall(String source) {
     HapticFeedback.selectionClick();
+    Analytics.mulankUnlockTapped(source: source); // 'daily'|'weekly'|'monthly'|'ask'
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PaywallScreen(trigger: 'mulank')),
     );
@@ -92,6 +97,7 @@ class _MulankScreenState extends State<MulankScreen> {
     final q = _askController.text.trim();
     if (q.isEmpty || _asking) return;
     HapticFeedback.selectionClick();
+    Analytics.mulankAsked(promptLen: q.length);
     setState(() {
       _asking = true;
       _answer = null;
@@ -316,7 +322,7 @@ class _MulankScreenState extends State<MulankScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: _openPaywall,
+        onPressed: () => _openPaywall(_period),
         icon: const Icon(Icons.lock_open_rounded, size: 16),
         label: const Text('Unlock full reading'),
         style: ElevatedButton.styleFrom(
@@ -349,7 +355,7 @@ class _MulankScreenState extends State<MulankScreen> {
               ),
             ),
             TextButton(
-              onPressed: _openPaywall,
+              onPressed: () => _openPaywall('ask'),
               child: const Text('Unlock'),
             ),
           ],

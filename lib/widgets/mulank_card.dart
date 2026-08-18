@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/mulank_reading.dart';
 import '../services/mulank_service.dart';
 import '../services/storage_service.dart';
+import '../services/analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../screens/mulank_screen.dart';
 
@@ -38,10 +39,18 @@ class _MulankCardState extends State<MulankCard> {
       _reading = r;
       _loading = false;
     });
+    if (r != null) {
+      Analytics.mulankCardViewed(
+        mulank: r.mulank,
+        verdict: r.verdict,
+        locked: r.locked,
+      );
+    }
   }
 
   void _openDetail() {
     HapticFeedback.selectionClick();
+    Analytics.mulankOpened(source: 'home_card');
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const MulankScreen()),
     );
