@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/mulank_reading.dart';
+import '../models/mulank_profile.dart';
 import 'storage_service.dart';
 
 /// Client for the Mulank (Ank Jyotish) backend endpoints.
@@ -59,6 +60,27 @@ class MulankService {
           .timeout(const Duration(seconds: 20));
       if (resp.statusCode == 200) {
         return MulankReading.fromJson(
+            jsonDecode(resp.body) as Map<String, dynamic>);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Fetch the static personality profile for the active mulank.
+  static Future<MulankProfile?> getProfile() async {
+    final profile = StorageService.currentProfile;
+    if (profile == null) return null;
+    try {
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/mulank/profile');
+      final resp = await http
+          .post(
+            url,
+            headers: await _authHeaders(),
+            body: jsonEncode({'birthDate': _iso(profile.dateOfBirth)}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (resp.statusCode == 200) {
+        return MulankProfile.fromJson(
             jsonDecode(resp.body) as Map<String, dynamic>);
       }
     } catch (_) {}

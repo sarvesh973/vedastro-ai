@@ -4,7 +4,7 @@ import '../models/mulank_reading.dart';
 import '../services/mulank_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
-import '../screens/paywall_screen.dart';
+import '../screens/mulank_screen.dart';
 
 /// Home-screen "Today's Mulank" card. Sits just below Today's Cosmic Mood.
 ///
@@ -40,10 +40,10 @@ class _MulankCardState extends State<MulankCard> {
     });
   }
 
-  void _openPaywall() {
+  void _openDetail() {
     HapticFeedback.selectionClick();
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PaywallScreen(trigger: 'mulank')),
+      MaterialPageRoute(builder: (_) => const MulankScreen()),
     );
   }
 
@@ -57,7 +57,7 @@ class _MulankCardState extends State<MulankCard> {
 
     final locked = r.locked;
     return GestureDetector(
-      onTap: locked ? _openPaywall : null,
+      onTap: _openDetail,
       child: _shell(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
