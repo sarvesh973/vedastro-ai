@@ -451,7 +451,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   String _subscribeButtonLabel() {
     switch (_selectedPlan) {
       case SubscriptionPlan.pass:
-        return 'Subscribe — ₹79/week';
+        return 'Subscribe — ₹49/week';
       case SubscriptionPlan.trial:
         return 'Subscribe — ₹199/month';
       case SubscriptionPlan.standard:
