@@ -113,6 +113,50 @@ class Analytics {
 
   static Future<void> kundliViewed() => _log('kundli_viewed', {});
 
+  // ─── MULANK (Ank Jyotish) ───────────────────────────────────
+  // Funnel: mulank_card_viewed (daily impression / return signal)
+  //   → mulank_opened (tapped into detail)
+  //   → mulank_period_viewed (which periods they look at)
+  //   → mulank_unlock_tapped (conversion INTENT — also fires
+  //      paywall_viewed(trigger:'mulank') via the paywall it opens)
+  //   → mulank_asked (paid feature usage).
+  // Params are safe (mulank number, verdict, period) — never PII.
+
+  /// Home card rendered a reading. `locked` = free user seeing the teaser.
+  static Future<void> mulankCardViewed({
+    required int mulank,
+    required String verdict,
+    required bool locked,
+  }) =>
+      _log('mulank_card_viewed', {
+        'mulank': mulank,
+        'verdict': verdict,
+        'locked': locked ? '1' : '0',
+      });
+
+  /// Detail screen opened (from the home card).
+  static Future<void> mulankOpened({String source = 'home_card'}) =>
+      _log('mulank_opened', {'source': source});
+
+  /// A period reading was shown in the detail screen.
+  static Future<void> mulankPeriodViewed({
+    required String period,
+    required bool locked,
+  }) =>
+      _log('mulank_period_viewed', {
+        'period': period,
+        'locked': locked ? '1' : '0',
+      });
+
+  /// User tapped an Unlock CTA on a Mulank reading — key conversion intent.
+  /// source: 'daily' | 'weekly' | 'monthly' | 'ask'.
+  static Future<void> mulankUnlockTapped({required String source}) =>
+      _log('mulank_unlock_tapped', {'source': source});
+
+  /// Paid user submitted an "ask about my day" question.
+  static Future<void> mulankAsked({int? promptLen}) =>
+      _log('mulank_asked', {'prompt_len_bucket': _bucketLength(promptLen)});
+
   // ─── MONETIZATION ───────────────────────────────────────────
   static Future<void> paywallViewed({required String trigger}) {
     // Meta standard event: ViewContent — top-of-funnel signal that someone

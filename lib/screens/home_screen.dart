@@ -19,6 +19,7 @@ import 'kundli_screen.dart';
 import 'settings_screen.dart';
 import 'horoscope_screen.dart';
 import 'paywall_screen.dart';
+import '../widgets/mulank_card.dart';
 import 'legal_screen.dart';
 import 'subscription_screen.dart';
 import '../models/subscription_plan.dart';
@@ -365,6 +366,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // rotating zodiac glyph in the corner. Replaces the
                     // old Did-You-Know card.
                     _buildDailyVibeCard(context),
+
+                    // Today's Mulank (Ank Jyotish) card — deterministic
+                    // daily verdict + reading, with a paywall CTA for free
+                    // users. Sits between Cosmic Mood and the premium banner.
+                    const MulankCard(),
 
                     // Email verification banner — only renders for
                     // email/password users with unverified addresses.
