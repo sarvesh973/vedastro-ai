@@ -71,6 +71,9 @@ class _MulankScreenState extends State<MulankScreen> {
     });
     if (r != null) {
       Analytics.mulankPeriodViewed(period: period, locked: r.locked);
+      if (r.generationFailed) {
+        Analytics.mulankReadingFailed(period: period, reason: r.readingError);
+      }
     }
   }
 
@@ -129,7 +132,30 @@ class _MulankScreenState extends State<MulankScreen> {
           _readingCard(),
           const SizedBox(height: 20),
           _askSection(),
+          const SizedBox(height: 22),
+          _disclaimer(),
         ],
+      ),
+    );
+  }
+
+  /// Persistent guidance disclaimer. The server's system prompt explicitly
+  /// tells the model NOT to add per-reading disclaimers because the app is
+  /// assumed to show one — this is that disclaimer. Do not remove without
+  /// changing mulank-prompt.js too.
+  Widget _disclaimer() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Text(
+        'Ank Jyotish readings are for guidance and entertainment purposes.\n'
+        'Always trust your own judgement, and consult a qualified '
+        'professional for medical, legal, or financial decisions.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.textSecondary.withOpacity(0.65),
+          fontSize: 11.5,
+          height: 1.5,
+        ),
       ),
     );
   }
@@ -292,13 +318,26 @@ class _MulankScreenState extends State<MulankScreen> {
         children: [
           _verdictChip(r),
           const SizedBox(height: 12),
-          if (!r.locked && (r.reading?.isNotEmpty ?? false))
+          // Three states, not two: unlocked-but-failed must not show the
+          // paywall button to someone who has already paid.
+          if (r.hasReading)
             Text(
               r.reading!,
               style: TextStyle(
                 color: AppColors.textPrimary.withOpacity(0.92),
                 fontSize: 14,
                 height: 1.5,
+              ),
+            )
+          else if (r.generationFailed)
+            Text(
+              'This reading is taking a moment to prepare. The numbers and '
+              'verdict above are accurate — please check back shortly.',
+              style: TextStyle(
+                color: AppColors.textPrimary.withOpacity(0.7),
+                fontSize: 14,
+                height: 1.5,
+                fontStyle: FontStyle.italic,
               ),
             )
           else ...[

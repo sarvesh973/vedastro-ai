@@ -157,6 +157,19 @@ class Analytics {
   static Future<void> mulankAsked({int? promptLen}) =>
       _log('mulank_asked', {'prompt_len_bucket': _bucketLength(promptLen)});
 
+  /// Reading was unlocked for this user but no prose came back (provider
+  /// quota, timeout, outage). Without this the funnel looks HEALTHIER
+  /// during an outage — impressions hold and unlock-taps rise — so the
+  /// break is invisible in GA4. Always fire alongside the degraded UI.
+  static Future<void> mulankReadingFailed({
+    required String period,
+    String? reason,
+  }) =>
+      _log('mulank_reading_failed', {
+        'period': period,
+        'reason': reason ?? 'unknown',
+      });
+
   // ─── MONETIZATION ───────────────────────────────────────────
   static Future<void> paywallViewed({required String trigger}) {
     // Meta standard event: ViewContent — top-of-funnel signal that someone

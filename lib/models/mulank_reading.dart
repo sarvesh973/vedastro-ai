@@ -16,6 +16,10 @@ class MulankReading {
   final String? plan;
   final bool cached;
 
+  /// Set by the server when the reading was unlocked for this user but
+  /// LLM generation failed (e.g. provider quota). Distinct from [locked].
+  final String? readingError;
+
   const MulankReading({
     required this.mulank,
     required this.planet,
@@ -26,6 +30,7 @@ class MulankReading {
     this.locked = false,
     this.plan,
     this.cached = false,
+    this.readingError,
   });
 
   factory MulankReading.fromJson(Map<String, dynamic> j) {
@@ -39,8 +44,19 @@ class MulankReading {
       locked: (j['locked'] ?? false) as bool,
       plan: j['plan'] as String?,
       cached: (j['cached'] ?? false) as bool,
+      readingError: j['readingError'] as String?,
     );
   }
+
+  /// Unlocked for this user, but there is no prose to show — generation
+  /// failed upstream. The paywall CTA must NEVER be shown in this state:
+  /// the user has already paid for what we failed to produce.
+  bool get generationFailed =>
+      !locked && (reading == null || reading!.isEmpty);
+
+  /// True only when this user may see prose AND we actually have it.
+  bool get hasReading =>
+      !locked && reading != null && reading!.isNotEmpty;
 
   bool get isFavourable => verdict == 'favourable';
   bool get isCaution => verdict == 'caution';

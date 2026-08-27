@@ -45,6 +45,12 @@ class _MulankCardState extends State<MulankCard> {
         verdict: r.verdict,
         locked: r.locked,
       );
+      if (r.generationFailed) {
+        Analytics.mulankReadingFailed(
+          period: 'daily',
+          reason: r.readingError,
+        );
+      }
     }
   }
 
@@ -73,7 +79,9 @@ class _MulankCardState extends State<MulankCard> {
           children: [
             _header(r),
             const SizedBox(height: 12),
-            if (!locked && (r.reading?.isNotEmpty ?? false))
+            // Three distinct states — never collapse the last two, or a
+            // paying user whose reading failed gets shown the paywall.
+            if (r.hasReading)
               Text(
                 r.reading!,
                 style: TextStyle(
@@ -81,6 +89,19 @@ class _MulankCardState extends State<MulankCard> {
                   fontSize: 13.5,
                   height: 1.45,
                   letterSpacing: 0.1,
+                ),
+              )
+            else if (r.generationFailed)
+              // Unlocked but no prose: the numbers above still stand, so
+              // the card stays useful. No CTA — they already paid for this.
+              Text(
+                "Today's reading is taking a moment. Your numbers and "
+                'verdict above are accurate — check back shortly.',
+                style: TextStyle(
+                  color: AppColors.textPrimary.withOpacity(0.7),
+                  fontSize: 13,
+                  height: 1.45,
+                  fontStyle: FontStyle.italic,
                 ),
               )
             else ...[
