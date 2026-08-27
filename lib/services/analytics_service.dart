@@ -170,9 +170,9 @@ class Analytics {
   // 'drawer_upgrade', 'settings', 'settings_upgrade', 'post_purchase_upsell'
 
   /// Map plan id → INR value for Meta/GA4 value-optimisation.
-  /// pass=₹79/week (front door), trial=₹199, standard=₹499, premium=₹999.
+  /// pass=₹49/week (front door), trial=₹199, standard=₹499, premium=₹999.
   static const Map<String, double> _planValueInr = {
-    'pass': 79.0,
+    'pass': 49.0,
     'trial': 199.0,
     'standard': 499.0,
     'premium': 999.0,

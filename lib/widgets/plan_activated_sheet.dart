@@ -179,7 +179,7 @@ class PlanActivatedSheet extends StatelessWidget {
   static String _subtitleFor(SubscriptionPlan p) {
     switch (p) {
       case SubscriptionPlan.pass:
-        return '₹79/week — 21 chats a week. Auto-renews weekly. Cancel anytime in Settings.';
+        return '₹49/week — 21 chats a week. Auto-renews weekly. Cancel anytime in Settings.';
       case SubscriptionPlan.trial:
         return '₹199/month — 50 chats + 2 palm readings. Auto-renews monthly. Cancel anytime in Settings.';
       case SubscriptionPlan.standard:
@@ -389,7 +389,7 @@ class _FeaturesCard extends StatelessWidget {
       case SubscriptionPlan.pass:
         return const [
           '21 AI chats every week',
-          'Billed ₹79/week — cancel anytime',
+          'Billed ₹49/week — cancel anytime',
           'Daily / weekly / monthly horoscope',
           'Full Kundli chart with D9 + D10',
         ];
