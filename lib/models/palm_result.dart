@@ -51,6 +51,22 @@ class PalmReadingResult {
         if (mounts != null) mounts!,
       ];
 
-  /// Follow-up questions need a stored reading on the server.
-  bool get canAsk => readingId != null && readingId!.isNotEmpty;
+  /// Shape the server expects when we post the reading itself instead of an
+  /// id. Keys are arbitrary; it picks out any value carrying a `title`.
+  Map<String, dynamic> toJson() {
+    Map<String, dynamic> line(PalmLineResult l) => {
+          'title': l.title,
+          'emoji': l.emoji,
+          'insight': l.insight,
+          'meaning': l.meaning,
+          'advice': l.advice,
+        };
+    return {
+      'loveLine': line(loveLine),
+      'careerLine': line(careerLine),
+      'lifeLine': line(lifeLine),
+      if (fateLine != null) 'fateLine': line(fateLine!),
+      if (mounts != null) 'mounts': line(mounts!),
+    };
+  }
 }

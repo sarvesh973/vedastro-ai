@@ -711,9 +711,13 @@ class AiService {
   /// corpus, cites nothing, and is forbidden from describing a palm feature
   /// that was never observed. Sending palm questions to /chat would get
   /// verse citations about a hand the Jyotishi never saw.
+  /// Pass [readingId] when the server stored the reading (cheaper — it
+  /// already holds it), or [reading] when it did not. Sending neither is a
+  /// programming error; the server replies `no_reading`.
   static Future<String?> askPalm({
     required String question,
-    required String readingId,
+    String? readingId,
+    Map<String, dynamic>? reading,
     List<String> chatHistory = const [],
   }) async {
     try {
@@ -726,7 +730,8 @@ class AiService {
             headers: headers,
             body: jsonEncode({
               'question': question,
-              'readingId': readingId,
+              if (readingId != null) 'readingId': readingId,
+              if (reading != null) 'reading': reading,
               'chatHistory': chatHistory,
               'language': StorageService.languagePreference,
               if (p != null) ...{

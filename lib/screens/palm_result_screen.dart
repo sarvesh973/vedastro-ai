@@ -152,8 +152,11 @@ class PalmResultScreen extends ConsumerWidget {
           // Ask about the reading. Only offered when the server stored it -
           // /palm/ask answers against the saved reading, so without an id
           // there is nothing to ask about and the button would dead-end.
-          if (result.canAsk)
-            SliverToBoxAdapter(
+          // Always offered. It used to be gated on the server having stored
+          // the reading, so a failed Firestore write - or simply an older
+          // server build - made the whole chat vanish with no explanation.
+          // /palm/ask accepts the reading itself when there is no id.
+          SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                 child: SizedBox(

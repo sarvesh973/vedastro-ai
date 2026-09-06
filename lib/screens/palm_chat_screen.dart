@@ -55,17 +55,6 @@ class _PalmChatScreenState extends ConsumerState<PalmChatScreen> {
   Future<void> _send(String text) async {
     final q = text.trim();
     if (q.isEmpty || _sending) return;
-    if (!widget.reading.canAsk) {
-      setState(() {
-        _messages.add(const _PalmChatMessage(
-          'This reading was not saved, so I cannot answer questions about it. '
-          'Please scan your palm again.',
-          fromUser: false,
-        ));
-      });
-      return;
-    }
-
     setState(() {
       _messages.add(_PalmChatMessage(q, fromUser: true));
       _sending = true;
@@ -81,9 +70,12 @@ class _PalmChatScreenState extends ConsumerState<PalmChatScreen> {
         .map((m) => '${m.fromUser ? 'User' : 'Palmist'}: ${m.text}')
         .toList();
 
+    // Prefer the id (cheaper — the server already holds the reading), fall
+    // back to posting the reading itself when it was never stored.
     final answer = await AiService.askPalm(
       question: q,
-      readingId: widget.reading.readingId!,
+      readingId: widget.reading.readingId,
+      reading: widget.reading.readingId == null ? widget.reading.toJson() : null,
       chatHistory: history,
     );
 
