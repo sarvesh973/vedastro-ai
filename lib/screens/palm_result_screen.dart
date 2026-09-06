@@ -5,6 +5,8 @@ import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import '../providers/providers.dart';
 import '../widgets/result_card.dart';
+import '../services/analytics_service.dart';
+import 'palm_chat_screen.dart';
 
 class PalmResultScreen extends ConsumerWidget {
   const PalmResultScreen({super.key});
@@ -97,12 +99,25 @@ class PalmResultScreen extends ConsumerWidget {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 4),
+                          // Says what actually happened. It used to claim
+                          // "Based on Samudrik Shastra" while we hold no
+                          // palmistry text at all, so nothing was based on
+                          // it. When birth details were available the
+                          // reading really was cross-checked against the
+                          // chart, and that is worth saying; when they were
+                          // not, we do not pretend otherwise.
                           Text(
-                            'Based on Samudrik Shastra',
+                            result.usedChart
+                                ? 'Read with your birth chart'
+                                : 'Read from your hand',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
-                                ?.copyWith(color: AppColors.textMuted),
+                                ?.copyWith(
+                                  color: result.usedChart
+                                      ? AppColors.goldLight.withOpacity(0.85)
+                                      : AppColors.textMuted,
+                                ),
                           ),
                         ],
                       ),
@@ -133,6 +148,40 @@ class PalmResultScreen extends ConsumerWidget {
               ),
             ),
           ),
+
+          // Ask about the reading. Only offered when the server stored it -
+          // /palm/ask answers against the saved reading, so without an id
+          // there is nothing to ask about and the button would dead-end.
+          if (result.canAsk)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Analytics.palmOpenedChat();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => PalmChatScreen(reading: result),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline_rounded,
+                        size: 18),
+                    label: const Text('Ask about your palm'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.purpleAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           // Bottom spacing
           const SliverToBoxAdapter(

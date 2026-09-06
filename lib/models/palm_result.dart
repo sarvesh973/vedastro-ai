@@ -19,11 +19,38 @@ class PalmReadingResult {
   final PalmLineResult careerLine;
   final PalmLineResult lifeLine;
 
+  /// Fate line and mounts. Nullable because the server only guarantees the
+  /// original three - it is told to omit a section rather than invent one
+  /// when the photo does not show it clearly.
+  final PalmLineResult? fateLine;
+  final PalmLineResult? mounts;
+
+  /// Server-side id for this reading. Follow-up questions post this instead
+  /// of resending the whole reading.
+  final String? readingId;
+
+  /// True when the reading was cross-checked against the user's kundli.
+  /// False means birth details were missing and this is an image-only read.
+  final bool usedChart;
+
   const PalmReadingResult({
     required this.loveLine,
     required this.careerLine,
     required this.lifeLine,
+    this.fateLine,
+    this.mounts,
+    this.readingId,
+    this.usedChart = false,
   });
 
-  List<PalmLineResult> get allLines => [loveLine, careerLine, lifeLine];
+  List<PalmLineResult> get allLines => [
+        loveLine,
+        careerLine,
+        lifeLine,
+        if (fateLine != null) fateLine!,
+        if (mounts != null) mounts!,
+      ];
+
+  /// Follow-up questions need a stored reading on the server.
+  bool get canAsk => readingId != null && readingId!.isNotEmpty;
 }

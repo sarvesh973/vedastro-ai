@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../providers/providers.dart';
 import '../services/ai_service.dart';
 import '../services/storage_service.dart';
+import '../services/analytics_service.dart';
 import 'dart:ui';
 import '../widgets/palm_guide_overlay.dart';
 import 'palm_result_screen.dart';
@@ -24,6 +25,12 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
     with TickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
   bool _isAnalyzing = false;
+
+  /// Which hand the photo is of. Defaults to 'right' because most users are
+  /// right-handed and the dominant hand shows what they have made of their
+  /// potential — the more useful reading of the two. Sent to the server,
+  /// which reads the two hands differently.
+  String _selectedHand = 'right';
   String? _capturedImagePath;
 
   // Scanner animations
@@ -74,6 +81,67 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
     _pulseController.dispose();
     _gridController.dispose();
     super.dispose();
+  }
+
+  /// Left/right toggle. The wording matters more than the control: users do
+  /// not know why a palmist asks, and "what you were born with" versus "what
+  /// you have made of it" is the actual distinction, not handedness trivia.
+  Widget _handSelector() {
+    Widget option(String value, String label, String sub) {
+      final selected = _selectedHand == value;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() => _selectedHand = value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.purpleAccent.withOpacity(0.22)
+                  : Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected
+                    ? AppColors.purpleAccent.withOpacity(0.7)
+                    : Colors.white.withOpacity(0.08),
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  sub,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 10.5,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        option('right', 'Right hand', 'what you have made'),
+        const SizedBox(width: 10),
+        option('left', 'Left hand', 'what you were born with'),
+      ],
+    );
   }
 
   void _startScanAnimation() {
@@ -138,9 +206,12 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
       // Start scanner animation
       _startScanAnimation();
 
-      // Analyze palm in background
-      final result = await AiService.analyzePalm(image.path);
+      // Analyze palm in background. `_selectedHand` changes the reading:
+      // the non-dominant hand is read as what a person was born with, the
+      // dominant as what they have made of it.
+      final result = await AiService.analyzePalm(image.path, hand: _selectedHand);
       ref.read(palmResultProvider.notifier).state = result;
+      Analytics.palmReadingShown(usedChart: result.usedChart);
 
       await StorageService.incrementPalmReadings();
       ref.read(palmReadingsUsedProvider.notifier).state =
@@ -862,6 +933,11 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
               .fadeIn(duration: 500.ms, delay: 300.ms),
 
           const Spacer(flex: 1),
+
+          // Which hand. Classical palmistry reads the two differently, so
+          // this genuinely changes the reading rather than being a label.
+          _handSelector(),
+          const SizedBox(height: 16),
 
           // Camera button (primary)
           SizedBox(
