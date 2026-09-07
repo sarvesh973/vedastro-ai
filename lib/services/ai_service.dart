@@ -704,6 +704,56 @@ class AiService {
     }
   }
 
+  /// Compatibility reading between the signed-in user and a partner.
+  ///
+  /// Returns the raw map rather than a typed model: the score, archetypes
+  /// and dimension bars are all rendered directly, and a model would just
+  /// be a second place to keep the field names in sync with the server.
+  static Future<Map<String, dynamic>?> compatReading({
+    required String partnerName,
+    required String partnerBirthDate,
+    required String partnerBirthTime,
+    required String partnerPlace,
+  }) async {
+    final p = StorageService.currentProfile;
+    if (p == null) return null;
+    try {
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/compat/reading');
+      final headers = await _authHeaders();
+      final response = await http
+          .post(
+            url,
+            headers: headers,
+            body: jsonEncode({
+              'you': {
+                'birthDate': p.dobFormatted,
+                'birthTime': p.timeOfBirth ?? '',
+                'place': p.placeOfBirth,
+              },
+              'partner': {
+                'birthDate': partnerBirthDate,
+                'birthTime': partnerBirthTime,
+                'place': partnerPlace,
+              },
+              'yourName': p.firstName,
+              'partnerName': partnerName,
+              'language': StorageService.languagePreference,
+            }),
+          )
+          .timeout(const Duration(seconds: 90));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      if (response.statusCode == 429) Analytics.rateLimitHit(feature: 'compat');
+      print('[COMPAT] Status ${response.statusCode}: ${response.body}');
+      return null;
+    } catch (e) {
+      print('[COMPAT] error: $e');
+      return null;
+    }
+  }
+
   /// Palm reading using Gemini Vision
   static Future<PalmReadingResult> analyzePalm(String imagePath) async {
     Analytics.palmUploaded(source: imagePath.contains('camera') ? 'camera' : 'gallery');
