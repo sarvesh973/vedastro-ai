@@ -86,49 +86,41 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
   /// Left/right toggle. The wording matters more than the control: users do
   /// not know why a palmist asks, and "what you were born with" versus "what
   /// you have made of it" is the actual distinction, not handedness trivia.
+  /// Compact single-row toggle. Height matters here: this Column has no
+  /// scroll view and relies on Spacers to fill the screen exactly, so
+  /// anything tall enough to exhaust the Spacers pushes the camera and
+  /// gallery buttons off the bottom, where they are clipped AND untappable.
+  /// The first version was a two-line card and did exactly that.
   Widget _handSelector() {
-    Widget option(String value, String label, String sub) {
+    Widget option(String value, String label) {
       final selected = _selectedHand == value;
       return Expanded(
         child: GestureDetector(
           onTap: () => setState(() => _selectedHand = value),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               color: selected
                   ? AppColors.purpleAccent.withOpacity(0.22)
                   : Colors.white.withOpacity(0.04),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: selected
                     ? AppColors.purpleAccent.withOpacity(0.7)
                     : Colors.white.withOpacity(0.08),
               ),
             ),
-            child: Column(
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: selected
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  sub,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 10.5,
-                    height: 1.3,
-                  ),
-                ),
-              ],
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -137,9 +129,9 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
 
     return Row(
       children: [
-        option('right', 'Right hand', 'what you have made'),
-        const SizedBox(width: 10),
-        option('left', 'Left hand', 'what you were born with'),
+        option('right', 'Right hand'),
+        const SizedBox(width: 8),
+        option('left', 'Left hand'),
       ],
     );
   }
@@ -867,10 +859,27 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
   // ═══════════════════════════════════════════
 
   Widget _buildUploadUI() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        children: [
+    // Scrollable, but still able to use Spacer.
+    //
+    // This Column fills the screen with two Spacers and no scroll view, so
+    // any content added to it eats the Spacers' slack and then overflows -
+    // and an overflowing Column CLIPS its tail, leaving the camera and
+    // gallery buttons invisible and untappable. Adding the hand selector
+    // did exactly that on shorter screens.
+    //
+    // LayoutBuilder + a minHeight equal to the viewport + IntrinsicHeight is
+    // the standard fix: the Spacers still distribute slack when there is
+    // room, and the whole thing scrolls when there is not, instead of
+    // silently swallowing the buttons.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                children: [
           const SizedBox(height: 16),
 
           // Info banner
@@ -922,7 +931,7 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
           const SizedBox(height: 8),
 
           Text(
-            'Keep palm open and well-lit\nRight hand for males, Left for females',
+            'Keep palm open and well-lit',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textMuted,
@@ -937,7 +946,7 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
           // Which hand. Classical palmistry reads the two differently, so
           // this genuinely changes the reading rather than being a label.
           _handSelector(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
           // Camera button (primary)
           SizedBox(
@@ -1010,8 +1019,12 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
               .animate()
               .fadeIn(duration: 500.ms, delay: 600.ms),
 
-          const SizedBox(height: 32),
-        ],
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
