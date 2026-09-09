@@ -704,8 +704,76 @@ class AiService {
     }
   }
 
-  /// Palm reading using Gemini Vision
-  static Future<PalmReadingResult> analyzePalm(String imagePath) async {
+  /// Ask a follow-up about a palm reading.
+  ///
+  /// Deliberately NOT the normal chat endpoint. /palm/ask answers only from
+  /// the reading already produced for this hand plus the chart - it has no
+  /// corpus, cites nothing, and is forbidden from describing a palm feature
+  /// that was never observed. Sending palm questions to /chat would get
+  /// verse citations about a hand the Jyotishi never saw.
+  /// Pass [readingId] when the server stored the reading (cheaper — it
+  /// already holds it), or [reading] when it did not. Sending neither is a
+  /// programming error; the server replies `no_reading`.
+  static Future<String?> askPalm({
+    required String question,
+    String? readingId,
+    Map<String, dynamic>? reading,
+    List<String> chatHistory = const [],
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.cloudFunctionBaseUrl}/palm/ask');
+      final headers = await _authHeaders();
+      final p = StorageService.currentProfile;
+      final response = await http
+          .post(
+            url,
+            headers: headers,
+            body: jsonEncode({
+              'question': question,
+              if (readingId != null) 'readingId': readingId,
+              if (reading != null) 'reading': reading,
+              'chatHistory': chatHistory,
+              'language': StorageService.languagePreference,
+              if (p != null) ...{
+                'userProfile': p.profileSummary,
+                'birthDate': p.dobFormatted,
+                'birthTime': p.timeOfBirth ?? '',
+                'place': p.placeOfBirth,
+              },
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final answer = (data['answer'] as String?)?.trim();
+        return (answer == null || answer.isEmpty) ? null : answer;
+      }
+      if (response.statusCode == 429) {
+        Analytics.rateLimitHit(feature: 'palm_ask');
+      }
+      print('[PALM ASK] Status ${response.statusCode}');
+      return null;
+    } catch (e) {
+      print('[PALM ASK] error: $e');
+      return null;
+    }
+  }
+
+  /// Palm reading using Gemini Vision.
+  ///
+  /// [hand] is 'left' or 'right' when the user told us. The server reads the
+  /// non-dominant hand as what a person was born with and the dominant as
+  /// what they have made of it, so this changes the reading meaningfully.
+  ///
+  /// Birth details are sent when a profile exists. That is what lets the
+  /// server cross-check the mounts against the actual planetary placements -
+  /// without them the reading falls back to image-only, which is what every
+  /// other palm app does.
+  static Future<PalmReadingResult> analyzePalm(
+    String imagePath, {
+    String? hand,
+  }) async {
     Analytics.palmUploaded(source: imagePath.contains('camera') ? 'camera' : 'gallery');
     try {
       // Read + base64-encode the image. Image picker is already capped at
@@ -734,6 +802,14 @@ class AiService {
             body: jsonEncode({
               'imageBase64': imageB64,
               'mimeType': mimeType,
+              if (hand != null) 'hand': hand,
+              // Optional on the server: absent or unparseable birth details
+              // degrade to an image-only reading rather than failing.
+              if (StorageService.currentProfile != null) ...{
+                'birthDate': StorageService.currentProfile!.dobFormatted,
+                'birthTime': StorageService.currentProfile!.timeOfBirth ?? '',
+                'place': StorageService.currentProfile!.placeOfBirth,
+              },
             }),
           )
           .timeout(const Duration(seconds: 90));
@@ -756,6 +832,12 @@ class AiService {
           loveLine: _parsePalmLine(data['loveLine']),
           careerLine: _parsePalmLine(data['careerLine']),
           lifeLine: _parsePalmLine(data['lifeLine']),
+          // Optional sections - omitted by the server when the photo does
+          // not show them clearly, which is deliberate, not a failure.
+          fateLine: data['fateLine'] != null ? _parsePalmLine(data['fateLine']) : null,
+          mounts: data['mounts'] != null ? _parsePalmLine(data['mounts']) : null,
+          readingId: data['readingId'] as String?,
+          usedChart: data['usedChart'] == true,
         );
       } else if (response.statusCode == 401) {
         try {
