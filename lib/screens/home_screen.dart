@@ -18,6 +18,7 @@ import 'palm_upload_screen.dart';
 import 'kundli_screen.dart';
 import 'settings_screen.dart';
 import 'horoscope_screen.dart';
+import 'compat_screen.dart';
 import 'paywall_screen.dart';
 import '../widgets/mulank_card.dart';
 import 'legal_screen.dart';
@@ -1900,6 +1901,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     _bottomNavItem(
                       index: 2,
+                      icon: Icons.favorite_outline_rounded,
+                      label: 'Match',
+                      destination: const CompatScreen(),
+                    ),
+                    _bottomNavItem(
+                      index: 3,
                       icon: Icons.stars_outlined,
                       label: 'Horoscope',
                       destination: const HoroscopeScreen(),
