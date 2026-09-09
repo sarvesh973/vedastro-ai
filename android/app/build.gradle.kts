@@ -19,9 +19,9 @@ if (hasKeystore) {
 
 android {
     namespace = "com.mokshastro.ai"
-    // compileSdk = 36 to satisfy AndroidX libs (activity 1.12.4, core 1.18.0).
     // compileSdk only affects what APIs the code can call — it does NOT change
-    // the app's runtime target. It just has to be >= targetSdk.
+    // the app's runtime target. It just has to be >= targetSdk, and both are
+    // now 36 (Android 16), which is Play's current minimum for uploads.
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -37,7 +37,7 @@ android {
     defaultConfig {
         applicationId = "com.mokshastro.ai"
         minSdk = 23                    // Android 6.0+ — covers ~99% of devices
-        targetSdk = 35                 // Play Store now requires API 35 minimum
+        targetSdk = 36                 // Play Store now requires API 36 minimum
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
