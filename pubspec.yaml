@@ -24,6 +24,10 @@ dependencies:
   http: ^1.2.0
   smooth_page_indicator: ^1.1.0
   cached_network_image: ^3.3.1
+  # Reads the Play Store install referrer set by /get?src=<creator>, so an
+  # install can be traced back to the influencer who drove it. Android only,
+  # which is fine - there is no iOS build.
+  android_play_install_referrer: ^0.4.0
   # Firebase
   firebase_core: ^3.13.0
   firebase_auth: ^5.7.0
