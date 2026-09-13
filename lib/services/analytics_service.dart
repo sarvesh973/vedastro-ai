@@ -134,6 +134,10 @@ class Analytics {
   static Future<void> palmReadingShown({required bool usedChart}) =>
       _log('palm_reading_shown', {'used_chart': usedChart ? '1' : '0'});
 
+  /// Ran a compatibility check. No partner details are logged - the partner
+  /// is not a user of this app and has not consented to anything.
+  static Future<void> compatChecked() => _log('compat_checked', {});
+
   static Future<void> horoscopeViewed({required String period, String? sign}) =>
       _log('horoscope_viewed', {
         'period': period,
