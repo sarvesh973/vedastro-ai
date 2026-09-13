@@ -54,6 +54,20 @@ class Analytics {
     } catch (_) {}
   }
 
+  // ─── Install attribution ─────────────────────────────────
+  // Set once at startup from the Play install referrer, then applied as GA4
+  // user properties. User properties persist across events and sessions, so
+  // every funnel and audience can be segmented by source without a single
+  // call site having to remember to pass it - and signup and purchase, the
+  // two that decide whether a creator paid off, cannot silently lose it.
+  static void setAttribution(Map<String, String> attr) {
+    try {
+      attr.forEach((k, v) {
+        _instance?.setUserProperty(name: 'attr_$k', value: v);
+      });
+    } catch (_) {}
+  }
+
   /// Hook this into MaterialApp to auto-track screen views.
   static FirebaseAnalyticsObserver? get observer => _observer;
 

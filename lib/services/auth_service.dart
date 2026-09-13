@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api_config.dart';
 import 'analytics_service.dart';
+import 'attribution_service.dart';
+import 'firestore_service.dart';
 
 /// Firebase Authentication Service
 class AuthService {
@@ -120,6 +122,11 @@ class AuthService {
       if (credential.user != null) {
         await Analytics.signupCompleted(method: 'email');
         await Analytics.setUser(uid: credential.user!.uid);
+        // Stamp the install source so the admin can group subscribers by
+        // creator. Written for every signup, attributed or not - organic is
+        // the denominator any per-creator rate is measured against.
+        await FirestoreService.saveAttribution(
+            credential.user!.uid, AttributionService.params);
       }
 
       return AuthResult(success: true, user: credential.user);
@@ -188,6 +195,8 @@ class AuthService {
         } else {
           await Analytics.loginCompleted(method: 'google');
         }
+        await FirestoreService.saveAttribution(
+            userCredential.user!.uid, AttributionService.params);
         await Analytics.setUser(uid: userCredential.user!.uid);
       }
       return AuthResult(success: true, user: userCredential.user);

@@ -323,6 +323,30 @@ class FirestoreService {
     } catch (_) {}
   }
 
+  /// Stamp the install source onto the user document.
+  ///
+  /// GA4 already carries it as a user property, but GA4 cannot be joined to
+  /// the subscription records the admin dashboard reads. Writing it here is
+  /// what lets /admin/api/subscriptions answer "how many of this creator's
+  /// installs actually subscribed", which is the number creators get paid on.
+  ///
+  /// Written on sign-in rather than on purchase, because a user who never
+  /// subscribes is still needed as the denominator.
+  static Future<void> saveAttribution(
+    String uid,
+    Map<String, String> attribution,
+  ) async {
+    if (attribution.isEmpty) return;
+    try {
+      await _db.collection('users').doc(uid).set({
+        'attribution': attribution,
+        // Only set once. A later launch must not overwrite the original
+        // source with 'organic' and quietly erase the credit.
+        'attributionAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   // ─── Payment Records ────────────────────────
 
   /// Save Razorpay payment record
