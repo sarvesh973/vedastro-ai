@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../providers/providers.dart';
 import '../services/ai_service.dart';
 import '../services/storage_service.dart';
+import '../services/analytics_service.dart';
 import 'dart:ui';
 import '../widgets/palm_guide_overlay.dart';
 import 'palm_result_screen.dart';
@@ -24,6 +25,12 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
     with TickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
   bool _isAnalyzing = false;
+
+  /// Which hand the photo is of. Defaults to 'right' because most users are
+  /// right-handed and the dominant hand shows what they have made of their
+  /// potential — the more useful reading of the two. Sent to the server,
+  /// which reads the two hands differently.
+  String _selectedHand = 'right';
   String? _capturedImagePath;
 
   // Scanner animations
@@ -74,6 +81,59 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
     _pulseController.dispose();
     _gridController.dispose();
     super.dispose();
+  }
+
+  /// Left/right toggle. The wording matters more than the control: users do
+  /// not know why a palmist asks, and "what you were born with" versus "what
+  /// you have made of it" is the actual distinction, not handedness trivia.
+  /// Compact single-row toggle. Height matters here: this Column has no
+  /// scroll view and relies on Spacers to fill the screen exactly, so
+  /// anything tall enough to exhaust the Spacers pushes the camera and
+  /// gallery buttons off the bottom, where they are clipped AND untappable.
+  /// The first version was a two-line card and did exactly that.
+  Widget _handSelector() {
+    Widget option(String value, String label) {
+      final selected = _selectedHand == value;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() => _selectedHand = value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.purpleAccent.withOpacity(0.22)
+                  : Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected
+                    ? AppColors.purpleAccent.withOpacity(0.7)
+                    : Colors.white.withOpacity(0.08),
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        option('right', 'Right hand'),
+        const SizedBox(width: 8),
+        option('left', 'Left hand'),
+      ],
+    );
   }
 
   void _startScanAnimation() {
@@ -138,9 +198,12 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
       // Start scanner animation
       _startScanAnimation();
 
-      // Analyze palm in background
-      final result = await AiService.analyzePalm(image.path);
+      // Analyze palm in background. `_selectedHand` changes the reading:
+      // the non-dominant hand is read as what a person was born with, the
+      // dominant as what they have made of it.
+      final result = await AiService.analyzePalm(image.path, hand: _selectedHand);
       ref.read(palmResultProvider.notifier).state = result;
+      Analytics.palmReadingShown(usedChart: result.usedChart);
 
       await StorageService.incrementPalmReadings();
       ref.read(palmReadingsUsedProvider.notifier).state =
@@ -796,10 +859,27 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
   // ═══════════════════════════════════════════
 
   Widget _buildUploadUI() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        children: [
+    // Scrollable, but still able to use Spacer.
+    //
+    // This Column fills the screen with two Spacers and no scroll view, so
+    // any content added to it eats the Spacers' slack and then overflows -
+    // and an overflowing Column CLIPS its tail, leaving the camera and
+    // gallery buttons invisible and untappable. Adding the hand selector
+    // did exactly that on shorter screens.
+    //
+    // LayoutBuilder + a minHeight equal to the viewport + IntrinsicHeight is
+    // the standard fix: the Spacers still distribute slack when there is
+    // room, and the whole thing scrolls when there is not, instead of
+    // silently swallowing the buttons.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                children: [
           const SizedBox(height: 16),
 
           // Info banner
@@ -851,7 +931,7 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
           const SizedBox(height: 8),
 
           Text(
-            'Keep palm open and well-lit\nRight hand for males, Left for females',
+            'Keep palm open and well-lit',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textMuted,
@@ -862,6 +942,11 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
               .fadeIn(duration: 500.ms, delay: 300.ms),
 
           const Spacer(flex: 1),
+
+          // Which hand. Classical palmistry reads the two differently, so
+          // this genuinely changes the reading rather than being a label.
+          _handSelector(),
+          const SizedBox(height: 10),
 
           // Camera button (primary)
           SizedBox(
@@ -934,8 +1019,12 @@ class _PalmUploadScreenState extends ConsumerState<PalmUploadScreen>
               .animate()
               .fadeIn(duration: 500.ms, delay: 600.ms),
 
-          const SizedBox(height: 32),
-        ],
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -54,6 +54,20 @@ class Analytics {
     } catch (_) {}
   }
 
+  // ─── Install attribution ─────────────────────────────────
+  // Set once at startup from the Play install referrer, then applied as GA4
+  // user properties. User properties persist across events and sessions, so
+  // every funnel and audience can be segmented by source without a single
+  // call site having to remember to pass it - and signup and purchase, the
+  // two that decide whether a creator paid off, cannot silently lose it.
+  static void setAttribution(Map<String, String> attr) {
+    try {
+      attr.forEach((k, v) {
+        _instance?.setUserProperty(name: 'attr_$k', value: v);
+      });
+    } catch (_) {}
+  }
+
   /// Hook this into MaterialApp to auto-track screen views.
   static FirebaseAnalyticsObserver? get observer => _observer;
 
@@ -104,6 +118,21 @@ class Analytics {
 
   static Future<void> palmAnalyzed({required bool success}) =>
       _log('palm_analyzed', {'success': success ? '1' : '0'});
+
+  /// Follow-up question asked about a palm reading. Distinct from
+  /// chat_sent — this is the palm conversation, not the Jyotishi chat, and
+  /// mixing them would make palm engagement invisible in the funnel.
+  static Future<void> palmAsked({int? promptLen}) =>
+      _log('palm_asked', {'prompt_len_bucket': _bucketLength(promptLen)});
+
+  /// Tapped through from the reading into the palm conversation.
+  static Future<void> palmOpenedChat() => _log('palm_opened_chat', {});
+
+  /// Whether the reading was cross-checked against the user's kundli.
+  /// The share of readings running image-only tells us how many users are
+  /// missing the one thing that differentiates this from every other palm app.
+  static Future<void> palmReadingShown({required bool usedChart}) =>
+      _log('palm_reading_shown', {'used_chart': usedChart ? '1' : '0'});
 
   /// Ran a compatibility check. No partner details are logged - the partner
   /// is not a user of this app and has not consented to anything.

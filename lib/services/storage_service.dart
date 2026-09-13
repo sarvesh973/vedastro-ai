@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
 import '../models/subscription_plan.dart';
 import 'firestore_service.dart';
+import 'auth_service.dart';
 
 /// Persistent storage service using SharedPreferences
 class StorageService {
@@ -258,7 +259,23 @@ class StorageService {
   /// check the actual plan — not just the premium flag — otherwise pass users
   /// would wrongly get palm access.
   static bool get canDoPalmReading {
+    // Admins bypass, matching the server, which already skips quota for
+    // ADMIN_EMAILS. Without this an admin is worse off than a free user:
+    // main.dart grants them isPremium on launch, which sends them down the
+    // paid branch below, where lastPurchasedPlan is null because they never
+    // bought anything - so fromId() returns free, palmLimit is 0, and palm
+    // locks. The bypass was locking out the very accounts it was for.
+    if (AuthService.isAdmin) return true;
+
     if (!isPremium) return palmReadingsUsed < freePalmLimit;
+
+    // Premium but no plan tag. Happens after a reinstall, cleared storage,
+    // or when the Razorpay webhook never wrote the subscription doc, so the
+    // heal in main.dart had nothing to read. Fail OPEN: wrongly granting
+    // palm to a ₹49 pass user costs one reading, wrongly denying it to
+    // someone who paid ₹499 for it is a refund and a support ticket.
+    if (lastPurchasedPlan == null || lastPurchasedPlan!.isEmpty) return true;
+
     final plan = SubscriptionPlanInfo.fromId(lastPurchasedPlan);
     return plan.palmLimit != 0; // pass(0)=false; standard(5)/premium(-1)=true
   }

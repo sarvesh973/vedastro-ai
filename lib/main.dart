@@ -13,6 +13,7 @@ import 'services/storage_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/analytics_service.dart';
+import 'services/attribution_service.dart';
 import 'services/ui_error_log.dart';
 import 'screens/animated_splash_screen.dart';
 import 'models/subscription_plan.dart';
@@ -65,6 +66,13 @@ void main() async {
 
     // Initialize persistent storage
     await StorageService.init();
+
+    // Where this install came from. Must run before the first signup or
+    // purchase event so those carry the source - the Play referrer is
+    // install-scoped and read exactly once, so a late read means the
+    // conversion that matters most is the one we cannot attribute.
+    await AttributionService.init();
+    Analytics.setAttribution(AttributionService.params);
 
     // Sync cloud data if user is logged in
     _syncCloudData();
