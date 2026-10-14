@@ -65,3 +65,7 @@ scripts/.env
 
 # Knowledge base (too large for git, stored in Firestore)
 knowledge_base/*.json
+
+# Firebase CLI scratch dir from `crashlytics:symbols:upload`
+# (holds an 11 MB dump_syms binary it downloads on first run)
+.crashlytics/

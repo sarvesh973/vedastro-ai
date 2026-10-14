@@ -154,6 +154,36 @@ jobs:
             --split-debug-info=build/symbols
           ls -lh build/app/outputs/bundle/release/
 
+      # CRASHLYTICS SYMBOLS — must run on every release build.
+      #
+      # Both builds above pass --obfuscate, so without these symbols every
+      # Dart stack trace in Crashlytics is raw instruction offsets
+      # ("#00 abs 00000072282d4657 ... _kDartIsolateSnapshotInstructions")
+      # rather than file:line. The symbols used to be uploaded only as a
+      # GitHub artifact with a comment saying to push them to Firebase by
+      # hand — which never happened, leaving 929 crash events across
+      # 1.1.3-1.1.10 undebuggable.
+      #
+      # Same service-account pattern as deploy-functions.yml. Note that SA
+      # has incomplete IAM (it already lacks Service Usage Admin, see that
+      # workflow): if this step 403s, grant it Firebase Crashlytics Admin.
+      # continue-on-error so a symbol-upload permission problem can never
+      # block shipping an otherwise-good build.
+      - name: Upload Dart symbols to Crashlytics
+        if: env.RELEASE_BUILD == 'true'
+        continue-on-error: true
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          # printf, not echo, so JSON quoting in the secret survives intact.
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/firebase-key.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-key.json"
+          npm install -g firebase-tools@latest
+          firebase crashlytics:symbols:upload \
+            --app=1:1030095774035:android:7751e07ddd10cef78201a6 \
+            build/symbols
+          rm -f "$RUNNER_TEMP/firebase-key.json"
+
       # Two upload paths so PR reviewers know exactly which APK is theirs.
       - name: Upload Release APK (PR review build)
         if: env.RELEASE_BUILD == 'true' && github.event_name == 'pull_request'
@@ -179,9 +209,11 @@ jobs:
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
 
-      # Debug symbols for Crashlytics stack-trace deobfuscation.
-      # Upload these to Firebase Console → Crashlytics after each release.
-      - name: Upload Debug Symbols (for Crashlytics)
+      # Kept as a backup copy only — the step above already pushes these
+      # to Crashlytics automatically. Retained so symbols for a past build
+      # can be re-uploaded if a release ever needs re-symbolicating:
+      #   firebase crashlytics:symbols:upload --app=<appId> <dir>
+      - name: Upload Debug Symbols (backup copy)
         if: env.RELEASE_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:

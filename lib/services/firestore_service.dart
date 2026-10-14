@@ -13,6 +13,82 @@ class FirestoreService {
   /// Get current user's UID (or null)
   static String? get _uid => AuthService.currentUser?.uid;
 
+  // ─── UTF-16 safety for the Firestore platform channel ───────────
+  //
+  // Crashlytics issue bd6a788b: "Invalid argument(s): string is not
+  // well-formed UTF-16", fatal, 929 events across 1.1.3-1.1.10, with
+  // FlutterFirebaseFirestorePlugin.documentReferenceSet in flight.
+  //
+  // The channel encodes every string as UTF-8. An unpaired surrogate —
+  // half of an emoji whose partner got lost — has no UTF-8 encoding, so
+  // the codec throws. That throw happens inside the channel rather than
+  // in the Future we await, so the `catch (_)` wrappers below never see
+  // it: it escapes as an uncaught FlutterError and kills the app.
+  //
+  // Sanitising at this boundary fixes the whole class at once, which
+  // matters because the character can arrive from anywhere a user types
+  // or pastes (names, birthplace, family profiles).
+
+  /// Drop unpaired UTF-16 surrogates; valid pairs (real emoji) are kept.
+  static String _sanitizeUtf16(String s) {
+    // Fast path: most strings have no surrogates at all.
+    var hasSurrogate = false;
+    for (var i = 0; i < s.length; i++) {
+      final u = s.codeUnitAt(i);
+      if (u >= 0xD800 && u <= 0xDFFF) {
+        hasSurrogate = true;
+        break;
+      }
+    }
+    if (!hasSurrogate) return s;
+
+    final out = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      final u = s.codeUnitAt(i);
+      if (u >= 0xD800 && u <= 0xDBFF) {
+        // High surrogate — keep only when a low surrogate follows.
+        if (i + 1 < s.length) {
+          final next = s.codeUnitAt(i + 1);
+          if (next >= 0xDC00 && next <= 0xDFFF) {
+            out.writeCharCode(u);
+            out.writeCharCode(next);
+            i++;
+            continue;
+          }
+        }
+        continue;
+      }
+      if (u >= 0xDC00 && u <= 0xDFFF) continue; // orphaned low surrogate
+      out.writeCharCode(u);
+    }
+    return out.toString();
+  }
+
+  /// Recursively sanitise a Firestore payload. Sentinels such as
+  /// FieldValue.serverTimestamp() are neither String, List nor Map, so
+  /// they pass through untouched.
+  static Map<String, dynamic> _clean(Map<String, dynamic> data) =>
+      data.map((k, v) => MapEntry(k, _cleanValue(v)));
+
+  static dynamic _cleanValue(dynamic v) {
+    if (v is String) return _sanitizeUtf16(v);
+    if (v is List) return v.map(_cleanValue).toList();
+    if (v is Map) {
+      return v.map<dynamic, dynamic>((k, val) => MapEntry(k, _cleanValue(val)));
+    }
+    return v;
+  }
+
+  /// Truncate without slicing a surrogate pair in half — a plain
+  /// substring(0, n) is itself a way to manufacture the bad character.
+  static String _truncateUtf16(String s, int max) {
+    if (s.length <= max) return s;
+    var end = max;
+    final last = s.codeUnitAt(end - 1);
+    if (last >= 0xD800 && last <= 0xDBFF) end--; // don't split the pair
+    return s.substring(0, end);
+  }
+
   // ─── Subscription State (read-side) ────────────────────────────
   //
   // The webhook (vedastro-rag-server -> /subscription/webhook) writes
@@ -100,14 +176,14 @@ class FirestoreService {
   static Future<void> saveProfile(String uid, UserProfile profile) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      await _db.collection('users').doc(uid).set({
+      await _db.collection('users').doc(uid).set(_clean({
         ...profile.toJson(),
         'email': user?.email,
         'phoneNumber': user?.phoneNumber,
         'displayName': user?.displayName,
         'authProvider': _resolveAuthProvider(user),
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      }), SetOptions(merge: true));
     } catch (_) {
       // Silently fail — local storage is primary
     }
@@ -135,10 +211,10 @@ class FirestoreService {
   static Future<void> syncFamilyProfiles(List<UserProfile> profiles) async {
     if (_uid == null) return;
     try {
-      await _db.collection('users').doc(_uid!).set({
+      await _db.collection('users').doc(_uid!).set(_clean({
         'familyProfiles': profiles.map((p) => p.toJson()).toList(),
         'familyUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      }), SetOptions(merge: true));
     } catch (_) {}
   }
 
@@ -188,11 +264,11 @@ class FirestoreService {
           .collection('users')
           .doc(uid)
           .collection('chats')
-          .add({
+          .add(_clean({
         'text': text,
         'role': role,
         'timestamp': FieldValue.serverTimestamp(),
-      });
+      }));
     } catch (_) {}
   }
 
@@ -212,13 +288,14 @@ class FirestoreService {
     String reason = 'inappropriate',
   }) async {
     try {
-      await _db.collection('ai_reports').add({
+      await _db.collection('ai_reports').add(_clean({
         'uid': _uid ?? 'anonymous',
-        'messageText':
-            messageText.length > 2000 ? messageText.substring(0, 2000) : messageText,
+        // substring(0, 2000) could cut an emoji in half and manufacture
+        // the exact unpaired surrogate that crashes the channel.
+        'messageText': _truncateUtf16(messageText, 2000),
         'reason': reason,
         'timestamp': FieldValue.serverTimestamp(),
-      });
+      }));
     } catch (_) {}
   }
 

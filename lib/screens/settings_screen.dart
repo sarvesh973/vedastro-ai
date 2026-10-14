@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
@@ -83,14 +84,28 @@ class SettingsScreen extends ConsumerWidget {
             // App Info
             _buildSectionTitle('About'),
             const SizedBox(height: 8),
-            _buildInfoTile(
-              icon: Icons.info_outline,
-              title: 'App Version',
-              // Build marker bumped per-change so we can tell at a
-              // glance which APK is on the device when debugging.
-              // Increment when shipping a noticeable behavioural fix.
-              subtitle: 'v1.1.0 (build k14)',
-              onTap: null,
+            // Read from the installed package rather than a hand-edited
+            // literal. The old hardcoded 'v1.1.0 (build k14)' had drifted
+            // badly — it was still claiming 1.1.0 while users were running
+            // 1.1.10 (330), so every bug report quoted a version that
+            // never existed.
+            //
+            // buildNumber here is the CI run_number, which is exactly the
+            // number Crashlytics prints in parentheses. That makes a user's
+            // screenshot directly matchable to a GitHub Actions run.
+            FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                final info = snapshot.data;
+                return _buildInfoTile(
+                  icon: Icons.info_outline,
+                  title: 'App Version',
+                  subtitle: info == null
+                      ? '—'
+                      : 'v${info.version} (build ${info.buildNumber})',
+                  onTap: null,
+                );
+              },
             ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
 
             _buildInfoTile(
