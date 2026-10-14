@@ -396,6 +396,38 @@ class ChatBubble extends StatelessWidget {
           );
         }
 
+        // Markdown heading: "## Title", optionally followed by body text
+        // in the same block. The server's sectioned reading uses these to
+        // separate "Business outlook" from "How progress unfolds" and so
+        // on. Rendered like the emoji headers below so both styles look
+        // the same; the emoji form stays supported for older responses.
+        if (trimmed.startsWith('#')) {
+          final lines = trimmed.split('\n');
+          final heading = lines.first.replaceFirst(RegExp(r'^#{1,6}\s*'), '').trim();
+          final rest = lines.length > 1 ? lines.sublist(1).join('\n').trim() : '';
+          return Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  heading,
+                  style: const TextStyle(
+                    color: AppColors.goldLight,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+                if (rest.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  _buildRichText(rest),
+                ],
+              ],
+            ),
+          );
+        }
+
         // Check if section starts with an emoji header
         if (trimmed.startsWith('\u{1F52E}') ||
             trimmed.startsWith('\u{1F4D6}') ||
