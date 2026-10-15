@@ -1,6 +1,14 @@
 import 'dart:convert';
 
+import '../utils/crash_breadcrumbs.dart';
 import '../utils/text_safety.dart';
+
+/// Records the stored name's shape (never its content) before cleaning,
+/// so a crash report shows whether the profile text was the culprit.
+String _named(String? raw) {
+  crashKey('profile_name_shape', textShape(raw));
+  return safeText(raw, context: 'profile.name');
+}
 
 class UserProfile {
   final String name;
@@ -129,7 +137,11 @@ class UserProfile {
       // keyboards deliver half a typed emoji, and a name stored that way
       // would otherwise be a permanent crash for that one user — which
       // matches the "repetitive crashes" signature exactly.
-      name: safeText(json['name'] as String?, context: 'profile.name'),
+      // Shape recorded unconditionally — safeText only reports when it
+      // FINDS a problem, and we also want to know when a crashing user's
+      // name was perfectly fine, which rules the hypothesis out instead
+      // of leaving it open.
+      name: _named(json['name'] as String?),
       dateOfBirth: DateTime.parse(json['dateOfBirth'] as String),
       timeOfBirth: json['timeOfBirth'] as String?,
       placeOfBirth:

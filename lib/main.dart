@@ -13,6 +13,7 @@ import 'services/storage_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/analytics_service.dart';
+import 'utils/crash_breadcrumbs.dart';
 import 'services/attribution_service.dart';
 import 'services/ui_error_log.dart';
 import 'screens/animated_splash_screen.dart';
@@ -194,6 +195,11 @@ class VedAstroApp extends StatelessWidget {
       // Auto-track screen views (screen_view event) for funnel analysis
       navigatorObservers: [
         if (Analytics.observer != null) Analytics.observer!,
+        // Mirrors navigation into Crashlytics as a `screen` key plus a
+        // breadcrumb trail. Crash reports previously arrived with no
+        // indication of where the user was, which is a large part of why
+        // the UTF-16 fatal needed several rounds to place.
+        CrashBreadcrumbObserver(),
       ],
       // AnimatedSplashScreen runs once on launch — plays the wordmark
       // reveal, then routes to the right screen via _getStartScreen logic
