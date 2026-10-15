@@ -1,7 +1,7 @@
 name: vedastro_ai
 description: VedAstro AI - Vedic Astrology & Palm Reading Platform
 publish_to: 'none'
-version: 1.1.11+12
+version: 1.1.12+12
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -43,6 +43,11 @@ dependencies:
   # Facebook App ID is set in android/app/src/main/res/values/strings.xml.
   facebook_app_events: ^0.20.1
   package_info_plus: ^9.0.1
+  # Grapheme-cluster aware string handling. Needed because slicing text by
+  # UTF-16 code unit splits emoji surrogate pairs, and rendering half a
+  # pair throws "string is not well-formed UTF-16". Ships with the Flutter
+  # SDK already; declared explicitly because we import it directly.
+  characters: ^1.4.0
   # Note: zodiac glyphs used to come from font_awesome_flutter, but its
   # zodiac icons are Pro-only and the package itself breaks on newer
   # Flutter SDKs (extends the now-sealed IconData). They're drawn as

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -25,24 +26,53 @@ class TypewriterText extends StatefulWidget {
 }
 
 class _TypewriterTextState extends State<TypewriterText> {
+  // Counted in GRAPHEME CLUSTERS, not UTF-16 code units.
+  //
+  // This used to advance by code unit and slice with substring(). An emoji
+  // is a surrogate PAIR — two code units — so stepping one at a time meant
+  // there was always a tick where the slice ended between the two halves.
+  // Rendering that half threw:
+  //
+  //   Invalid argument(s): string is not well-formed UTF-16
+  //
+  // It was not an edge case. The animation visits every index, so every
+  // emoji in every reply crashed the app, every time — 2,723 fatals across
+  // 232 users in a week. Gemini uses emoji freely and _isEmojiHeader below
+  // shows we expect them, so this fired constantly.
+  //
+  // Grapheme clusters also keep ZWJ sequences and combining marks whole,
+  // so flags and family emoji no longer half-form mid-animation.
   int _charIndex = 0;
+  int _total = 0;
   Timer? _timer;
   bool _done = false;
 
   @override
   void initState() {
     super.initState();
+    _total = widget.text.characters.length;
     if (widget.isComplete) {
-      _charIndex = widget.text.length;
+      _charIndex = _total;
       _done = true;
     } else {
       _startTyping();
     }
   }
 
+  @override
+  void didUpdateWidget(TypewriterText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The cached length would otherwise go stale if the same widget is
+    // reused for different text, leaving the animation short or long.
+    if (oldWidget.text != widget.text) {
+      _total = widget.text.characters.length;
+      if (_charIndex > _total) _charIndex = _total;
+    }
+  }
+
   void _startTyping() {
     _timer = Timer.periodic(widget.charDuration, (timer) {
-      if (_charIndex >= widget.text.length) {
+      if (_charIndex >= _total) {
         timer.cancel();
         if (!_done) {
           _done = true;
@@ -52,12 +82,9 @@ class _TypewriterTextState extends State<TypewriterText> {
       }
       if (mounted) {
         setState(() {
-          // One char at a time -> readable Melooha pace.
-          // (Was 2 chars/tick before, which made it feel like a flash.)
+          // One grapheme at a time -> readable Melooha pace.
           _charIndex += 1;
-          if (_charIndex > widget.text.length) {
-            _charIndex = widget.text.length;
-          }
+          if (_charIndex > _total) _charIndex = _total;
         });
       }
     });
@@ -71,7 +98,11 @@ class _TypewriterTextState extends State<TypewriterText> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleText = widget.text.substring(0, _charIndex);
+    // Short-circuit once complete so the finished message costs no
+    // grapheme iteration on every rebuild.
+    final visibleText = _charIndex >= _total
+        ? widget.text
+        : widget.text.characters.take(_charIndex).toString();
     return _buildFormattedText(visibleText);
   }
 

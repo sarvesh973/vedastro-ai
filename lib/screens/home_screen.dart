@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -180,9 +181,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return clean.substring(0, dotIdx).trim();
     }
 
+    // Cuts below are by GRAPHEME CLUSTER, never by code unit. A fixed
+    // offset can land between the two halves of an emoji's surrogate pair,
+    // and rendering that half throws "string is not well-formed UTF-16".
+    // The comma/space cuts that follow are safe because they land on an
+    // ASCII character, so only the fixed 60/55 offsets needed changing.
+    String takeChars(String s, int n) =>
+        s.characters.length <= n ? s : s.characters.take(n).toString();
+
     // Strategy 2: last comma before 60 chars (clean clause boundary)
-    if (clean.length > 55) {
-      final head = clean.substring(0, clean.length > 60 ? 60 : clean.length);
+    if (clean.characters.length > 55) {
+      final head = takeChars(clean, 60);
       final lastComma = head.lastIndexOf(',');
       if (lastComma > 18) {
         return head.substring(0, lastComma).trim();
@@ -190,8 +199,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     // Strategy 3: hard trim at last word boundary under 55
-    if (clean.length > 55) {
-      final cut = clean.substring(0, 55);
+    if (clean.characters.length > 55) {
+      final cut = takeChars(clean, 55);
       final lastSpace = cut.lastIndexOf(' ');
       return (lastSpace > 30 ? cut.substring(0, lastSpace) : cut).trim();
     }
