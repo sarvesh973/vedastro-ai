@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../utils/text_safety.dart';
+
 class UserProfile {
   final String name;
   final DateTime dateOfBirth;
@@ -122,10 +124,16 @@ class UserProfile {
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
-      name: json['name'] as String? ?? '',
+      // Cleaned on the way IN, so a profile saved with a broken character
+      // cannot keep crashing every screen that renders it. Some OEM
+      // keyboards deliver half a typed emoji, and a name stored that way
+      // would otherwise be a permanent crash for that one user — which
+      // matches the "repetitive crashes" signature exactly.
+      name: safeText(json['name'] as String?, context: 'profile.name'),
       dateOfBirth: DateTime.parse(json['dateOfBirth'] as String),
       timeOfBirth: json['timeOfBirth'] as String?,
-      placeOfBirth: json['placeOfBirth'] as String? ?? '',
+      placeOfBirth:
+          safeText(json['placeOfBirth'] as String?, context: 'profile.place'),
     );
   }
 
