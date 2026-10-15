@@ -14,7 +14,20 @@ class MPageRoute<T> extends PageRouteBuilder<T> {
     required Widget page,
     MTransition transition = MTransition.push,
     Duration? duration,
+    RouteSettings? settings,
   }) : super(
+          // Name every route after the screen it shows.
+          //
+          // FirebaseAnalyticsObserver only emits screen_view for routes
+          // that HAVE a name, and nothing here ever set one — so despite
+          // navigatorObservers being wired for "funnel analysis", in-app
+          // navigation produced no screen_view events at all. It also
+          // meant crash reports carried no breadcrumb trail, which is
+          // part of why the UTF-16 fatal took so long to place.
+          //
+          // The widget's runtime type ("ChatScreen", "HomeScreen") is a
+          // stable, readable identifier and needs no per-call-site edits.
+          settings: settings ?? RouteSettings(name: page.runtimeType.toString()),
           pageBuilder: (context, _, __) => page,
           transitionDuration: duration ?? _defaultDuration(transition),
           reverseTransitionDuration: duration ?? _defaultDuration(transition),

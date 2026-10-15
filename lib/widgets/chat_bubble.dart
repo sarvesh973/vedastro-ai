@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../models/chat_message.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../utils/text_safety.dart';
 import 'typewriter_text.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -87,7 +88,11 @@ class ChatBubble extends StatelessWidget {
         ],
       ),
       child: Text(
-        message.text,
+        // Guarded because an unpaired surrogate here is a hard crash in
+        // the text layer. User-typed text is a plausible source: some
+        // OEM keyboards deliver half a typed emoji, and the resulting
+        // message then crashes this bubble on every rebuild.
+        safeText(message.text, context: 'chat.user'),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 15,
@@ -148,12 +153,13 @@ class ChatBubble extends StatelessWidget {
             child: isLatestAiMessage
                 ? TypewriterText(
                     key: ValueKey('tw_${message.timestamp.millisecondsSinceEpoch}'),
-                    text: message.text,
+                    text: safeText(message.text, context: 'chat.ai.typing'),
                     // Melooha-like pace — slower, calmer, easier to read.
                     charDuration: const Duration(milliseconds: 35),
                     onComplete: onTypewriterComplete,
                   )
-                : _buildFormattedAiText(message.text),
+                : _buildFormattedAiText(
+                    safeText(message.text, context: 'chat.ai.settled')),
           ),
         ),
         // Always show sources below — even for the latest message currently

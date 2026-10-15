@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
+import '../utils/crash_breadcrumbs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../config/vedic_system_prompt.dart';
@@ -223,6 +224,13 @@ class AiService {
           _lastError = 'RAG returned empty answer';
           return null;
         }
+
+        // Breadcrumb for the next unexplained render crash: which parse
+        // branch produced the text, and the text's SHAPE — never the text
+        // itself. `lone=` greater than zero on a crashing session would
+        // identify the server response as the source immediately, and
+        // `lone=0` rules it out just as usefully.
+        breadcrumb('chat reply [${parsePath.join('|')}] ${textShape(answer)}');
 
         final sourcesJson = data['sources'] as List<dynamic>? ?? [];
         final sources = sourcesJson
