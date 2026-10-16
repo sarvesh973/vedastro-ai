@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/ai_service.dart';
+import '../services/notification_service.dart';
 import '../providers/providers.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -78,6 +79,18 @@ class SettingsScreen extends ConsumerWidget {
             _buildUsageCard(chatUsed, palmUsed, isPremium)
                 .animate()
                 .fadeIn(duration: 500.ms, delay: 300.ms),
+
+            const SizedBox(height: 24),
+
+            // Notifications. Play policy expects an in-app opt-out for
+            // promotional notifications, and at 4.1 stars a nudge that
+            // feels like spam costs more than it returns — so this is one
+            // tap, not buried in system settings.
+            _buildSectionTitle('Notifications'),
+            const SizedBox(height: 8),
+            const _NotificationToggle()
+                .animate()
+                .fadeIn(duration: 500.ms, delay: 350.ms),
 
             const SizedBox(height: 24),
 
@@ -696,6 +709,72 @@ class SettingsScreen extends ConsumerWidget {
             child: const Text('Logout', style: TextStyle(color: AppColors.error)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One switch controlling all three notification kinds.
+///
+/// Stateful because SettingsScreen is a ConsumerWidget and the switch has
+/// to repaint immediately on tap — waiting for a provider round trip on a
+/// value that lives in SharedPreferences would be more machinery than the
+/// one boolean deserves.
+///
+/// Turning it on from here also requests the system permission if that has
+/// not happened yet: a user who comes looking for this switch has clearly
+/// opted in, which is the one other moment besides a first reading where
+/// the prompt makes sense.
+class _NotificationToggle extends StatefulWidget {
+  const _NotificationToggle();
+
+  @override
+  State<_NotificationToggle> createState() => _NotificationToggleState();
+}
+
+class _NotificationToggleState extends State<_NotificationToggle> {
+  late bool _on = NotificationService.enabled;
+  bool _busy = false;
+
+  Future<void> _set(bool value) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _on = value;
+    });
+    await NotificationService.setEnabled(value);
+    if (value) await NotificationService.requestPermissionOnce();
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider.withOpacity(0.5)),
+      ),
+      child: SwitchListTile(
+        value: _on,
+        onChanged: _busy ? null : _set,
+        activeThumbColor: AppColors.goldLight,
+        secondary: Icon(
+          _on ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
+          color: AppColors.textMuted,
+          size: 22,
+        ),
+        title: const Text(
+          'Daily guidance',
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+        ),
+        subtitle: const Text(
+          'Morning horoscope, evening chat and your nightly Mulank — plus '
+          'an alert when a reading is ready.',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }

@@ -236,7 +236,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 20),
 
                   const Text(
-                    'Welcome Back',
+                    // Not "Welcome Back": this screen is the first thing a
+                    // brand-new user sees, and greeting them as a returning
+                    // user on their very first visit reads as careless.
+                    'Welcome',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 28,

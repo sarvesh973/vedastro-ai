@@ -8,6 +8,8 @@ import '../providers/providers.dart';
 import '../services/ai_service.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
+import '../utils/text_safety.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chapter_detail_card.dart';
 import '../widgets/contextual_loader.dart';
@@ -226,6 +228,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       debugMeta: aiResponse.debugMeta,
     ));
 
+    // ─── Reply-ready notification ─────────────────────────────
+    // The reply is produced by a client-side HTTP call, so the device is
+    // the only thing that knows when it finished — there is no server
+    // push to hang this off. Fire only when the user is NOT looking at
+    // this screen: either they navigated away (`!mounted`, e.g. back to
+    // Home) or they backgrounded the app. Notifying someone staring at
+    // the answer they just watched arrive would be noise.
+    //
+    // Offline template fallbacks are skipped: no real answer arrived, so
+    // there is nothing to come back for.
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    final userIsWatching =
+        mounted && (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+    if (!userIsWatching && !aiResponse.isOffline) {
+      // stripLoneSurrogates: the reply goes out over a platform channel
+      // and into a system notification, and a half surrogate pair is the
+      // same class of bad input that caused the UTF-16 render fatal.
+      NotificationService.showReplyReady(
+        preview: stripLoneSurrogates(aiResponse.text),
+      );
+    }
+
     // Online-only side effects. Skip them when we served a template
     // fallback (no real LLM call happened, so the user's quota should
     // not be charged, and we don't want to permanently log generic
@@ -248,6 +272,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     if (!aiResponse.isOffline) {
       ref.read(chatQuestionsUsedProvider.notifier).state =
           StorageService.chatQuestionsUsed;
+      // Ask for notification permission here and nowhere else: the user
+      // has just received a real reading, so "tell me when the next one
+      // is ready" is an obvious yes. A cold prompt on launch is mostly
+      // denied, and on Android that denial is sticky — the user has to
+      // go into system settings to undo it. No-ops after the first call.
+      NotificationService.requestPermissionOnce();
     }
 
     _scrollToBottom();

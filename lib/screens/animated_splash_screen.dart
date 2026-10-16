@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/moksha_wordmark_image.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -35,6 +36,11 @@ class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen> {
     if (!mounted) return;
 
     final next = _resolveStartScreen();
+    // A notification tap that cold-started the app is honoured only once
+    // the user is actually home — pushing a reading on top of onboarding
+    // or the login screen would strand them somewhere they cannot use.
+    final pending =
+        next is HomeScreen ? NotificationService.takePendingLaunchRoute() : null;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => next,
@@ -45,6 +51,12 @@ class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen> {
         transitionDuration: const Duration(milliseconds: 600),
       ),
     );
+
+    if (pending != null && mounted) {
+      // Pushed on top of Home, not instead of it, so Back behaves the way
+      // the user expects after following a notification.
+      Navigator.of(context).pushNamed(pending);
+    }
   }
 
   Widget _resolveStartScreen() {

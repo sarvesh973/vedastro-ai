@@ -15,6 +15,25 @@
     <!-- For palm reading via camera capture path -->
     <uses-permission android:name="android.permission.CAMERA"/>
 
+    <!-- ─── NOTIFICATIONS ───────────────────────────────────────
+         POST_NOTIFICATIONS is required from Android 13 (API 33). It is a
+         RUNTIME permission: declaring it is not enough, the app must also
+         ask, which NotificationService does after the user's first real
+         reading rather than cold on launch — a cold prompt is mostly
+         denied and the denial is sticky.
+
+         RECEIVE_BOOT_COMPLETED lets the daily reminders survive a reboot.
+         Without it every scheduled notification is silently dropped when
+         the phone restarts, which on Android is a common occurrence.
+
+         Deliberately NOT declaring SCHEDULE_EXACT_ALARM: daily nudges do
+         not need to-the-second delivery, and that permission triggers an
+         additional Play Console declaration and review. Scheduling uses
+         inexactAllowWhileIdle instead, which needs no special permission
+         and still survives Doze. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <!-- NOTE: no gallery storage permission is declared on purpose.
          image_picker (>=1.0) uses the permissionless Android Photo Picker,
          which grants per-image access without READ_MEDIA_IMAGES. Declaring
@@ -61,6 +80,29 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- ─── flutter_local_notifications receivers ───────────────
+             Without the boot receiver, every scheduled reminder is lost on
+             reboot. The action receiver handles taps on notification
+             action buttons. Both are plugin-provided; we only declare
+             them so the system can route to them. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <!-- HTC devices send this instead of QUICKBOOT_POWERON -->
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false"/>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false"/>
 
         <!-- ─── Meta (Facebook) App Events SDK ──────────────────────
              App ID + Client Token are NOT secrets (they ship inside every
