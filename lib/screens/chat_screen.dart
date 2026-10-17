@@ -8,6 +8,8 @@ import '../providers/providers.dart';
 import '../services/ai_service.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
+import '../utils/text_safety.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chapter_detail_card.dart';
 import '../widgets/contextual_loader.dart';
@@ -225,6 +227,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       isOffline: aiResponse.isOffline,
       debugMeta: aiResponse.debugMeta,
     ));
+
+    // ─── Reply-ready notification ─────────────────────────────
+    // The reply is produced by a client-side HTTP call, so the device is
+    // the only thing that knows when it finished — there is no server
+    // push to hang this off. Fire only when the user is NOT looking at
+    // this screen: either they navigated away (`!mounted`, e.g. back to
+    // Home) or they backgrounded the app. Notifying someone staring at
+    // the answer they just watched arrive would be noise.
+    //
+    // Offline template fallbacks are skipped: no real answer arrived, so
+    // there is nothing to come back for.
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    final foreground =
+        lifecycle == null || lifecycle == AppLifecycleState.resumed;
+
+    // Ask for permission HERE, before the notification, and whether or not
+    // this screen is still mounted. It used to be asked further down, past
+    // an `if (!mounted) return`, which meant the first time a user did the
+    // exact thing this feature is for — ask a question, go back to Home —
+    // we tried to post a notification we had never been granted and then
+    // returned before asking. On Android 13+ that is a silent no-op, and
+    // the user concludes the feature does not work. Which it did not.
+    if (!aiResponse.isOffline && foreground) {
+      await NotificationService.requestPermissionOnce();
+    }
+
+    final userIsWatching = mounted && foreground;
+    if (!userIsWatching && !aiResponse.isOffline) {
+      // stripLoneSurrogates: the reply goes out over a platform channel
+      // and into a system notification, and a half surrogate pair is the
+      // same class of bad input that caused the UTF-16 render fatal.
+      NotificationService.showReplyReady(
+        preview: stripLoneSurrogates(aiResponse.text),
+      );
+    }
 
     // Online-only side effects. Skip them when we served a template
     // fallback (no real LLM call happened, so the user's quota should

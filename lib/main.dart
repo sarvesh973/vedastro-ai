@@ -13,10 +13,14 @@ import 'services/storage_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/analytics_service.dart';
+import 'services/notification_service.dart';
 import 'utils/crash_breadcrumbs.dart';
 import 'services/attribution_service.dart';
 import 'services/ui_error_log.dart';
 import 'screens/animated_splash_screen.dart';
+import 'screens/chat_screen.dart';
+import 'screens/horoscope_screen.dart';
+import 'screens/mulank_screen.dart';
 import 'models/subscription_plan.dart';
 
 void main() async {
@@ -74,6 +78,19 @@ void main() async {
     // conversion that matters most is the one we cannot attribute.
     await AttributionService.init();
     Analytics.setAttribution(AttributionService.params);
+
+    // ─── Local notifications ────────────────────────────────
+    // Sets up channels, timezone data and the tap handler, and re-arms
+    // the three daily reminders. Deliberately does NOT ask for the
+    // POST_NOTIFICATIONS permission — that happens after the user's
+    // first real reading, where the value is obvious. Awaited because
+    // the tap handler has to be registered before the engine delivers a
+    // notification that cold-started the app; it is local work (prefs +
+    // tz data) and does not touch the network.
+    await NotificationService.init();
+    // One process-wide lifecycle observer: the re-engagement nudge is
+    // about the whole visit, so it cannot live on a single screen.
+    WidgetsBinding.instance.addObserver(NotificationLifecycleObserver());
 
     // Sync cloud data if user is logged in
     _syncCloudData();
@@ -184,6 +201,9 @@ class VedAstroApp extends StatelessWidget {
     return MaterialApp(
       title: 'Moksha',
       debugShowCheckedModeBanner: false,
+      // Lets NotificationService route a notification tap without needing
+      // a BuildContext it has no way to get.
+      navigatorKey: NotificationService.navigatorKey,
       theme: AppTheme.darkTheme,
       locale: const Locale('en', 'IN'),
       supportedLocales: const [Locale('en', 'IN')],
@@ -200,7 +220,19 @@ class VedAstroApp extends StatelessWidget {
         // indication of where the user was, which is a large part of why
         // the UTF-16 fatal needed several rounds to place.
         CrashBreadcrumbObserver(),
+        // Tells "opened the app and read something" apart from "opened it
+        // and left", which is what decides whether the re-engagement
+        // nudge gets armed.
+        EngagementObserver(),
       ],
+      // Named routes exist solely as notification-tap targets — the rest
+      // of the app navigates with MPageRoute and widget instances. The
+      // payload strings in NotificationService map onto these three.
+      routes: {
+        NotificationService.routeHoroscope: (_) => const HoroscopeScreen(),
+        NotificationService.routeChat: (_) => const ChatScreen(),
+        NotificationService.routeMulank: (_) => const MulankScreen(),
+      },
       // AnimatedSplashScreen runs once on launch — plays the wordmark
       // reveal, then routes to the right screen via _getStartScreen logic
       // (kept inside the splash widget itself).

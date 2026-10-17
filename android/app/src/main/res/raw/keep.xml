@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resource shrinking is on (isShrinkResources = true in build.gradle.kts).
+  R8 only sees resources referenced from code or the manifest, and the
+  notification icon is named as a STRING in Dart
+  ("@drawable/ic_notification" via AndroidInitializationSettings), which
+  it cannot trace. Shrunk away, the system finds no resource and the
+  notification silently never shows — the worst failure mode, because
+  nothing logs.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification" />
