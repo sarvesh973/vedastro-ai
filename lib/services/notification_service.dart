@@ -145,9 +145,16 @@ class NotificationService {
       // Re-arm the daily reminders on every launch. The IDs are stable so
       // this replaces rather than stacks, and it repairs a schedule lost
       // to a reboot the boot receiver missed, or shifted by the user
-      // travelling into another timezone. Gated on the prompt having
-      // happened so we never schedule for someone not yet asked.
-      if (enabled && permissionAlreadyAsked) {
+      // travelling into another timezone.
+      //
+      // NOT gated on the permission having been requested. That gate was
+      // a bug: on a fresh install nothing was ever scheduled, and the
+      // only thing that lifted it was finishing a chat answer while still
+      // on the chat screen — so a user who only ever read their horoscope
+      // got no daily reminders at all, forever. Scheduling before the
+      // grant is harmless: the alarm fires, the system drops the
+      // notification, and the next day's occurrence works once granted.
+      if (enabled) {
         await scheduleDailyReminders();
       }
     } catch (e) {
@@ -170,6 +177,61 @@ class NotificationService {
 
   static bool get permissionAlreadyAsked =>
       _prefs?.getBool(_keyAsked) ?? false;
+
+  /// Whether ANDROID will actually deliver our notifications right now.
+  ///
+  /// Distinct from [enabled], which is only our own in-app switch. The two
+  /// disagree in the case that matters: a user who denied the system
+  /// prompt, or never saw it, has `enabled == true` and a system state of
+  /// false — so a Settings row driven by [enabled] alone tells them
+  /// notifications are on while the OS is dropping every one.
+  static Future<bool> systemEnabled() async {
+    if (!_ready) return false;
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      return await android?.areNotificationsEnabled() ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Opens this app's notification screen in Android Settings. The only
+  /// way back for a user who denied the prompt: from Android 13 on the
+  /// denial is sticky and re-requesting returns false without showing
+  /// anything, so an in-app retry button would do nothing at all.
+  static Future<void> openSystemSettings() async {
+    if (!_ready) return;
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await android?.openAppNotificationSettings();
+    } catch (e) {
+      breadcrumb('notifications: open settings failed ${e.runtimeType}');
+    }
+  }
+
+  /// Ask for permission a beat after the user has actually been given
+  /// something — a horoscope on screen, a chat answer that landed.
+  ///
+  /// Deferred because the caller is usually mid-navigation or mid-await:
+  /// a system dialog thrown up in the same frame as the screen it is
+  /// justifying by reads as a launch prompt, which is the thing we are
+  /// trying not to be. Re-entrant-safe, and a no-op once asked.
+  static void maybeAskAfterValue() {
+    if (!_ready || permissionAlreadyAsked || _askScheduled) return;
+    _askScheduled = true;
+    Future<void>.delayed(const Duration(seconds: 3), () async {
+      _askScheduled = false;
+      // A dialog cannot be shown from the background, and queuing one for
+      // whenever the user next returns would surprise them.
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+      await requestPermissionOnce();
+    });
+  }
+
+  static bool _askScheduled = false;
 
   /// Ask for POST_NOTIFICATIONS. Call this AFTER the user has seen real
   /// value — never on first launch. Returns false if already asked, so
@@ -509,14 +571,36 @@ class EngagementObserver extends NavigatorObserver {
     'PalmChatScreen',
   };
 
+  /// The subset where OPENING the screen is itself the payoff — the
+  /// reading is on screen seconds later. These are the honest moments to
+  /// ask for notification permission.
+  ///
+  /// ChatScreen is deliberately absent: arriving there means the user has
+  /// not asked anything yet, so a prompt would be a launch prompt wearing
+  /// a disguise. Chat asks once an answer has actually landed.
+  static const _readingRoutes = <String>{
+    'HoroscopeScreen',
+    'MulankScreen',
+    'KundliScreen',
+    'PalmResultScreen',
+  };
+
+  static bool _matches(Set<String> routes, String name) {
+    if (routes.contains(name)) return true;
+    // Named routes from a notification tap arrive as '/chat' etc.
+    final bare = name.startsWith('/') ? name.substring(1) : name;
+    final target = '${bare.toLowerCase()}screen';
+    return routes.any((r) => r.toLowerCase() == target);
+  }
+
   void _check(Route<dynamic>? route) {
     final name = route?.settings.name;
     if (name == null) return;
-    // Named routes from a notification tap arrive as '/chat' etc.
-    final bare = name.startsWith('/') ? name.substring(1) : name;
-    if (_engagingRoutes.contains(name) ||
-        _engagingRoutes.any((r) => r.toLowerCase() == '${bare.toLowerCase()}screen')) {
+    if (_matches(_engagingRoutes, name)) {
       NotificationService.markEngaged();
+    }
+    if (_matches(_readingRoutes, name)) {
+      NotificationService.maybeAskAfterValue();
     }
   }
 

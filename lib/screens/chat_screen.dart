@@ -239,8 +239,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // Offline template fallbacks are skipped: no real answer arrived, so
     // there is nothing to come back for.
     final lifecycle = WidgetsBinding.instance.lifecycleState;
-    final userIsWatching =
-        mounted && (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+    final foreground =
+        lifecycle == null || lifecycle == AppLifecycleState.resumed;
+
+    // Ask for permission HERE, before the notification, and whether or not
+    // this screen is still mounted. It used to be asked further down, past
+    // an `if (!mounted) return`, which meant the first time a user did the
+    // exact thing this feature is for — ask a question, go back to Home —
+    // we tried to post a notification we had never been granted and then
+    // returned before asking. On Android 13+ that is a silent no-op, and
+    // the user concludes the feature does not work. Which it did not.
+    if (!aiResponse.isOffline && foreground) {
+      await NotificationService.requestPermissionOnce();
+    }
+
+    final userIsWatching = mounted && foreground;
     if (!userIsWatching && !aiResponse.isOffline) {
       // stripLoneSurrogates: the reply goes out over a platform channel
       // and into a system notification, and a half surrogate pair is the
@@ -272,12 +285,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     if (!aiResponse.isOffline) {
       ref.read(chatQuestionsUsedProvider.notifier).state =
           StorageService.chatQuestionsUsed;
-      // Ask for notification permission here and nowhere else: the user
-      // has just received a real reading, so "tell me when the next one
-      // is ready" is an obvious yes. A cold prompt on launch is mostly
-      // denied, and on Android that denial is sticky — the user has to
-      // go into system settings to undo it. No-ops after the first call.
-      NotificationService.requestPermissionOnce();
     }
 
     _scrollToBottom();

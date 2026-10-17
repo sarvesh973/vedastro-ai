@@ -736,6 +736,21 @@ class _NotificationToggleState extends State<_NotificationToggle> {
   late bool _on = NotificationService.enabled;
   bool _busy = false;
 
+  /// What ANDROID thinks, which is not the same as what our switch says.
+  /// Null until the first check comes back.
+  bool? _systemOn;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSystemState();
+  }
+
+  Future<void> _refreshSystemState() async {
+    final system = await NotificationService.systemEnabled();
+    if (mounted) setState(() => _systemOn = system);
+  }
+
   Future<void> _set(bool value) async {
     if (_busy) return;
     setState(() {
@@ -743,9 +758,19 @@ class _NotificationToggleState extends State<_NotificationToggle> {
       _on = value;
     });
     await NotificationService.setEnabled(value);
-    if (value) await NotificationService.requestPermissionOnce();
+    if (value) {
+      // If the prompt has never been shown this is where it happens. If it
+      // has been shown and denied, this returns false without showing
+      // anything, and the blocked row below is what the user sees.
+      await NotificationService.requestPermissionOnce();
+    }
+    await _refreshSystemState();
     if (mounted) setState(() => _busy = false);
   }
+
+  /// True when our switch is on but Android is dropping everything — the
+  /// state that made this feature look broken rather than blocked.
+  bool get _blocked => _on && _systemOn == false;
 
   @override
   Widget build(BuildContext context) {
@@ -756,25 +781,73 @@ class _NotificationToggleState extends State<_NotificationToggle> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.divider.withOpacity(0.5)),
       ),
-      child: SwitchListTile(
-        value: _on,
-        onChanged: _busy ? null : _set,
-        activeThumbColor: AppColors.goldLight,
-        secondary: Icon(
-          _on ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
-          color: AppColors.textMuted,
-          size: 22,
-        ),
-        title: const Text(
-          'Daily guidance',
-          style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
-        ),
-        subtitle: const Text(
-          'Morning horoscope, evening chat and your nightly Mulank — plus '
-          'an alert when a reading is ready.',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        children: [
+          SwitchListTile(
+            value: _on,
+            onChanged: _busy ? null : _set,
+            activeThumbColor: AppColors.goldLight,
+            secondary: Icon(
+              _blocked
+                  ? Icons.notifications_paused_outlined
+                  : (_on
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_off_outlined),
+              color: _blocked ? AppColors.goldLight : AppColors.textMuted,
+              size: 22,
+            ),
+            title: const Text(
+              'Daily guidance',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+            ),
+            subtitle: const Text(
+              'Morning horoscope, evening chat and your nightly Mulank — plus '
+              'an alert when a reading is ready.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          // Shown only when our switch is on and Android is still blocking.
+          // Without it the switch reads "on" while nothing is delivered,
+          // and the user has no way to tell a broken feature from a denied
+          // permission. Re-asking in-app cannot fix it — from Android 13 a
+          // denial is sticky and the request returns false silently — so
+          // the only honest offer is a trip to system settings.
+          if (_blocked)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () async {
+                  await NotificationService.openSystemSettings();
+                  // They may have flipped it while they were over there.
+                  await _refreshSystemState();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          color: AppColors.goldLight, size: 18),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Blocked in Android settings — tap to allow '
+                          'notifications for Moksha.',
+                          style: TextStyle(
+                              color: AppColors.goldLight, fontSize: 12),
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right,
+                          color: AppColors.goldLight, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
