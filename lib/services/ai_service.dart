@@ -158,6 +158,12 @@ class AiService {
         // (per-point chapter deep-dives). The server also still sends
         // `answer` (a bulleted join) for backward-compat — we prefer
         // `summary` when present, fall back to `answer` otherwise.
+        // `body` is the sectioned markdown reading — headings, paragraphs
+        // and bullets, the way a real reading is written. Servers that
+        // predate it simply omit the field and we fall back to joining
+        // `summary` into bullets exactly as before, so an older backend
+        // keeps working unchanged.
+        final String bodyMarkdown = (data['body'] as String? ?? '').trim();
         List<dynamic>? summaryJson = data['summary'] as List<dynamic>?;
         List<dynamic> detailsJson = data['details'] as List<dynamic>? ?? [];
         String rawAnswer = data['answer'] as String? ?? '';
@@ -211,7 +217,14 @@ class AiService {
         }
 
         String answer;
-        if (summaryJson != null && summaryJson.isNotEmpty) {
+        if (bodyMarkdown.isNotEmpty) {
+          // Pass it through untouched. Forcing '• ' onto every line (what
+          // the summary path below does) collapsed the whole reading into
+          // one bullet block, which is why answers read as a flat list
+          // instead of a structured reading.
+          answer = bodyMarkdown;
+          parsePath.add('render:body-markdown');
+        } else if (summaryJson != null && summaryJson.isNotEmpty) {
           answer = summaryJson
               .map((p) => '• ${p.toString().trim()}')
               .join('\n');
