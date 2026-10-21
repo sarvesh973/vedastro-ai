@@ -22,6 +22,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late TextEditingController _placeController;
   late DateTime _selectedDate;
   String? _selectedTime;
+
+  /// A place picked out of the suggestions during THIS edit, if any.
+  LocationSuggestion? _placePick;
+
+  /// Whether the place text was typed into during this edit without a
+  /// suggestion being picked afterwards.
+  ///
+  /// The three states are genuinely different and collapsing them loses
+  /// data. Untouched: keep whatever coordinates the profile already had.
+  /// Picked: take the new ones. Typed but not picked: drop them, because
+  /// coordinates describing the previous place while the text names a new
+  /// one are worse than none — the server would silently build the chart
+  /// for the old city and nothing on screen would disagree.
+  bool _placeEdited = false;
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -115,6 +129,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       dateOfBirth: _selectedDate,
       timeOfBirth: _selectedTime,
       placeOfBirth: _placeController.text.trim(),
+      // See _placeEdited: picked wins, typed-over clears, untouched keeps.
+      birthLat: _placePick?.lat ?? (_placeEdited ? null : widget.profile.birthLat),
+      birthLon: _placePick?.lon ?? (_placeEdited ? null : widget.profile.birthLon),
+      birthCountryCode: _placePick?.countryCode ??
+          (_placeEdited ? null : widget.profile.birthCountryCode),
     );
 
     await StorageService.saveProfile(updatedProfile);
@@ -258,6 +277,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               LocationAutocompleteField(
                 controller: _placeController,
                 hintText: 'Search city, town or village',
+                onChanged: (_) {
+                  if (_placePick != null || !_placeEdited) {
+                    setState(() {
+                      _placePick = null;
+                      _placeEdited = true;
+                    });
+                  }
+                },
+                onSelected: (s) => setState(() {
+                  _placePick = s;
+                  _placeEdited = false;
+                }),
               ),
 
               const SizedBox(height: 36),

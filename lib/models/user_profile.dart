@@ -16,12 +16,61 @@ class UserProfile {
   final String? timeOfBirth;
   final String placeOfBirth;
 
+  /// Coordinates of [placeOfBirth], captured when the user picked the
+  /// place out of the autocomplete rather than typing it.
+  ///
+  /// NULLABLE, and permanently so. Every profile already on a device or
+  /// in Firestore was saved before these fields existed, and the app is
+  /// live — making them required would stop those profiles loading at
+  /// all. Absent coordinates mean "send the place as text and let the
+  /// server geocode it", which is what every request did before.
+  ///
+  /// Why they are worth carrying: the server derives the birthplace
+  /// TIMEZONE from lat/lon via geo-tz, and the timezone is what converts
+  /// a local birth time to UTC. Resolve the wrong "Patna" and the whole
+  /// chart shifts — the ascendant can move several signs.
+  final double? birthLat;
+  final double? birthLon;
+
+  /// Two-letter ISO country code from the same pick, lowercase. Not used
+  /// for calculation; kept because it is the cheapest way to tell two
+  /// identically-named towns apart when looking at stored data.
+  final String? birthCountryCode;
+
   const UserProfile({
     required this.name,
     required this.dateOfBirth,
     this.timeOfBirth,
     required this.placeOfBirth,
+    this.birthLat,
+    this.birthLon,
+    this.birthCountryCode,
   });
+
+  /// True only when BOTH coordinates are present. Callers send lat/lon as
+  /// a pair or not at all — the server treats a half-pair as missing
+  /// (`if (!lat || !lon)`) and falls back to geocoding anyway, so there is
+  /// no case where one alone is useful.
+  bool get hasCoordinates => birthLat != null && birthLon != null;
+
+  UserProfile copyWith({
+    String? name,
+    DateTime? dateOfBirth,
+    String? timeOfBirth,
+    String? placeOfBirth,
+    double? birthLat,
+    double? birthLon,
+    String? birthCountryCode,
+  }) =>
+      UserProfile(
+        name: name ?? this.name,
+        dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+        timeOfBirth: timeOfBirth ?? this.timeOfBirth,
+        placeOfBirth: placeOfBirth ?? this.placeOfBirth,
+        birthLat: birthLat ?? this.birthLat,
+        birthLon: birthLon ?? this.birthLon,
+        birthCountryCode: birthCountryCode ?? this.birthCountryCode,
+      );
 
   String get dobFormatted {
     final day = dateOfBirth.day.toString().padLeft(2, '0');
@@ -128,6 +177,9 @@ class UserProfile {
     'dateOfBirth': dateOfBirth.toIso8601String(),
     'timeOfBirth': timeOfBirth,
     'placeOfBirth': placeOfBirth,
+    'birthLat': birthLat,
+    'birthLon': birthLon,
+    'birthCountryCode': birthCountryCode,
   };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -146,7 +198,25 @@ class UserProfile {
       timeOfBirth: json['timeOfBirth'] as String?,
       placeOfBirth:
           safeText(json['placeOfBirth'] as String?, context: 'profile.place'),
+      // `as double?` would throw on an int, and JSON round-trips a whole
+      // number as an int — a place sitting exactly on the equator or the
+      // prime meridian would store 0 and then fail to load. num.toDouble()
+      // accepts both. Out-of-range values are dropped rather than trusted:
+      // a corrupt coordinate sends the chart somewhere real but wrong,
+      // which is harder to notice than no coordinate at all.
+      birthLat: _coord(json['birthLat'], 90),
+      birthLon: _coord(json['birthLon'], 180),
+      birthCountryCode: (json['birthCountryCode'] as String?)?.toLowerCase(),
     );
+  }
+
+  /// Reads a stored coordinate, or null if it is absent, unparseable or
+  /// outside [-limit, limit].
+  static double? _coord(Object? raw, double limit) {
+    final v = raw is num ? raw.toDouble() : null;
+    if (v == null || v.isNaN || v.isInfinite) return null;
+    if (v < -limit || v > limit) return null;
+    return v;
   }
 
   String toJsonString() => jsonEncode(toJson());

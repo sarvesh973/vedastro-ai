@@ -132,6 +132,7 @@ class AiService {
               'birthDate': profile.dobFormatted,
               'birthTime': profile.timeOfBirth ?? '',
               'place': profile.placeOfBirth,
+              ...coordsOf(profile),
               // 'english' | 'hinglish' — server replies entirely in this.
               'language': StorageService.languagePreference,
               'chatHistory': chatHistory.length > 10
@@ -712,6 +713,31 @@ class AiService {
     }
   }
 
+  /// The `lat`/`lon` pair for a request body, or nothing when the profile
+  /// has no coordinates. Spread it into the JSON map:
+  ///
+  ///     'place': p.placeOfBirth,
+  ///     ...coordsOf(p),
+  ///
+  /// Both or neither, never one: the server reads them as
+  /// `if (!lat || !lon) geocodePlace(place)`, so a half-pair is treated as
+  /// missing anyway, and sending one invites a reader to think it matters.
+  ///
+  /// `place` stays in the body alongside these. It is the fallback for
+  /// profiles saved before coordinates existed, and the server prefers
+  /// lat/lon when both are present, so there is no conflict — and the
+  /// place string is still what prompts and logs read.
+  ///
+  /// NOT sent to /horoscope. That endpoint is sign-based: it takes a sign,
+  /// a period and a language, computes no chart, and caches globally
+  /// across all users on exactly those three. Coordinates would be dead
+  /// weight in the body and misleading to anyone reading it. Mulank is the
+  /// same — /mulank/* needs only birthDate, since Ank Jyotish works from
+  /// the digits of the date and has no chart at all.
+  static Map<String, dynamic> coordsOf(UserProfile p) => p.hasCoordinates
+      ? {'lat': p.birthLat, 'lon': p.birthLon}
+      : const <String, dynamic>{};
+
   /// Compatibility reading between the signed-in user and a partner.
   ///
   /// Returns the raw map rather than a typed model: the score, archetypes
@@ -748,6 +774,7 @@ class AiService {
                 'birthDate': p.dobFormatted,
                 'birthTime': p.timeOfBirth ?? '',
                 'place': p.placeOfBirth,
+                ...coordsOf(p),
               },
               'partner': {
                 'birthDate': partnerBirthDate,
@@ -822,6 +849,7 @@ class AiService {
                 'birthDate': p.dobFormatted,
                 'birthTime': p.timeOfBirth ?? '',
                 'place': p.placeOfBirth,
+                ...coordsOf(p),
               },
             }),
           )
@@ -892,6 +920,7 @@ class AiService {
                 'birthDate': StorageService.currentProfile!.dobFormatted,
                 'birthTime': StorageService.currentProfile!.timeOfBirth ?? '',
                 'place': StorageService.currentProfile!.placeOfBirth,
+                ...coordsOf(StorageService.currentProfile!),
               },
             }),
           )

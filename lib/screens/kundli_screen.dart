@@ -163,6 +163,12 @@ class _KundliScreenState extends ConsumerState<KundliScreen>
           'birthDate': dobIso,
           'birthTime': profile.timeOfBirth ?? '',
           'place': profile.placeOfBirth,
+          // Exact birthplace coordinates when the profile has them. This
+          // screen draws the houses and the vargas, so the birthplace
+          // timezone — which the server derives from lat/lon — decides
+          // the ascendant. A geocode that lands on the wrong town of the
+          // same name rotates every house in the chart.
+          ...AiService.coordsOf(profile),
         }),
       ).timeout(const Duration(seconds: 60));
 
