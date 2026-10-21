@@ -69,3 +69,8 @@ knowledge_base/*.json
 # Firebase CLI scratch dir from `crashlytics:symbols:upload`
 # (holds an 11 MB dump_syms binary it downloads on first run)
 .crashlytics/
+
+# Kotlin compiler daemon session files. Gradle writes these during a
+# local Android build; one got committed in the notifications branch.
+# They are empty, per-machine and regenerated on every build.
+android/.kotlin/

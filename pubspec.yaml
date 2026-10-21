@@ -48,6 +48,20 @@ dependencies:
   # pair throws "string is not well-formed UTF-16". Ships with the Flutter
   # SDK already; declared explicitly because we import it directly.
   characters: ^1.4.0
+  # Local (on-device) notifications: reply-ready alerts, the three daily
+  # reminders, and the re-engagement nudge. No FCM / server push — the
+  # phone can schedule all of this itself, and the reply alert is fired by
+  # the same isolate that made the HTTP call.
+  #
+  # NOTE: this plugin declares minSdkVersion 24, which is why
+  # android/app/build.gradle.kts had to move off minSdk 23. It also
+  # requires core-library desugaring in the app module.
+  flutter_local_notifications: ^22.3.2
+  # zonedSchedule needs a real IANA zone, not UTC, or "08:00" lands at the
+  # wrong local hour for every user outside UTC — i.e. all of them.
+  timezone: ^0.11.2
+  # Reads the device's current IANA zone to feed the above.
+  flutter_timezone: ^5.1.1
   # Note: zodiac glyphs used to come from font_awesome_flutter, but its
   # zodiac icons are Pro-only and the package itself breaks on newer
   # Flutter SDKs (extends the now-sealed IconData). They're drawn as
