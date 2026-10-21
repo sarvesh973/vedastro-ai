@@ -730,11 +730,22 @@ class AiService {
   /// Returns the raw map rather than a typed model: the score, archetypes
   /// and dimension bars are all rendered directly, and a model would just
   /// be a second place to keep the field names in sync with the server.
+  /// [partnerLat] / [partnerLon] come from the place the user actually
+  /// picked out of the autocomplete. Sending them lets the server skip its
+  /// own geocoding step, which is the part that silently resolved a
+  /// half-typed city to the wrong country — or to nothing, producing a 400
+  /// the UI reported as "check the details".
+  ///
+  /// On a non-200 this returns `{'error': <server message>}` rather than
+  /// null, so the caller can say what was actually wrong. Null is reserved
+  /// for "the request never completed" — no network, timeout, bad JSON.
   static Future<Map<String, dynamic>?> compatReading({
     required String partnerName,
     required String partnerBirthDate,
     required String partnerBirthTime,
     required String partnerPlace,
+    double? partnerLat,
+    double? partnerLon,
   }) async {
     final p = StorageService.currentProfile;
     if (p == null) return null;
@@ -755,6 +766,8 @@ class AiService {
                 'birthDate': partnerBirthDate,
                 'birthTime': partnerBirthTime,
                 'place': partnerPlace,
+                if (partnerLat != null) 'lat': partnerLat,
+                if (partnerLon != null) 'lon': partnerLon,
               },
               'yourName': p.firstName,
               'partnerName': partnerName,
@@ -768,7 +781,19 @@ class AiService {
       }
       if (response.statusCode == 429) Analytics.rateLimitHit(feature: 'compat');
       print('[COMPAT] Status ${response.statusCode}: ${response.body}');
-      return null;
+      // /compat/reading answers a rejection with {"error": "..."} and the
+      // reason is specific enough to act on ("birth date and time are
+      // required", "place or lat/lon required"). Swallowing it was why
+      // every failure looked identical from inside the app.
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['error'] != null) {
+          return {'error': decoded['error'].toString()};
+        }
+      } catch (_) {
+        // Non-JSON body (a proxy error page, an HTML 502). Fall through.
+      }
+      return {'error': 'http_${response.statusCode}'};
     } catch (e) {
       print('[COMPAT] error: $e');
       return null;
