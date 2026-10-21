@@ -26,6 +26,17 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
   final _timeController = TextEditingController();
   DateTime? _selectedDate;
 
+  /// The place the user picked out of the suggestion list, when they did.
+  ///
+  /// Deliberately NOT required to continue. This is onboarding for a live
+  /// app: refusing a typed place would turn a precision improvement into
+  /// a signup drop-off. Picking a suggestion gets you an exact birthplace
+  /// timezone; typing one falls back to the server's own geocode, exactly
+  /// as before. The compat screen does require a pick, because there the
+  /// whole result is a Moon comparison and there is no existing flow to
+  /// protect.
+  LocationSuggestion? _placePick;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -135,6 +146,11 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
       // Birth time is now required (validated above).
       timeOfBirth: _timeController.text.trim(),
       placeOfBirth: _placeController.text.trim(),
+      // Null unless a suggestion was actually picked, which is the only
+      // state in which these agree with the text above.
+      birthLat: _placePick?.lat,
+      birthLon: _placePick?.lon,
+      birthCountryCode: _placePick?.countryCode,
     );
 
     // Save profile locally + cloud.
@@ -340,6 +356,14 @@ class _UserDetailsScreenState extends ConsumerState<UserDetailsScreen> {
               LocationAutocompleteField(
                 controller: _placeController,
                 hintText: 'Search city, town or village',
+                // Typing after a pick invalidates the coordinates: they
+                // would still describe the old selection while the text
+                // says something else, and storing that pair is worse
+                // than storing no coordinates at all.
+                onChanged: (_) {
+                  if (_placePick != null) setState(() => _placePick = null);
+                },
+                onSelected: (s) => setState(() => _placePick = s),
               )
                   .animate()
                   .fadeIn(duration: 400.ms, delay: 550.ms),
