@@ -213,7 +213,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // "Explain more" use serverPromptOverride internally — we restore
       // the visible variant for UX).
       _messageController.text = visibleText;
-      _showPaywall();
+      // The question is rolled back on purpose — restoring the text lets
+      // them retry in one tap after paying. What was missing is any sign
+      // that their question was READ, so the server's chart-grounded line
+      // travels to the paywall and leads it. Null-safe: the paywall still
+      // works without one.
+      _showPaywall(teaser: aiResponse.paywallTeaser);
       return;
     }
 
@@ -302,7 +307,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     });
   }
 
-  Future<void> _showPaywall() async {
+  Future<void> _showPaywall({String? teaser}) async {
     // Smart plan filtering based on the user's *actual* current plan
     // (not the legacy isPremium boolean — that flag is true for trial,
     // standard, AND premium, so it would skip the Standard upgrade for
@@ -329,7 +334,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
             PaywallScreen(
-                availablePlans: availablePlans, trigger: 'chat_limit'),
+                availablePlans: availablePlans,
+                trigger: 'chat_limit',
+                teaser: teaser),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(

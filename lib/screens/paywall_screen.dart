@@ -99,8 +99,22 @@ class PaywallScreen extends ConsumerStatefulWidget {
   /// so ad campaigns can see which surfaces drive conversions.
   final String trigger;
 
+  /// One chart-grounded sentence about the question that was just blocked,
+  /// supplied by the server with its 429 — e.g. "Marriage and partnership
+  /// runs through your 7th house, where Moon sits in Libra, under Venus."
+  ///
+  /// Shown above the plans so the moment is not empty. It is the only part
+  /// of this screen that is specific to the person rather than to the
+  /// product, which is the whole reason it earns the space.
+  ///
+  /// Always optional: the server omits it when the profile has no
+  /// coordinates or the question maps to no house, so every layout here
+  /// has to work without it.
+  final String? teaser;
+
   const PaywallScreen({
     super.key,
+    this.teaser,
     this.availablePlans,
     this.trigger = 'unknown',
   });
@@ -244,6 +258,46 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 ),
               ),
             ),
+
+            // ─── Chart-grounded teaser ─────────────────────────
+            // The one thing on this screen that is about THEM rather than
+            // about the product. Placed above the plans so the specific
+            // claim lands before the prices, and quoted rather than
+            // styled as body text so it reads as the chart speaking.
+            if ((widget.teaser ?? '').trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.purpleAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border(
+                      left: BorderSide(
+                          color: AppColors.purpleAccent, width: 3),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.auto_awesome,
+                          color: AppColors.goldLight, size: 16),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          widget.teaser!.trim(),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 13.5,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 20),
 
