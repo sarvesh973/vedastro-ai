@@ -1,6 +1,6 @@
 import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 
 /// Centralized analytics wrapper for VedAstro AI.
 ///
@@ -244,9 +244,24 @@ class Analytics {
     return _log('checkout_initiated', {'plan': plan});
   }
 
+  /// [trigger] is the paywall surface this purchase came from — the same
+  /// value [paywallViewed] reports ('chat_limit', 'compat', 'mulank',
+  /// 'home_banner', ...).
+  ///
+  /// Without it the funnel does not join. paywall_viewed carried the
+  /// trigger and the purchase events carried only the plan, so "100 people
+  /// hit the chat wall" and "12 people bought Standard" were two unrelated
+  /// numbers — there was no way to tell which surface actually converts,
+  /// which is the one thing needed to decide where a paywall belongs.
+  ///
+  /// NOTE: `trigger` must be registered as an event-scoped CUSTOM DIMENSION
+  /// in Firebase Console → Analytics → Custom definitions before GA4 will
+  /// break any report down by it. Registration is NOT retroactive, so it
+  /// only applies to data arriving afterwards.
   static Future<void> subscriptionStarted({
     required String plan,
     required String paymentMethod,
+    String trigger = 'unknown',
   }) {
     // Recurring plan (Standard/Premium) just activated and the first month
     // was charged immediately. There is NO free trial anymore, so we fire:
@@ -274,6 +289,7 @@ class Analytics {
     return _log('subscription_started', {
       'plan': plan,
       'payment_method': paymentMethod,
+      'trigger': trigger,
     });
   }
 
@@ -283,7 +299,10 @@ class Analytics {
   /// NOTE: the charge happens server-side, so ideally this is also sent via
   /// Meta Conversions API from the webhook; calling it here covers the case
   /// where the app observes the active/charged state on resume.
-  static Future<void> subscriptionPurchased({required String plan}) {
+  static Future<void> subscriptionPurchased({
+    required String plan,
+    String trigger = 'unknown',
+  }) {
     // trial = the one-time ₹49 Starter Pass; standard/premium = monthly.
     final value = _planValueInr[plan] ?? 0.0;
     try {
@@ -297,7 +316,35 @@ class Analytics {
     try {
       _instance?.logPurchase(currency: 'INR', value: value);
     } catch (_) {}
-    return _log('subscription_purchased', {'plan': plan});
+    return _log('subscription_purchased', {'plan': plan, 'trigger': trigger});
+  }
+
+  /// Fired when the paywall is closed without a purchase.
+  ///
+  /// The other half of the conversion rate: paywall_viewed alone cannot
+  /// distinguish "nobody saw it" from "everybody saw it and left", and
+  /// those call for opposite fixes.
+  static Future<void> paywallDismissed({
+    required String trigger,
+    required int secondsViewed,
+  }) =>
+      _log('paywall_dismissed', {
+        'trigger': trigger,
+        'dwell': dwellBucket(secondsViewed),
+      });
+
+  /// Buckets a paywall dwell time.
+  ///
+  /// Bucketed, not raw: the number is only ever read as "bounced" versus
+  /// "actually considered it", and a bucket is a usable GA4 dimension where
+  /// hundreds of distinct integers are not — GA4 caps the cardinality of a
+  /// custom dimension and starts collapsing the rest into (other).
+  @visibleForTesting
+  static String dwellBucket(int seconds) {
+    if (seconds < 3) return 'bounce';
+    if (seconds < 15) return 'skim';
+    if (seconds < 60) return 'considered';
+    return 'long';
   }
 
   static Future<void> subscriptionCancelled({required String plan}) =>
@@ -306,9 +353,11 @@ class Analytics {
   static Future<void> subscriptionFailed({
     required String plan,
     required String reason,
+    String trigger = 'unknown',
   }) =>
       _log('subscription_failed', {
         'plan': plan,
+        'trigger': trigger,
         'reason': reason.length > 100 ? reason.substring(0, 100) : reason,
       });
 

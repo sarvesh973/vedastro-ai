@@ -50,6 +50,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   late SubscriptionPlan _selectedPlan;
   bool _isProcessing = false;
 
+  /// For the dwell bucket on paywall_dismissed.
+  DateTime? _openedAt;
+
+  /// Set when a purchase completes, so dispose() can tell a dismissal from
+  /// a conversion — the success sheet replaces this route, which disposes
+  /// it just the same.
+  bool _purchased = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +66,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     // screen instead of plans, so their views would only pollute the funnel.
     if (!AuthService.isAdmin) {
       Analytics.paywallViewed(trigger: widget.trigger);
+      _openedAt = DateTime.now();
     }
     // Default selection = first plan in the available list (so it works
     // for both "all 3" and "only premium" cases).
@@ -76,6 +85,16 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   @override
   void dispose() {
+    // Fired here rather than on the close buttons so it also catches the
+    // Android back button and the edge-swipe, which are how most paywalls
+    // are actually dismissed. _openedAt is null for admins, who are
+    // excluded from the funnel entirely.
+    if (!_purchased && _openedAt != null) {
+      Analytics.paywallDismissed(
+        trigger: widget.trigger,
+        secondsViewed: DateTime.now().difference(_openedAt!).inSeconds,
+      );
+    }
     PaymentService.dispose();
     super.dispose();
   }
@@ -485,6 +504,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     setState(() => _isProcessing = true);
 
     final onSuccess = (String paymentId, String planId) {
+      // Set before the mounted check: the conversion happened whether or
+      // not this screen is still alive, and dispose() must not then log it
+      // as a dismissal.
+      _purchased = true;
       if (!mounted) return;
       setState(() => _isProcessing = false);
       ref.read(isPremiumProvider.notifier).state = StorageService.isPremium;
@@ -508,6 +531,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       await PaymentService.openStarterPassCheckout(
         onSuccess: onSuccess,
         onFailure: onFailure,
+        trigger: widget.trigger,
       );
       return;
     }
@@ -516,6 +540,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       plan: _selectedPlan,
       onSuccess: onSuccess,
       onFailure: onFailure,
+      trigger: widget.trigger,
     );
   }
 
