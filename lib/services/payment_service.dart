@@ -44,6 +44,20 @@ class PaymentService {
   static PaymentFailureCallback? _onFailure;
   static SubscriptionPlan? _currentPlan;
   static String? _currentSubscriptionId;
+
+  /// Which paywall surface opened this checkout ('chat_limit', 'compat',
+  /// 'mulank', 'home_banner', ...).
+  ///
+  /// Static alongside _currentPlan for the same reason: the Razorpay result
+  /// arrives in _handlePaymentSuccess / _handlePaymentError, which are SDK
+  /// callbacks with no reference to the screen that started the flow. The
+  /// trigger has to be parked somewhere it survives the round trip, or the
+  /// purchase cannot be attributed to the paywall that produced it.
+  ///
+  /// Defaults to 'unknown' rather than being nullable so a caller that
+  /// forgets it produces a countable bucket in the funnel instead of a
+  /// silently absent dimension.
+  static String _trigger = 'unknown';
   // True while a one-time Starter Pass (₹49) order is in flight, so the
   // success handler verifies it via /order/verify instead of treating it as
   // a recurring subscription.
@@ -82,12 +96,14 @@ class PaymentService {
     required SubscriptionPlan plan,
     required PaymentSuccessCallback onSuccess,
     required PaymentFailureCallback onFailure,
+    String trigger = 'unknown',
   }) async {
     if (_razorpay == null) init();
 
     _onSuccess = onSuccess;
     _onFailure = onFailure;
     _currentPlan = plan;
+    _trigger = trigger;
 
     final userEmail = AuthService.userEmail ?? '';
     final uid = AuthService.currentUser?.uid ?? '';
@@ -211,12 +227,14 @@ class PaymentService {
   static Future<void> openStarterPassCheckout({
     required PaymentSuccessCallback onSuccess,
     required PaymentFailureCallback onFailure,
+    String trigger = 'unknown',
   }) async {
     if (_razorpay == null) init();
 
     _onSuccess = onSuccess;
     _onFailure = onFailure;
     _currentPlan = SubscriptionPlan.trial; // the ₹49 pass
+    _trigger = trigger;
     _isOneTimeFlow = true;
     _currentSubscriptionId = null;
 
@@ -436,7 +454,7 @@ class PaymentService {
         return;
       }
       // ₹49 one-time purchase → Meta Purchase event (not a trial).
-      Analytics.subscriptionPurchased(plan: planId);
+      Analytics.subscriptionPurchased(plan: planId, trigger: _trigger);
       final uidA = AuthService.currentUser?.uid;
       if (uidA != null) Analytics.setUser(uid: uidA, plan: planId);
 
@@ -458,7 +476,8 @@ class PaymentService {
     }
 
     // Analytics: subscription started
-    Analytics.subscriptionStarted(plan: planId, paymentMethod: 'razorpay');
+    Analytics.subscriptionStarted(
+        plan: planId, paymentMethod: 'razorpay', trigger: _trigger);
     // Update user's plan in analytics
     final uidForAnalytics = AuthService.currentUser?.uid;
     if (uidForAnalytics != null) {
@@ -493,6 +512,7 @@ class PaymentService {
     Analytics.subscriptionFailed(
       plan: _currentPlan?.id ?? 'unknown',
       reason: 'code=$code: $desc',
+      trigger: _trigger,
     );
     final msg = response.message ?? 'Payment failed';
     print('[PAYMENT] Error: code=$code, msg=$msg');
