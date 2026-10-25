@@ -82,6 +82,9 @@ flutter:
     - assets/
     - assets/icon/
     - assets/legal/
+    # Festive promo creatives. Both 1600x2000 WebP so the A/B compares
+    # the creative and not the image quality.
+    - assets/images/promo/
 
   # No custom fonts needed — zodiac wheel uses FontAwesome icons (via
   # font_awesome_flutter package), which live in the Unicode Private

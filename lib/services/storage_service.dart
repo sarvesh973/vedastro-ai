@@ -7,6 +7,11 @@ import 'auth_service.dart';
 /// Persistent storage service using SharedPreferences
 class StorageService {
   static SharedPreferences? _prefs;
+
+  /// Raw access for small, self-contained feature state that does not
+  /// deserve its own typed API surface here — currently the promo
+  /// frequency caps in PromoService. Null before init().
+  static SharedPreferences? get prefs => _prefs;
   static UserProfile? _currentProfile;
 
   static const int freeChatLimit = 1;
