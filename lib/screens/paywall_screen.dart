@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -24,6 +25,68 @@ import '../widgets/plan_activated_sheet.dart';
 ///  - [availablePlans] lets the caller hide irrelevant plans, e.g. when a
 ///    Standard subscriber hits their cap, only show Premium.
 ///  - Pass `null` to show all 3 plans (default).
+/// Headline and subline for a paywall, keyed on the surface it opened from.
+typedef PaywallCopy = ({String headline, String subline});
+
+/// Copy for the surface the user arrived from, or null to keep the generic
+/// header ('Unlock Moksha' / 'Pick the plan that suits your journey').
+///
+/// Only the surfaces where something was actually BLOCKED get their own
+/// copy. Arriving from the home banner, the drawer or Settings is browsing
+/// — the generic line is the honest one there, because nothing was taken
+/// away and implying otherwise would be manufactured urgency.
+///
+/// [isFreeUser] false returns null throughout: someone already paying who
+/// hits their plan's ceiling needs to hear about THAT, not about a free
+/// question they used months ago.
+///
+/// Deliberately calm and declarative. Every line states what the user
+/// already has, then what the plans add. No countdowns, no "last chance",
+/// no implied loss — the Play listing promises no fear-based manipulation,
+/// and at 4.1 stars a paywall that reads as a squeeze costs more in reviews
+/// than it earns in conversions. paywall_copy_test.dart enforces this.
+@visibleForTesting
+PaywallCopy? paywallCopyFor(String trigger, {required bool isFreeUser}) {
+  if (!isFreeUser) return null;
+  switch (trigger) {
+    case 'chat_limit':
+      return (
+        headline: 'Your chart has more to say',
+        // Names the real allowance. The server's own 429 still claims
+        // "5 chats a day for 7 days", which is neither what the Pass gives
+        // (21 a week) nor how it bills (weekly, recurring). The app has
+        // always shown its own copy so users never saw that — but this is
+        // the number this screen must not get wrong.
+        subline: 'You have used your free question. The Starter Pass '
+            'includes 21 a week, and every plan above it includes more.',
+      );
+    case 'palm_limit':
+      return (
+        headline: 'Palm readings',
+        // The one case where vagueness causes refunds: a free user told to
+        // "pick a plan" can buy the ₹49 Pass and only then discover palm
+        // is not in it.
+        subline: 'Palm reading comes with Standard and above. The ₹49 '
+            'Starter Pass does not include it.',
+      );
+    case 'compat':
+      return (
+        headline: 'See the whole match',
+        subline: 'Your score and all eight kutas are yours to keep. The '
+            'written reading covers what each of you needs, and where you '
+            'misread each other.',
+      );
+    case 'mulank':
+      return (
+        headline: 'Your Mulank, every day',
+        subline: 'The monthly overview stays free. Daily and weekly '
+            'readings, and asking about your day, come with any plan.',
+      );
+    default:
+      return null;
+  }
+}
+
 class PaywallScreen extends ConsumerStatefulWidget {
   /// If null, shows all 3 plans. If set, shows only the listed plans
   /// in their order. Used by chat / palm screens to hide already-active
@@ -83,6 +146,29 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   List<SubscriptionPlan> get _plansToShow =>
       widget.availablePlans ?? _defaultPlanOrder;
 
+  /// The Pass is only ever offered to free users (see
+  /// SubscriptionPlan.upgradeOptions), so its presence is the signal that
+  /// nobody has paid yet. Someone already paying who hits their plan's
+  /// ceiling needs to hear about THAT, not about a free question they used
+  /// months ago — so the trigger copy below applies to free users only.
+  bool get _isFreeUser => _plansToShow.contains(SubscriptionPlan.pass);
+
+  /// Headline and subline for the surface the user arrived from, or null to
+  /// keep the generic header.
+  ///
+  /// Only the surfaces where something was actually BLOCKED get their own
+  /// copy. Arriving from the home banner, the drawer or Settings is
+  /// browsing — the generic line is the honest one there, because nothing
+  /// was taken away and pretending otherwise would be manufactured urgency.
+  ///
+  /// Deliberately calm and declarative. Every line names what the user
+  /// already has, then what the plans add. No countdowns, no "don't miss
+  /// out", no implied loss — the Play listing promises no fear-based
+  /// manipulation, and at 4.1 stars a paywall that feels like a squeeze
+  /// costs more in reviews than it earns in conversions.
+  PaywallCopy? _triggerCopy() =>
+      paywallCopyFor(widget.trigger, isFreeUser: _isFreeUser);
+
   @override
   void dispose() {
     // Fired here rather than on the close buttons so it also catches the
@@ -116,10 +202,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Unlock Moksha',
-                      style: TextStyle(
+                      _triggerCopy()?.headline ?? 'Unlock Moksha',
+                      style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -149,8 +235,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   _subtitleForContext(),
+                  // height: the trigger-aware sublines run to two or three
+                  // lines where the old generic one was always a single
+                  // line, and muted 14px text set solid is hard to read at
+                  // that length.
                   style: const TextStyle(
-                      color: AppColors.textMuted, fontSize: 14),
+                      color: AppColors.textMuted, fontSize: 14, height: 1.45),
                 ),
               ),
             ),
@@ -453,6 +543,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   /// Subtitle changes based on which plans are available — gives the user
   /// a clear reason for being on this screen.
   String _subtitleForContext() {
+    // The surface the user came from, when it blocked them, is more
+    // relevant than anything derivable from the plan list.
+    final fromTrigger = _triggerCopy();
+    if (fromTrigger != null) return fromTrigger.subline;
+
     final plans = _plansToShow;
     if (plans.length == 1 && plans.first == SubscriptionPlan.premium) {
       return "You've reached your Standard plan limit. Upgrade to Premium for unlimited access.";
