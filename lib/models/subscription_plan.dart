@@ -14,6 +14,28 @@
 /// the other three bill/reset MONTHLY. Palm is a paid *monthly-tier* feature
 /// — the ₹49 pass has none, so palm is an upgrade reason. Enum symbols map to
 /// Firestore/plan tags: pass/trial/standard/premium.
+/// Whether the Starter Pass introductory price is LIVE in Razorpay.
+///
+/// Flip this to true only once BOTH exist in the Razorpay dashboard:
+///   1. a ₹99/week plan, with RAZORPAY_PLAN_PASS pointing at it
+///   2. a first-cycle offer bringing cycle 1 to ₹49, with
+///      RAZORPAY_OFFER_PASS_INTRO pointing at it
+///
+/// Until then the app charges ₹49 every week, and this must stay false.
+///
+/// It gates three things at once — the price fields below, the plan
+/// labels, and which promo sheet variant is shown — so the displayed
+/// price, the autopay disclosure and the actual Razorpay charge cannot
+/// drift apart. That matters more than it looks: AutopayDisclosure makes
+/// the user tick "I understand ₹N will be auto-debited every week", so a
+/// wrong recurring figure here is a false consent record, not a typo.
+///
+/// Raising the Pass to ₹99 also fixes a real inversion in the ladder. At
+/// ₹49/week it costs ~₹212/month for ~91 chats against Standard's ₹199
+/// for 50, so nobody who only chats should ever have upgraded. At ₹99 the
+/// Pass lands at ~₹429/month and sits correctly above Standard.
+const bool kPassIntroPricingLive = false;
+
 enum SubscriptionPlan {
   /// Free tier — 1 chat total (lifetime), 0 palm readings.
   free,
@@ -84,7 +106,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return 'Free';
       case SubscriptionPlan.pass:
-        return '₹49/week';
+        return kPassIntroPricingLive ? '₹49 first week' : '₹49/week';
       case SubscriptionPlan.trial:
         return '₹199/month';
       case SubscriptionPlan.standard:
@@ -100,7 +122,9 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return '1 free chat';
       case SubscriptionPlan.pass:
-        return '21 chats a week · billed weekly, cancel anytime';
+        return kPassIntroPricingLive
+            ? '21 chats a week · then ₹99 a week, cancel anytime'
+            : '21 chats a week · billed weekly, cancel anytime';
       case SubscriptionPlan.trial:
         return 'For regular seekers';
       case SubscriptionPlan.standard:
@@ -116,7 +140,7 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.free:
         return 0;
       case SubscriptionPlan.pass:
-        return 4900;      // ₹49
+        return 4900;      // ₹49 — the first cycle, intro or not
       case SubscriptionPlan.trial:
         return 19900;     // ₹199
       case SubscriptionPlan.standard:
@@ -127,10 +151,36 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
   }
 
   /// Recurring amount in paise (per [billingCycle]).
-  int get recurringPaise => firstChargePaise;
+  ///
+  /// Equal to [firstChargePaise] for every plan EXCEPT the Pass once
+  /// intro pricing is live: ₹49 for cycle one, ₹99 after. AutopayDisclosure
+  /// renders both figures and puts the recurring one in the consent
+  /// checkbox, so this is the number the user actually agrees to.
+  int get recurringPaise =>
+      (this == SubscriptionPlan.pass && kPassIntroPricingLive)
+          ? 9900 // ₹99/week standing rate
+          : firstChargePaise;
 
   /// No free trial. 0 for every plan.
   int get trialDays => 0;
+
+  /// [recurringPaise] normalised to a month, so a weekly plan can be
+  /// compared with the monthly tiers at all. 52 weeks / 12 months.
+  ///
+  /// This is the number that exposes whether the ladder actually goes up.
+  /// At ₹49/week the Pass works out to ~₹212/month for ~91 chats, against
+  /// Standard at ₹199 for 50 — so the cheaper-looking weekly plan was in
+  /// fact the better deal, and nobody who only chats should ever have
+  /// upgraded off it. Raising the standing rate to ₹99 puts the Pass at
+  /// ~₹429 and restores the order.
+  int get monthlyEquivalentPaise =>
+      isWeekly ? (recurringPaise * 52 / 12).round() : recurringPaise;
+
+  /// Chat questions per month, normalised the same way, for the same
+  /// reason. -1 stays -1 (unlimited).
+  int get monthlyEquivalentChats => chatLimit < 0
+      ? -1
+      : (isWeekly ? (chatLimit * 52 / 12).round() : chatLimit);
 
   /// Chat questions allowed per BILLING CYCLE (weekly for Pass, monthly for
   /// the rest). For Free this is the LIFETIME total. -1 = unlimited.
@@ -231,8 +281,15 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
           SubscriptionPlan.premium,
         ];
       case SubscriptionPlan.pass:
+        // Standard (₹199/mo) is deliberately absent. On the headline
+        // prices it looks like an upgrade from ₹49, but the Pass bills
+        // weekly: ~₹212/month for ~91 chats, against ₹199 for 50. Offering
+        // it was offering a downgrade — more money per question, 45% fewer
+        // questions — and it stays wrong once the Pass goes to ₹99/week
+        // (~₹429). plan_ladder_test.dart enforces this on monthly
+        // equivalents, which is the only basis on which a weekly plan and
+        // a monthly one can be compared at all.
         return const [
-          SubscriptionPlan.trial,
           SubscriptionPlan.standard,
           SubscriptionPlan.premium,
         ];
