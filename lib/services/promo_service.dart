@@ -8,6 +8,12 @@ import 'analytics_service.dart';
 import 'auth_service.dart';
 import 'storage_service.dart';
 
+/// The part of the day an impression belongs to.
+///
+/// One impression per slot per day, so the three are naturally spread
+/// instead of all landing in whichever session the user happens to have.
+enum PromoSlot { morning, afternoon, night }
+
 /// One promotional creative in the A/B test.
 ///
 /// The artwork carries ALL the copy — headline, price, CTA label, "Not
@@ -79,15 +85,24 @@ class PromoService {
   static const _keyShownToday = 'promo_shown_today';
   static const _keyPausedUntil = 'promo_paused_until_ms';
 
-  /// Impressions per calendar day.
-  static const maxPerDay = 2;
-
-  /// Minimum gap between those two, so they land at different points in
-  /// the day rather than twice in one sitting. Without it, opening the
-  /// app twice in a minute burns the day's allowance immediately and the
-  /// second impression is pure irritation — the user has not done
-  /// anything in between for it to be a fresh ask.
-  static const minGapSameDay = Duration(hours: 4);
+  /// Three impressions a day, one per part of the day.
+  ///
+  /// Slots rather than a counter plus a minimum gap, because a counter
+  /// cannot express "spread them out" — it only knows how many have gone.
+  /// A plain count of 3 a day lets all three land in one evening, and a
+  /// count plus a gap leaks across midnight: shown at 16:00 and 20:00,
+  /// the calendar day rolls at 00:00 and the gap has already elapsed, so
+  /// a third fires at 00:05. Eight hours, three impressions. Binding each
+  /// impression to a window closes that by construction.
+  ///
+  /// Whichever window the user opens the app in, they get that window's
+  /// impression — once. Open at 07:00 and again at 09:00 and only the
+  /// first shows; come back at 14:00 and the afternoon one does.
+  static const slotHours = <PromoSlot, (int, int)>{
+    PromoSlot.morning: (5, 12),    // 05:00–11:59
+    PromoSlot.afternoon: (12, 18), // 12:00–17:59
+    PromoSlot.night: (18, 5),      // 18:00–04:59, wrapping past midnight
+  };
 
   /// Dismissals before the promo pauses.
   static const maxDismissals = 4;
@@ -95,11 +110,11 @@ class PromoService {
   /// How long it rests after [maxDismissals], before resuming with a
   /// clean counter.
   ///
-  /// This is the release valve on a deliberately frequent campaign. At two
-  /// a day, four dismissals is reached in roughly two days, so the shape
-  /// over a fortnight is: ~2 days of asking, 7 days of silence, then ~2
-  /// days again. Someone who never engages sees it about eight times in
-  /// two weeks rather than twenty-eight.
+  /// This is the release valve on a deliberately frequent campaign. At
+  /// three a day the cap is reached inside two days, so the shape over a
+  /// fortnight is: ~1.5 days of asking, 7 days of silence, then the same
+  /// again. Someone who never engages sees it about eight times in two
+  /// weeks rather than forty-two.
   static const pauseAfterDismissals = Duration(days: 7);
 
   /// Which creative this user sees — STABLE for a given account.
@@ -162,28 +177,46 @@ class PromoService {
 
     if (dismissCount >= maxDismissals) return false;
 
-    if (shownOn(t) >= maxPerDay) return false;
-
-    final last = lastShownMs;
-    if (last != 0 &&
-        t.millisecondsSinceEpoch - last < minGapSameDay.inMilliseconds) {
-      return false;
-    }
+    // This window's impression already used.
+    if (slotUsed(t)) return false;
 
     return true;
   }
 
-  /// Impressions recorded for [t]'s calendar day, local time.
-  ///
-  /// Keyed on the date rather than a rolling 24h window so "twice a day"
-  /// means what a person means by it, and so the allowance refreshes at
-  /// midnight rather than at whatever time they happened to open the app
-  /// yesterday.
-  static int shownOn(DateTime t) {
-    final stored = StorageService.prefs?.getString(_keyShownDay);
-    if (stored != _dayKey(t)) return 0;
-    return StorageService.prefs?.getInt(_keyShownToday) ?? 0;
+  /// Which part of the day [t] falls in.
+  static PromoSlot slotFor(DateTime t) {
+    final h = t.hour;
+    if (h >= 5 && h < 12) return PromoSlot.morning;
+    if (h >= 12 && h < 18) return PromoSlot.afternoon;
+    return PromoSlot.night;
   }
+
+  /// The day a slot belongs to.
+  ///
+  /// Anything before 05:00 counts as the PREVIOUS day's night. Someone
+  /// using the app at 00:30 is finishing their evening, not starting a
+  /// new day — and attributing it correctly is what stops the night slot
+  /// being handed out twice either side of midnight.
+  static String slotDayKey(DateTime t) =>
+      _dayKey(t.hour < 5 ? t.subtract(const Duration(days: 1)) : t);
+
+  /// Whether [t]'s window has already been used.
+  static bool slotUsed(DateTime t) {
+    final p = StorageService.prefs;
+    if (p?.getString(_keyShownDay) != slotDayKey(t)) return false;
+    final mask = p?.getInt(_keyShownToday) ?? 0;
+    return mask & _bit(slotFor(t)) != 0;
+  }
+
+  /// How many of today's three windows have been used.
+  static int slotsUsedOn(DateTime t) {
+    final p = StorageService.prefs;
+    if (p?.getString(_keyShownDay) != slotDayKey(t)) return 0;
+    final mask = p?.getInt(_keyShownToday) ?? 0;
+    return PromoSlot.values.where((s) => mask & _bit(s) != 0).length;
+  }
+
+  static int _bit(PromoSlot s) => 1 << s.index;
 
   static String _dayKey(DateTime t) =>
       '${t.year}-${t.month.toString().padLeft(2, '0')}-'
@@ -211,9 +244,14 @@ class PromoService {
       await p.setInt(_keyDismissCount, 0);
     }
 
+    // Read the mask BEFORE moving the day key, or a new day would be
+    // written with the old day's bits still set.
+    final existing =
+        p.getString(_keyShownDay) == slotDayKey(t) ? (p.getInt(_keyShownToday) ?? 0) : 0;
+
     await p.setInt(_keyLastShown, t.millisecondsSinceEpoch);
-    await p.setInt(_keyShownToday, shownOn(t) + 1);
-    await p.setString(_keyShownDay, _dayKey(t));
+    await p.setInt(_keyShownToday, existing | _bit(slotFor(t)));
+    await p.setString(_keyShownDay, slotDayKey(t));
   }
 
   static Future<void> markDismissed({DateTime? now}) async {

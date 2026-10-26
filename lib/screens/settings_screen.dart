@@ -115,8 +115,8 @@ class SettingsScreen extends ConsumerWidget {
                 title: 'Promo — reset frequency caps (admin)',
                 subtitle: '${PromoService.dismissCount}/'
                     '${PromoService.maxDismissals} dismissed · '
-                    '${PromoService.shownOn(DateTime.now())}/'
-                    '${PromoService.maxPerDay} today'
+                    '${PromoService.slotsUsedOn(DateTime.now())}/3 slots today · '
+                    'now: ${PromoService.slotFor(DateTime.now()).name}'
                     '${PromoService.pausedUntilMs > DateTime.now().millisecondsSinceEpoch ? " · paused" : ""}',
                 onTap: () async {
                   await PromoService.resetForTesting();
