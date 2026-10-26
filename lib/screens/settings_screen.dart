@@ -113,8 +113,11 @@ class SettingsScreen extends ConsumerWidget {
               _buildInfoTile(
                 icon: Icons.restart_alt,
                 title: 'Promo — reset frequency caps (admin)',
-                subtitle: 'Shown ${PromoService.dismissCount}x dismissed · '
-                    'clears the once-a-week gap',
+                subtitle: '${PromoService.dismissCount}/'
+                    '${PromoService.maxDismissals} dismissed · '
+                    '${PromoService.shownOn(DateTime.now())}/'
+                    '${PromoService.maxPerDay} today'
+                    '${PromoService.pausedUntilMs > DateTime.now().millisecondsSinceEpoch ? " · paused" : ""}',
                 onTap: () async {
                   await PromoService.resetForTesting();
                   if (context.mounted) {

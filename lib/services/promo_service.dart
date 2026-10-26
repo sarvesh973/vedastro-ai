@@ -75,14 +75,32 @@ class PromoService {
 
   static const _keyLastShown = 'promo_last_shown_ms';
   static const _keyDismissCount = 'promo_dismiss_count';
+  static const _keyShownDay = 'promo_shown_day';
+  static const _keyShownToday = 'promo_shown_today';
+  static const _keyPausedUntil = 'promo_paused_until_ms';
 
-  /// At most once a week.
-  static const minGap = Duration(days: 7);
+  /// Impressions per calendar day.
+  static const maxPerDay = 2;
 
-  /// Stop asking after this many dismissals. Someone who has closed it
-  /// twice has answered; continuing to ask is how an app earns one-star
-  /// reviews, and at 4.1 stars that costs more than the conversion.
-  static const maxDismissals = 2;
+  /// Minimum gap between those two, so they land at different points in
+  /// the day rather than twice in one sitting. Without it, opening the
+  /// app twice in a minute burns the day's allowance immediately and the
+  /// second impression is pure irritation — the user has not done
+  /// anything in between for it to be a fresh ask.
+  static const minGapSameDay = Duration(hours: 4);
+
+  /// Dismissals before the promo pauses.
+  static const maxDismissals = 4;
+
+  /// How long it rests after [maxDismissals], before resuming with a
+  /// clean counter.
+  ///
+  /// This is the release valve on a deliberately frequent campaign. At two
+  /// a day, four dismissals is reached in roughly two days, so the shape
+  /// over a fortnight is: ~2 days of asking, 7 days of silence, then ~2
+  /// days again. Someone who never engages sees it about eight times in
+  /// two weeks rather than twenty-eight.
+  static const pauseAfterDismissals = Duration(days: 7);
 
   /// Which creative this user sees — STABLE for a given account.
   ///
@@ -110,27 +128,69 @@ class PromoService {
 
   /// Whether to show the promo on this launch.
   ///
-  /// Never on a first run: someone who has not had a reading yet has no
-  /// idea what they would be buying, and a price is a poor first
-  /// impression. Never to someone already paying, for the obvious reason.
-  static bool shouldShowOnAppOpen() {
+  /// Order matters: the permanent exclusions are checked before anything
+  /// that mutates state, so a paying user can never trip the pause timer
+  /// or burn a daily slot.
+  ///
+  /// [now] is injectable so the rules can be tested across days and the
+  /// pause window without waiting.
+  static bool shouldShowOnAppOpen({DateTime? now}) {
+    final t = now ?? DateTime.now();
+
     if (!enabledOnAppOpen || !kPassIntroPricingLive) return false;
+
+    // Took the offer. Never ask again — nothing is more annoying than
+    // being sold something you have already bought, and it reads as the
+    // app not knowing who you are.
     if (StorageService.isPremium) return false;
+
     if (AuthService.isAdmin) return false;
-    // Has the user actually used the app yet?
-    if (StorageService.chatQuestionsUsed == 0 &&
-        !StorageService.hasProfile) {
-      return false;
+
+    // No profile means onboarding is unfinished, so there is no chart and
+    // nothing the Pass would unlock yet. This is targeting, not
+    // frequency: a price shown before the product works is wasted.
+    if (!StorageService.hasProfile) return false;
+
+    // Resting after too many dismissals.
+    final pausedUntil = pausedUntilMs;
+    if (pausedUntil != 0) {
+      if (t.millisecondsSinceEpoch < pausedUntil) return false;
+      // Pause elapsed — resume with a clean slate. Deliberately not done
+      // here, because shouldShow must stay side-effect free; markShown
+      // clears it on the next real impression.
     }
+
     if (dismissCount >= maxDismissals) return false;
+
+    if (shownOn(t) >= maxPerDay) return false;
 
     final last = lastShownMs;
     if (last != 0 &&
-        DateTime.now().millisecondsSinceEpoch - last < minGap.inMilliseconds) {
+        t.millisecondsSinceEpoch - last < minGapSameDay.inMilliseconds) {
       return false;
     }
+
     return true;
   }
+
+  /// Impressions recorded for [t]'s calendar day, local time.
+  ///
+  /// Keyed on the date rather than a rolling 24h window so "twice a day"
+  /// means what a person means by it, and so the allowance refreshes at
+  /// midnight rather than at whatever time they happened to open the app
+  /// yesterday.
+  static int shownOn(DateTime t) {
+    final stored = StorageService.prefs?.getString(_keyShownDay);
+    if (stored != _dayKey(t)) return 0;
+    return StorageService.prefs?.getInt(_keyShownToday) ?? 0;
+  }
+
+  static String _dayKey(DateTime t) =>
+      '${t.year}-${t.month.toString().padLeft(2, '0')}-'
+      '${t.day.toString().padLeft(2, '0')}';
+
+  static int get pausedUntilMs =>
+      StorageService.prefs?.getInt(_keyPausedUntil) ?? 0;
 
   static int get lastShownMs =>
       StorageService.prefs?.getInt(_keyLastShown) ?? 0;
@@ -138,20 +198,52 @@ class PromoService {
   static int get dismissCount =>
       StorageService.prefs?.getInt(_keyDismissCount) ?? 0;
 
-  static Future<void> markShown() async {
-    await StorageService.prefs
-        ?.setInt(_keyLastShown, DateTime.now().millisecondsSinceEpoch);
+  static Future<void> markShown({DateTime? now}) async {
+    final t = now ?? DateTime.now();
+    final p = StorageService.prefs;
+    if (p == null) return;
+
+    // A pause that has elapsed clears here rather than in shouldShow, so
+    // the predicate stays free of side effects and can be called as often
+    // as the launch path likes.
+    if (pausedUntilMs != 0 && t.millisecondsSinceEpoch >= pausedUntilMs) {
+      await p.remove(_keyPausedUntil);
+      await p.setInt(_keyDismissCount, 0);
+    }
+
+    await p.setInt(_keyLastShown, t.millisecondsSinceEpoch);
+    await p.setInt(_keyShownToday, shownOn(t) + 1);
+    await p.setString(_keyShownDay, _dayKey(t));
   }
 
-  static Future<void> markDismissed() async {
-    await StorageService.prefs?.setInt(_keyDismissCount, dismissCount + 1);
+  static Future<void> markDismissed({DateTime? now}) async {
+    final t = now ?? DateTime.now();
+    final p = StorageService.prefs;
+    if (p == null) return;
+
+    final count = dismissCount + 1;
+    await p.setInt(_keyDismissCount, count);
+
+    // Hitting the cap starts the rest period rather than stopping for
+    // good. The campaign is seasonal and the user may simply have been
+    // busy the first four times.
+    if (count >= maxDismissals) {
+      await p.setInt(
+        _keyPausedUntil,
+        t.add(pauseAfterDismissals).millisecondsSinceEpoch,
+      );
+    }
   }
 
   /// Clears the frequency state. Admin-only, for testing the real flow on
   /// a device without waiting a week or reinstalling.
   static Future<void> resetForTesting() async {
-    await StorageService.prefs?.remove(_keyLastShown);
-    await StorageService.prefs?.remove(_keyDismissCount);
+    final p = StorageService.prefs;
+    await p?.remove(_keyLastShown);
+    await p?.remove(_keyDismissCount);
+    await p?.remove(_keyShownDay);
+    await p?.remove(_keyShownToday);
+    await p?.remove(_keyPausedUntil);
   }
 
   /// Shows the sheet, records the outcome, and opens the paywall if taken.
