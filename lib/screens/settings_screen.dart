@@ -8,6 +8,7 @@ import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/ai_service.dart';
 import '../services/notification_service.dart';
+import '../models/subscription_plan.dart';
 import '../providers/providers.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -17,6 +18,7 @@ import 'ui_error_log_screen.dart';
 import '../services/ui_error_log.dart';
 import '../theme/m_page_route.dart';
 import '../widgets/cosmic_background.dart';
+import '../widgets/promo_offer_sheet.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -79,6 +81,35 @@ class SettingsScreen extends ConsumerWidget {
             _buildUsageCard(chatUsed, palmUsed, isPremium)
                 .animate()
                 .fadeIn(duration: 500.ms, delay: 300.ms),
+
+            // Admin-only preview of the launch offer sheet. The sheet is
+            // NOT wired to app open yet — this is the only way to reach
+            // it, so it can be reviewed on a real device without any
+            // user seeing it.
+            if (AuthService.isAdmin) ...[
+              _buildInfoTile(
+                icon: Icons.local_offer_outlined,
+                title: 'Preview offer sheet (admin)',
+                subtitle: kPassIntroPricingLive
+                    ? 'Live variant — ₹49 first week, then ₹99'
+                    : 'Live variant — ₹49/week, no anchor price',
+                onTap: () => PromoOfferSheet.show(
+                    context, PromoOffer.liveOffer),
+              ),
+              _buildInfoTile(
+                icon: Icons.local_offer_outlined,
+                title: 'Preview offer sheet — other variant (admin)',
+                subtitle: kPassIntroPricingLive
+                    ? 'Flat ₹49/week framing'
+                    : 'Intro framing — needs the ₹99 plan live in Razorpay',
+                onTap: () => PromoOfferSheet.show(
+                    context,
+                    kPassIntroPricingLive
+                        ? PromoOffer.starterPass
+                        : PromoOffer.starterPassIntro),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             const SizedBox(height: 24),
 
