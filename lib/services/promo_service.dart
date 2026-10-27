@@ -6,6 +6,7 @@ import '../screens/paywall_screen.dart';
 import '../widgets/promo_offer_sheet.dart';
 import 'analytics_service.dart';
 import 'auth_service.dart';
+import 'promo_config.dart';
 import 'storage_service.dart';
 
 /// The part of the day an impression belongs to.
@@ -158,7 +159,12 @@ class PromoService {
   static bool shouldShowOnAppOpen({DateTime? now}) {
     final t = now ?? DateTime.now();
 
-    if (!enabledOnAppOpen || !kPassIntroPricingLive) return false;
+    // Campaign policy comes from the server now — see PromoConfig. The
+    // local switch remains as a build-level override so the feature can
+    // be disabled without touching remote state.
+    if (!enabledOnAppOpen) return false;
+    final config = PromoConfig.current;
+    if (!config.live) return false;
 
     // Took the offer. Never ask again — nothing is more annoying than
     // being sold something you have already bought, and it reads as the
@@ -181,7 +187,7 @@ class PromoService {
       // clears it on the next real impression.
     }
 
-    if (dismissCount >= maxDismissals) return false;
+    if (dismissCount >= config.maxDismissals) return false;
 
     // This window's impression already used.
     if (slotUsed(t)) return false;
@@ -265,16 +271,17 @@ class PromoService {
     final p = StorageService.prefs;
     if (p == null) return;
 
+    final config = PromoConfig.current;
     final count = dismissCount + 1;
     await p.setInt(_keyDismissCount, count);
 
     // Hitting the cap starts the rest period rather than stopping for
     // good. The campaign is seasonal and the user may simply have been
-    // busy the first four times.
-    if (count >= maxDismissals) {
+    // busy the first few times. Both numbers are server-controlled.
+    if (count >= config.maxDismissals) {
       await p.setInt(
         _keyPausedUntil,
-        t.add(pauseAfterDismissals).millisecondsSinceEpoch,
+        t.add(Duration(days: config.pauseDays)).millisecondsSinceEpoch,
       );
     }
   }
@@ -300,7 +307,13 @@ class PromoService {
   /// touching the funnel.
   static String appOpenDiagnosis({DateTime? now}) {
     final t = now ?? DateTime.now();
-    if (!enabledOnAppOpen) return 'off: enabledOnAppOpen is false';
+    if (!enabledOnAppOpen) return 'off: enabledOnAppOpen is false (build)';
+    final config = PromoConfig.current;
+    if (config.expired) return 'off: campaign end date has passed (server)';
+    if (!config.enabled) return 'off: enabled=false in app_config/promo';
+    if (!config.pricingIntroLive) {
+      return 'off: pricingIntroLive=false in app_config/promo';
+    }
     if (!kPassIntroPricingLive) {
       return 'off: kPassIntroPricingLive is false — the ₹99 plan is not '
           'live in Razorpay, so the struck-through price would be untrue';
@@ -312,10 +325,12 @@ class PromoService {
     if (!StorageService.hasProfile) return 'skipped: no birth profile yet';
     if (pausedUntilMs > t.millisecondsSinceEpoch) {
       final until = DateTime.fromMillisecondsSinceEpoch(pausedUntilMs);
-      return 'paused after $maxDismissals dismissals until '
+      return 'paused after ${config.maxDismissals} dismissals until '
           '${until.day}/${until.month}';
     }
-    if (dismissCount >= maxDismissals) return 'paused: dismissal cap reached';
+    if (dismissCount >= config.maxDismissals) {
+      return 'paused: dismissal cap reached';
+    }
     if (slotUsed(t)) {
       return 'already shown in the ${slotFor(t).name} slot today';
     }

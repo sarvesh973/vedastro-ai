@@ -158,11 +158,14 @@ void main() {
       expect(PromoService.shouldShowOnAppOpen(now: t), isFalse);
     });
 
-    test('the diagnosis names the pricing flag as the blocker', () {
-      // The admin-facing explanation has to stay truthful about WHY, or
-      // it is worse than no diagnostic at all.
+    test('the diagnosis names the SERVER config as the first blocker', () {
+      // Campaign policy now comes from app_config/promo, and with no
+      // cached config the client falls back to defaults, which are off.
+      // That is the honest first reason — naming the build flag here
+      // would send someone to edit a const when the real switch is in
+      // Firestore.
       expect(PromoService.appOpenDiagnosis(now: t),
-          contains('kPassIntroPricingLive'));
+          contains('app_config/promo'));
     });
 
     test('a paying user is excluded before any state is touched', () async {
