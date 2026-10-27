@@ -113,7 +113,10 @@ class FirestoreService {
           .get();
 
       if (!doc.exists || doc.data() == null) {
-        return SubscriptionStatus.free;
+        // The read SUCCEEDED and found nothing. That is a fact about the
+        // account, not a failure, so it is safe to act on — unlike the
+        // catch below.
+        return SubscriptionStatus.confirmedFree;
       }
       final data = doc.data()!;
       // Firestore returns Timestamp objects; convert to ISO strings so
@@ -127,8 +130,10 @@ class FirestoreService {
       };
       return SubscriptionStatus.fromJson(normalized);
     } catch (e) {
-      // Network / permission failure -> conservative fallback. The app's
-      // local isPremium flag still drives gating until cloud catches up.
+      // Network / permission failure -> conservative fallback, left
+      // UNRESOLVED so no caller mistakes it for "this user has no
+      // subscription". The local isPremium flag keeps driving gating
+      // until the cloud can be reached.
       return SubscriptionStatus.free;
     }
   }

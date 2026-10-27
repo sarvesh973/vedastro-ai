@@ -11,8 +11,15 @@ name: Build APK + AAB
 on:
   push:
     branches: [ main ]
+  # EVERY pull request, not just those targeting main.
+  #
+  # This was `branches: [ main ]`, which silently produced no build — and
+  # therefore no downloadable APK — for any PR in a stack. Work split into
+  # dependent PRs (#71, #72, #74) could not be tested on a device at all,
+  # which is the one thing a PR build exists for. A stacked PR is the case
+  # that needs the artifact MOST, because its changes are the hardest to
+  # reason about from the diff alone.
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:

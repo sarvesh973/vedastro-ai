@@ -167,26 +167,42 @@ void _syncCloudData() async {
     // to users/{uid}/subscription/current → they uninstall → re-install →
     // sign in same email → without this lookup they'd see "Free plan"
     // even though Firestore knows they're paid.
-    if (!StorageService.isPremium) {
-      final cloudSub = await FirestoreService.loadCurrentSubscription();
-      if (cloudSub.isActive) {
+    // Read it on EVERY launch, not only when the local flag is false.
+    //
+    // The old shape short-circuited: a user whose local isPremium was
+    // true and who had a plan tag never consulted Firestore again. So a
+    // lapsed Pass, a cancellation, or a failed renewal was never noticed
+    // — isPremium was effectively write-once, cleared only by signing
+    // out. Settings kept saying "Subscription Active" to someone who was
+    // not, and they could never be offered a win-back.
+    final cloudSub = await FirestoreService.loadCurrentSubscription();
+
+    if (cloudSub.isActive) {
+      if (!StorageService.isPremium) {
         await StorageService.upgradeToPremium();
-        // Persist plan ID so the home banner / drawer can render the
-        // specific tier (Trial / Standard / Premium) and offer the
-        // right upgrade path. Without this the UI falls back to the
-        // generic "Subscription Active" label and the upgrade tap is
-        // disabled.
-        await StorageService.setLastPurchasedPlan(cloudSub.plan.id);
       }
-    } else if (StorageService.lastPurchasedPlan == null) {
-      // Already premium locally but missing the plan tag — happens for
-      // users who paid on an older app version that didn't write the
-      // field. Pull from Firestore so the home banner / drawer get the
-      // specific tier name and the right upgrade target.
-      final cloudSub = await FirestoreService.loadCurrentSubscription();
-      if (cloudSub.plan != SubscriptionPlan.free) {
-        await StorageService.setLastPurchasedPlan(cloudSub.plan.id);
-      }
+      // Persist plan ID so the home banner / drawer can render the
+      // specific tier (Trial / Standard / Premium) and offer the right
+      // upgrade path. Without this the UI falls back to the generic
+      // "Subscription Active" label and the upgrade tap is disabled.
+      // Refreshed on every launch now, so an upgrade bought on another
+      // device shows the correct tier here too.
+      await StorageService.setLastPurchasedPlan(cloudSub.plan.id);
+    } else if (cloudSub.resolved &&
+        StorageService.isPremium &&
+        !AuthService.isAdmin) {
+      // Cloud was reachable and says there is no active subscription, so
+      // the local flag is stale. Three guards, each load-bearing:
+      //
+      //   resolved  — a failed read also returns a free-looking status,
+      //               and downgrading on that would strip premium from
+      //               someone who just paid, every time their connection
+      //               dropped.
+      //   isPremium — nothing to do if the flag is already false.
+      //   !isAdmin  — admins are granted premium a few lines above and
+      //               have no subscription document to find, so without
+      //               this they would be downgraded on every launch.
+      await StorageService.downgradeToFree();
     }
 
     // Sync local usage stats to cloud
