@@ -61,6 +61,21 @@ class SubscriptionStatus {
   /// Palm readings used in the current billing cycle.
   final int palmUsedThisCycle;
 
+  /// Whether this status came from a SUCCESSFUL read of the subscription
+  /// document, as opposed to a fallback.
+  ///
+  /// loadCurrentSubscription returns [free] for three different things:
+  /// the user genuinely has no subscription, there is no signed-in uid,
+  /// and the read threw — a network blip, a permission error, an offline
+  /// launch. Those are indistinguishable from the value alone, which is
+  /// fine for granting access (all three mean "do not unlock") and
+  /// dangerous for REVOKING it: downgrading on a failed read would strip
+  /// premium from someone who paid five minutes ago, every time their
+  /// train went through a tunnel.
+  ///
+  /// So only [resolved] == true may be used to take something away.
+  final bool resolved;
+
   const SubscriptionStatus({
     required this.plan,
     required this.state,
@@ -73,12 +88,25 @@ class SubscriptionStatus {
     this.failedAttempts = 0,
     this.chatUsedThisCycle = 0,
     this.palmUsedThisCycle = 0,
+    this.resolved = false,
   });
 
-  /// Default for users who haven't paid yet.
+  /// Default for users who haven't paid yet, AND the fallback when the
+  /// subscription could not be read. Deliberately unresolved: it is the
+  /// value returned when we do not know, so it must never be grounds for
+  /// revoking access. Use [confirmedFree] when the read actually
+  /// succeeded and said there is no subscription.
   static const SubscriptionStatus free = SubscriptionStatus(
     plan: SubscriptionPlan.free,
     state: SubscriptionState.none,
+  );
+
+  /// A successful read that found no active subscription. This one IS
+  /// grounds for downgrading a stale local premium flag.
+  static const SubscriptionStatus confirmedFree = SubscriptionStatus(
+    plan: SubscriptionPlan.free,
+    state: SubscriptionState.none,
+    resolved: true,
   );
 
   /// True if the user currently has paid features unlocked.
@@ -144,8 +172,14 @@ class SubscriptionStatus {
         'palmUsedThisCycle': palmUsedThisCycle,
       };
 
-  factory SubscriptionStatus.fromJson(Map<String, dynamic> json) {
+  /// [resolved] defaults true: anything reaching fromJson came from a
+  /// document we actually read.
+  factory SubscriptionStatus.fromJson(
+    Map<String, dynamic> json, {
+    bool resolved = true,
+  }) {
     return SubscriptionStatus(
+      resolved: resolved,
       plan: SubscriptionPlanInfo.fromId(json['plan'] as String?),
       state: SubscriptionState.values.firstWhere(
         (s) => s.name == (json['state'] as String?),

@@ -303,6 +303,32 @@ class StorageService {
     await _prefs?.setInt(_keyPalmUsed, current);
   }
 
+  /// Clears the local premium flag after the cloud has CONFIRMED there is
+  /// no active subscription.
+  ///
+  /// Until this existed, isPremium was write-once on the client: set true
+  /// on purchase or on a launch that saw an active subscription, and
+  /// cleared only by clearAllLocalData() on sign-out. So a Pass that
+  /// lapsed, or a subscription that was cancelled or whose renewal
+  /// failed, left the flag true forever. Settings kept saying
+  /// "Subscription Active", the paywall never prompted again, and the
+  /// user could not be offered a win-back — the one person most worth
+  /// asking was the one permanently excluded.
+  ///
+  /// Not a revenue hole: the SERVER resolves the plan from Firestore on
+  /// every request, so a lapsed user was already rate-limited back to
+  /// free. The damage was to client state and to marketing reach.
+  ///
+  /// Callers must only reach this on a resolved read — see
+  /// SubscriptionStatus.resolved. Downgrading on a failed lookup would
+  /// strip premium from someone who had just paid.
+  static Future<void> downgradeToFree() async {
+    await _prefs?.remove(_keyIsPremium);
+    // The plan tag drives the Settings label and the upgrade options, so
+    // a stale one would keep showing a tier the user no longer has.
+    await _prefs?.remove(_keyLastPurchasedPlan);
+  }
+
   static Future<void> upgradeToPremium() async {
     await _prefs?.setBool(_keyIsPremium, true);
   }
