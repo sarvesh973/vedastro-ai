@@ -34,7 +34,7 @@
 /// ₹49/week it costs ~₹212/month for ~91 chats against Standard's ₹199
 /// for 50, so nobody who only chats should ever have upgraded. At ₹99 the
 /// Pass lands at ~₹429/month and sits correctly above Standard.
-const bool kPassIntroPricingLive = false;
+const bool kPassIntroPricingLive = true;
 
 enum SubscriptionPlan {
   /// Free tier — 1 chat total (lifetime), 0 palm readings.

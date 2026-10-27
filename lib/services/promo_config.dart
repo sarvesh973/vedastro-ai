@@ -190,6 +190,13 @@ class PromoConfig {
 
   static const _keyCached = 'promo_config_cache';
 
+  /// Whether a server config has ever been cached on this device.
+  ///
+  /// False on a first launch, which is the one time it is worth waiting
+  /// for the network before deciding.
+  static bool get hasCached =>
+      (StorageService.prefs?.getString(_keyCached) ?? '').isNotEmpty;
+
   /// The config the app is currently acting on.
   ///
   /// Read SYNCHRONOUSLY from the last cached copy, because the decision

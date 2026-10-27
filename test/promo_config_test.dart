@@ -72,15 +72,18 @@ void main() {
       expect(PromoConfig.current.live, isFalse);
     });
 
-    test('the build flag still wins when false', () async {
+    test('the server can turn the price claim off remotely', () async {
+      // The build flag is on, so the server is now the live control:
+      // setting pricingIntroLive false must stop the ₹99 claim without a
+      // release. That is the whole reason it moved off the client.
+      await cache({'enabled': true, 'pricingIntroLive': false});
+      expect(kPassIntroPricingLive, isTrue);
+      expect(PromoConfig.current.live, isFalse);
+    });
+
+    test('all three on makes it live', () async {
       await cache({'enabled': true, 'pricingIntroLive': true});
-      // The server can turn the price claim OFF remotely but must not be
-      // able to turn it ON for a build whose own pricing logic does not
-      // implement it. A remote flag asserting a price the app cannot
-      // honour is the worst case here.
-      expect(kPassIntroPricingLive, isFalse);
-      expect(PromoConfig.current.live, isFalse,
-          reason: 'remote config cannot override a false build flag');
+      expect(PromoConfig.current.live, isTrue);
     });
   });
 

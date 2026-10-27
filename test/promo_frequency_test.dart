@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vedastro_ai/models/subscription_plan.dart';
+import 'package:vedastro_ai/services/promo_config.dart';
 import 'package:vedastro_ai/services/promo_service.dart';
 import 'package:vedastro_ai/services/storage_service.dart';
 
@@ -147,14 +148,16 @@ void main() {
   group('shouldShowOnAppOpen', () {
     final t = DateTime(2026, 11, 8, 7, 0);
 
-    test('stays off while the pricing flag is false, even when enabled', () {
-      // The campaign switch is ON; the pricing switch is not. Both
-      // creatives show ₹99 struck through, so enabling the promo must not
-      // be enough on its own to put a saving in front of a user that the
-      // billing system is not applying. This asserts the AND, not either
-      // flag's value — flipping one is meant to be survivable.
+    test('stays off with no server config, whatever the build flags say', () {
+      // Both build switches are on, but no campaign config has been
+      // cached, so PromoConfig falls back to defaults — which are off.
+      // This asserts the AND rather than any flag's value: flipping one
+      // switch is meant to be survivable, and a server that has never
+      // answered must never be the reason a campaign starts.
       expect(PromoService.enabledOnAppOpen, isTrue);
-      expect(kPassIntroPricingLive, isFalse);
+      expect(kPassIntroPricingLive, isTrue);
+      expect(PromoConfig.current.enabled, isFalse,
+          reason: 'no cached config -> defaults -> off');
       expect(PromoService.shouldShowOnAppOpen(now: t), isFalse);
     });
 
