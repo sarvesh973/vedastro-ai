@@ -15,61 +15,6 @@ import 'storage_service.dart';
 /// instead of all landing in whichever session the user happens to have.
 enum PromoSlot { morning, afternoon, night }
 
-/// One promotional creative in the A/B test.
-///
-/// The artwork carries ALL the copy — headline, price, CTA label, "Not
-/// now" — so this holds only what the app needs to interact with it.
-class PromoCreative {
-  /// 'a' or 'b'. Rides into analytics as the trigger suffix.
-  final String id;
-  final String asset;
-
-  /// Everything at or below this fraction of the image height dismisses;
-  /// everything above it opens the paywall.
-  ///
-  /// Both creatives render a "Not now" under their button, and a visual
-  /// "Not now" that starts a checkout is a dark pattern, a refund
-  /// generator, and something Play treats as a policy issue. Measured from
-  /// the pixels rather than guessed: variant A's button ends at 0.9225 of
-  /// the image height and B's at 0.9220, so 0.93 clears both.
-  final double dismissTopFraction;
-
-  /// True puts the close X on the left. Variant A has its "शुभ दीपावली"
-  /// pill in the top-right corner, so an X there would collide with it.
-  final bool closeOnLeft;
-
-  const PromoCreative({
-    required this.id,
-    required this.asset,
-    this.dismissTopFraction = 0.93,
-    this.closeOnLeft = false,
-  });
-
-  /// Analytics trigger, e.g. 'app_open_promo_a'.
-  ///
-  /// The variant is encoded in the trigger rather than sent as its own
-  /// parameter on purpose: `trigger` is already registered as a GA4 custom
-  /// dimension and already flows through paywall_viewed,
-  /// paywall_dismissed, subscription_started and subscription_purchased.
-  /// So the whole funnel splits by variant with no second dimension to
-  /// register — which matters, because registration is not retroactive and
-  /// the free tier allows only 50.
-  String get trigger => 'app_open_promo_$id';
-
-  static const a = PromoCreative(
-    id: 'a',
-    asset: 'assets/images/promo/diwali_a.webp',
-    closeOnLeft: true,
-  );
-
-  static const b = PromoCreative(
-    id: 'b',
-    asset: 'assets/images/promo/diwali_b.webp',
-  );
-
-  static const all = [a, b];
-}
-
 /// Decides whether the launch promo shows, and which creative.
 class PromoService {
   /// Master switch for showing the promo on app open.
@@ -131,22 +76,51 @@ class PromoService {
   /// numbers that look fine and mean nothing. Hashing the uid gives a
   /// stable ~50/50 split with no server state and survives reinstalls,
   /// because the uid does.
+  /// Stable hash of a uid. FNV-1a: tiny, well-distributed on short
+  /// strings, and deterministic across platforms — unlike
+  /// String.hashCode, which Dart does not guarantee to be stable between
+  /// runs or versions.
   @visibleForTesting
-  static PromoCreative creativeForUid(String? uid) {
-    if (uid == null || uid.isEmpty) return PromoCreative.a;
-    // FNV-1a: tiny, well-distributed on short strings, and deterministic
-    // across platforms — unlike String.hashCode, which Dart does not
-    // guarantee to be stable between runs or versions.
+  static int hashUid(String uid) {
     var hash = 0x811c9dc5;
     for (final unit in uid.codeUnits) {
       hash ^= unit;
       hash = (hash * 0x01000193) & 0xFFFFFFFF;
     }
-    return PromoCreative.all[hash % PromoCreative.all.length];
+    return hash;
   }
 
-  static PromoCreative get creative =>
-      creativeForUid(AuthService.currentUser?.uid);
+  /// Picks a creative from the server's list, WEIGHTED.
+  ///
+  /// Weighted rather than a plain modulo, because weight is how a losing
+  /// variant is retired and how a split is rebalanced without a release.
+  /// A zero-weight creative is never selected.
+  ///
+  /// Still keyed on the uid, so assignment is stable for a given account:
+  /// picking per impression would let one person see both and no purchase
+  /// could be attributed to either.
+  ///
+  /// Note the split moves if the weights change mid-campaign, which is
+  /// the point — but it does mean a rebalance reassigns some users, so it
+  /// invalidates comparisons that straddle the change.
+  @visibleForTesting
+  static RemoteCreative creativeFor(String? uid, List<RemoteCreative> all) {
+    final usable = all.where((v) => v.weight > 0).toList();
+    if (usable.isEmpty) {
+      return all.isNotEmpty ? all.first : PromoConfig.defaults.variants.first;
+    }
+    final total = usable.fold<int>(0, (a, v) => a + v.weight);
+    final point = (uid == null || uid.isEmpty) ? 0 : hashUid(uid) % total;
+    var running = 0;
+    for (final v in usable) {
+      running += v.weight;
+      if (point < running) return v;
+    }
+    return usable.last;
+  }
+
+  static RemoteCreative get creative => creativeFor(
+      AuthService.currentUser?.uid, PromoConfig.current.variants);
 
   /// Whether to show the promo on this launch.
   ///
@@ -349,7 +323,7 @@ class PromoService {
   /// The whole creative is tappable, so a stray tap must cost nothing.
   static Future<void> present(
     BuildContext context, {
-    PromoCreative? forced,
+    RemoteCreative? forced,
     bool debugOverlay = false,
     bool track = true,
   }) async {

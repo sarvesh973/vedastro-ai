@@ -8,6 +8,7 @@ import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/ai_service.dart';
 import '../services/notification_service.dart';
+import '../services/promo_config.dart';
 import '../services/promo_service.dart';
 import '../providers/providers.dart';
 import 'edit_profile_screen.dart';
@@ -92,21 +93,21 @@ class SettingsScreen extends ConsumerWidget {
                 title: 'Promo — variant A (admin)',
                 subtitle: 'Chat-mockup creative · not tracked',
                 onTap: () => PromoService.present(context,
-                    forced: PromoCreative.a, track: false),
+                    forced: PromoConfig.current.variants.first, track: false),
               ),
               _buildInfoTile(
                 icon: Icons.local_offer_outlined,
                 title: 'Promo — variant B (admin)',
                 subtitle: 'Diya photograph creative · not tracked',
                 onTap: () => PromoService.present(context,
-                    forced: PromoCreative.b, track: false),
+                    forced: PromoConfig.current.variants.last, track: false),
               ),
               _buildInfoTile(
                 icon: Icons.grid_on_outlined,
                 title: 'Promo — tap regions (admin)',
                 subtitle: 'Green opens the paywall, red dismisses',
                 onTap: () => PromoService.present(context,
-                    forced: PromoCreative.a,
+                    forced: PromoConfig.current.variants.first,
                     track: false,
                     debugOverlay: true),
               ),

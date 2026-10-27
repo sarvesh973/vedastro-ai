@@ -8,6 +8,80 @@ import '../models/subscription_plan.dart';
 import 'auth_service.dart';
 import 'storage_service.dart';
 
+/// One creative, as the server describes it.
+///
+/// [imageUrl] is optional. Without it the app renders the creative
+/// bundled under [id] — which is what makes a first launch, an offline
+/// launch, or a dead URL produce a usable banner rather than a broken
+/// one. Remote artwork is an upgrade on the bundled pair, never a
+/// replacement for having any.
+class RemoteCreative {
+  final String id;
+  final int weight;
+  final String? imageUrl;
+
+  /// Fraction below which a tap dismisses instead of opening the paywall.
+  ///
+  /// Per-creative because it depends on the ARTWORK: it has to sit under
+  /// whatever "Not now" the image draws. Both shipped creatives put their
+  /// button's bottom edge at ~0.922, so 0.93 clears them.
+  final double dismissTop;
+
+  /// Where the close control goes. Variant A's top-right corner is
+  /// occupied by its Diwali pill.
+  final bool closeOnLeft;
+
+  const RemoteCreative({
+    required this.id,
+    required this.weight,
+    this.imageUrl,
+    this.dismissTop = 0.93,
+    this.closeOnLeft = false,
+  });
+
+  /// The asset bundled under this id, used when [imageUrl] is absent or
+  /// fails to load.
+  String get bundledAsset => 'assets/images/promo/diwali_$id.webp';
+
+  /// Analytics trigger, e.g. 'app_open_promo_a'. The variant rides in the
+  /// trigger because that is already a registered GA4 dimension flowing
+  /// through the whole funnel.
+  String get trigger => 'app_open_promo_$id';
+
+  /// Null for anything that cannot be rendered correctly. A creative with
+  /// a bad id or an out-of-range dismiss strip should not run — the strip
+  /// would sit over its own call to action.
+  static RemoteCreative? fromJson(Map<dynamic, dynamic> json) {
+    final id = json['id'];
+    if (id is! String || !RegExp(r'^[a-z0-9_-]{1,16}$').hasMatch(id)) {
+      return null;
+    }
+    final w = json['weight'];
+    final dt = json['dismissTop'];
+    final url = json['imageUrl'];
+    return RemoteCreative(
+      id: id,
+      weight: w is num && w >= 0 ? w.round().clamp(0, 1000) : 0,
+      // https only. The server validates this too; doing it here as well
+      // means a stale cache written by an older server cannot smuggle an
+      // http url past the app's network config.
+      imageUrl: url is String && url.startsWith('https://') && url.length < 500
+          ? url
+          : null,
+      dismissTop: dt is num && dt >= 0.5 && dt <= 0.99 ? dt.toDouble() : 0.93,
+      closeOnLeft: json['closeOnLeft'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'weight': weight,
+        'imageUrl': imageUrl,
+        'dismissTop': dismissTop,
+        'closeOnLeft': closeOnLeft,
+      };
+}
+
 /// Campaign policy for the launch banner, fetched from the server.
 ///
 /// These used to be compile-time constants, which meant stopping a
@@ -30,9 +104,9 @@ class PromoConfig {
   final int maxDismissals;
   final int pauseDays;
 
-  /// Relative weights per creative id. A zero retires a variant without
-  /// a release.
-  final Map<String, int> variantWeights;
+  /// The creatives themselves, so adding, replacing or retiring one is a
+  /// server edit rather than a release.
+  final List<RemoteCreative> variants;
 
   /// True when the server says the campaign's end date has passed.
   /// Resolved server-side so a wrong device clock cannot extend it.
@@ -43,18 +117,24 @@ class PromoConfig {
     required this.pricingIntroLive,
     required this.maxDismissals,
     required this.pauseDays,
-    required this.variantWeights,
+    required this.variants,
     this.expired = false,
   });
 
   /// Used until the server answers, and whenever it cannot be reached.
   /// OFF, on purpose.
+  /// Used until the server answers, and whenever it cannot be reached.
+  /// The two bundled creatives, so an offline first launch still has
+  /// something to show if the campaign is ever turned on.
   static const defaults = PromoConfig(
     enabled: false,
     pricingIntroLive: false,
     maxDismissals: 4,
     pauseDays: 7,
-    variantWeights: {'a': 50, 'b': 50},
+    variants: [
+      RemoteCreative(id: 'a', weight: 50, closeOnLeft: true),
+      RemoteCreative(id: 'b', weight: 50),
+    ],
   );
 
   /// Both switches, as the app sees them.
@@ -68,15 +148,16 @@ class PromoConfig {
 
   @visibleForTesting
   factory PromoConfig.fromJson(Map<String, dynamic> json) {
-    final rawWeights = json['variantWeights'];
-    final weights = <String, int>{};
-    if (rawWeights is Map) {
-      for (final entry in rawWeights.entries) {
-        final v = entry.value;
-        if (v is num && v >= 0) weights['${entry.key}'] = v.round();
+    final rawVariants = json['variants'];
+    final variants = <RemoteCreative>[];
+    if (rawVariants is List) {
+      for (final entry in rawVariants) {
+        if (entry is! Map) continue;
+        final parsed = RemoteCreative.fromJson(entry);
+        if (parsed != null) variants.add(parsed);
       }
     }
-    final total = weights.values.fold<int>(0, (a, b) => a + b);
+    final total = variants.fold<int>(0, (a, v) => a + v.weight);
 
     int clamp(Object? v, int fallback, int lo, int hi) {
       final n = v is num ? v.round() : null;
@@ -93,8 +174,8 @@ class PromoConfig {
       maxDismissals:
           clamp(json['maxDismissals'], defaults.maxDismissals, 1, 20),
       pauseDays: clamp(json['pauseDays'], defaults.pauseDays, 1, 60),
-      // All-zero or absent weights would leave nothing to pick.
-      variantWeights: total > 0 ? weights : defaults.variantWeights,
+      // An empty list, or every weight zero, would leave nothing to pick.
+      variants: total > 0 ? variants : defaults.variants,
     );
   }
 
@@ -104,7 +185,7 @@ class PromoConfig {
         'expired': expired,
         'maxDismissals': maxDismissals,
         'pauseDays': pauseDays,
-        'variantWeights': variantWeights,
+        'variants': variants.map((v) => v.toJson()).toList(),
       };
 
   static const _keyCached = 'promo_config_cache';

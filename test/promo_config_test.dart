@@ -99,35 +99,71 @@ void main() {
     });
   });
 
-  group('variant weights', () {
-    test('pass through', () async {
+  group('variants', () {
+    test('come from the server, with urls', () async {
       await cache({
-        'variantWeights': {'a': 70, 'b': 30}
+        'variants': [
+          {
+            'id': 'x',
+            'weight': 70,
+            'imageUrl': 'https://cdn.example/x.webp',
+            'dismissTop': 0.9,
+          },
+          {'id': 'y', 'weight': 30},
+        ],
       });
-      expect(PromoConfig.current.variantWeights, {'a': 70, 'b': 30});
+      final v = PromoConfig.current.variants;
+      expect(v.map((c) => c.id), ['x', 'y']);
+      expect(v.first.imageUrl, 'https://cdn.example/x.webp');
+      expect(v.first.dismissTop, 0.9);
+      // A creative with no url still works — it renders the bundled
+      // asset for its id.
+      expect(v.last.imageUrl, isNull);
+      expect(v.last.bundledAsset, contains('diwali_y'));
     });
 
-    test('a variant can be retired with a zero', () async {
+    test('a brand new creative needs no app release', () async {
+      // The whole point of moving this server-side: adding a third
+      // variant is a config edit.
       await cache({
-        'variantWeights': {'a': 100, 'b': 0}
+        'variants': [
+          {'id': 'a', 'weight': 34},
+          {'id': 'b', 'weight': 33},
+          {'id': 'holi', 'weight': 33, 'imageUrl': 'https://cdn.example/h.webp'},
+        ],
       });
-      expect(PromoConfig.current.variantWeights['b'], 0);
+      expect(PromoConfig.current.variants.length, 3);
+      expect(PromoConfig.current.variants.last.trigger, 'app_open_promo_holi');
     });
 
-    test('all-zero falls back so there is always something to pick',
+    test('malformed entries are dropped, not repaired', () async {
+      await cache({
+        'variants': [
+          {'id': 'bad id', 'weight': 50},
+          {'weight': 50},
+          {'id': 'ok', 'weight': 50},
+        ],
+      });
+      expect(PromoConfig.current.variants.map((c) => c.id), ['ok']);
+    });
+
+    test('an all-zero list falls back so there is something to pick',
         () async {
       await cache({
-        'variantWeights': {'a': 0, 'b': 0}
+        'variants': [
+          {'id': 'a', 'weight': 0},
+          {'id': 'b', 'weight': 0},
+        ],
       });
-      expect(PromoConfig.current.variantWeights,
-          PromoConfig.defaults.variantWeights);
+      expect(PromoConfig.current.variants.map((c) => c.id),
+          PromoConfig.defaults.variants.map((c) => c.id));
     });
 
-    test('negative weights are dropped', () async {
-      await cache({
-        'variantWeights': {'a': -5, 'b': 10}
-      });
-      expect(PromoConfig.current.variantWeights.containsKey('a'), isFalse);
+    test('an absent list falls back to the bundled pair', () async {
+      await cache({'enabled': true});
+      expect(PromoConfig.current.variants.length, 2);
+      expect(PromoConfig.current.variants.every((c) => c.imageUrl == null),
+          isTrue, reason: 'defaults are the bundled creatives');
     });
   });
 
@@ -151,7 +187,16 @@ void main() {
         pricingIntroLive: true,
         maxDismissals: 6,
         pauseDays: 3,
-        variantWeights: {'a': 20, 'b': 80},
+        variants: [
+          RemoteCreative(
+            id: 'a',
+            weight: 20,
+            imageUrl: 'https://cdn.example/a.webp',
+            dismissTop: 0.91,
+            closeOnLeft: true,
+          ),
+          RemoteCreative(id: 'b', weight: 80),
+        ],
         expired: false,
       );
       final back = PromoConfig.fromJson(
@@ -160,7 +205,15 @@ void main() {
       expect(back.pricingIntroLive, isTrue);
       expect(back.maxDismissals, 6);
       expect(back.pauseDays, 3);
-      expect(back.variantWeights, {'a': 20, 'b': 80});
+      // The whole creative survives the cache, not just its weight — a
+      // dropped url or dismissTop would mean the cached copy rendered
+      // differently from the live one.
+      expect(back.variants.length, 2);
+      expect(back.variants.first.imageUrl, 'https://cdn.example/a.webp');
+      expect(back.variants.first.dismissTop, 0.91);
+      expect(back.variants.first.closeOnLeft, isTrue);
+      expect(back.variants.last.weight, 80);
+      expect(back.variants.last.imageUrl, isNull);
     });
   });
 }

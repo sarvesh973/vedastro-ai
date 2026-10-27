@@ -1,7 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/promo_service.dart';
+import '../services/promo_config.dart';
 import '../theme/app_theme.dart';
 
 /// Full-creative promo sheet: the artwork carries the headline, the price
@@ -18,7 +19,7 @@ import '../theme/app_theme.dart';
 /// WHY THERE IS A DISMISS STRIP. Both creatives render "Not now" beneath
 /// their button. A visual "Not now" that opens a checkout is a dark
 /// pattern, a reliable source of refunds, and something Play treats as a
-/// policy issue. The cut sits at [PromoCreative.dismissTopFraction],
+/// policy issue. The cut sits at [RemoteCreative.dismissTop],
 /// measured from the pixels: variant A's button ends at 0.9225 of the
 /// image height and B's at 0.9220, so 0.93 clears both with room.
 ///
@@ -30,7 +31,7 @@ import '../theme/app_theme.dart';
 /// Accepting opens the paywall rather than charging, so even a stray tap
 /// costs nothing and backs out in one gesture.
 class PromoOfferSheet extends StatelessWidget {
-  final PromoCreative creative;
+  final RemoteCreative creative;
 
   /// Draws the tap regions. Admin preview only.
   final bool debugOverlay;
@@ -44,7 +45,7 @@ class PromoOfferSheet extends StatelessWidget {
   /// Returns true if the user took the offer, false or null if dismissed.
   static Future<bool?> show(
     BuildContext context,
-    PromoCreative creative, {
+    RemoteCreative creative, {
     bool debugOverlay = false,
   }) {
     return Navigator.of(context).push<bool>(
@@ -121,8 +122,30 @@ class PromoOfferSheet extends StatelessWidget {
     final logicalWidth = media.size.width.clamp(0.0, 420.0);
     final target =
         (logicalWidth * media.devicePixelRatio).round().clamp(360, 1600);
+    // Remote artwork when the server supplies it, so a new creative is a
+    // config edit rather than a release. The bundled asset is the floor:
+    // a first launch, an offline launch, or a dead URL must produce a
+    // usable banner or none at all, never a broken one.
+    final url = creative.imageUrl;
+    if (url != null) {
+      return CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.fill,
+        memCacheWidth: target,
+        filterQuality: FilterQuality.medium,
+        // No spinner. A promo that shows a loading state has already lost
+        // the moment — the bundled creative stands in until the remote
+        // one is cached, and from the second launch it is instant.
+        placeholder: (_, __) => _bundled(target),
+        errorWidget: (_, __, ___) => _bundled(target),
+      );
+    }
+    return _bundled(target);
+  }
+
+  Widget _bundled(int target) {
     return Image.asset(
-      creative.asset,
+      creative.bundledAsset,
       fit: BoxFit.fill,
       cacheWidth: target,
       filterQuality: FilterQuality.medium,
@@ -150,7 +173,7 @@ class PromoOfferSheet extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          flex: (creative.dismissTopFraction * 1000).round(),
+          flex: (creative.dismissTop * 1000).round(),
           child: Semantics(
             button: true,
             label: 'Start for ₹49',
@@ -164,7 +187,7 @@ class PromoOfferSheet extends StatelessWidget {
           ),
         ),
         Expanded(
-          flex: ((1 - creative.dismissTopFraction) * 1000).round(),
+          flex: ((1 - creative.dismissTop) * 1000).round(),
           child: Semantics(
             button: true,
             label: 'Not now',
@@ -222,7 +245,7 @@ class PromoOfferSheet extends StatelessWidget {
       child: Column(
         children: [
           Expanded(
-            flex: (creative.dismissTopFraction * 1000).round(),
+            flex: (creative.dismissTop * 1000).round(),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border.all(color: AppColors.success, width: 2),
@@ -242,7 +265,7 @@ class PromoOfferSheet extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: ((1 - creative.dismissTopFraction) * 1000).round(),
+            flex: ((1 - creative.dismissTop) * 1000).round(),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border.all(color: AppColors.error, width: 2),
