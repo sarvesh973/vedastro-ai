@@ -58,6 +58,15 @@ class AiResponse {
   /// bubble — gives the user upgrade options the moment they hit the cap.
   final bool rateLimited;
 
+  /// One chart-grounded sentence returned alongside a free-tier 429, e.g.
+  /// "Marriage and partnership runs through your 7th house, where Moon
+  /// sits in Libra, under Venus."
+  ///
+  /// Null when the server could not produce one (no coordinates on the
+  /// profile, or a question whose topic maps to no house). Callers must
+  /// treat it as optional — the paywall has to work without it.
+  final String? paywallTeaser;
+
   /// Admin-only classifier diagnostic — topic/focus/tone + retrieved
   /// chunks for THIS answer. Surfaced under the chat bubble for admin
   /// sign-ins (chat_bubble.dart gates the render).
@@ -70,6 +79,7 @@ class AiResponse {
     this.debugRaw,
     this.isOffline = false,
     this.rateLimited = false,
+    this.paywallTeaser,
     this.debugMeta,
   });
 }
@@ -294,10 +304,15 @@ class AiService {
         // chat bubble. The bubble that briefly shows the text is now
         // discarded by the caller before display.
         _lastError = 'RATE_LIMITED';
+        String? teaser;
         try {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           lastDiagnosticError = data['error'] as String? ??
               'Daily chat limit reached. Upgrade your plan for more questions.';
+          // Present only on the free-tier lifetime wall, and only when the
+          // server could ground it in the chart. Optional by design.
+          final t = (data['teaser'] as String?)?.trim();
+          if (t != null && t.isNotEmpty) teaser = t;
         } catch (_) {
           lastDiagnosticError = 'Daily chat limit reached. Upgrade your plan for more questions.';
         }
@@ -306,6 +321,7 @@ class AiService {
           text: lastDiagnosticError,
           sources: const [],
           rateLimited: true,
+          paywallTeaser: teaser,
         );
       } else if (response.statusCode == 503) {
         _lastError = 'SERVER_DOWN';
