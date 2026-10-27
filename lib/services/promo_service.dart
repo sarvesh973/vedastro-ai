@@ -329,7 +329,7 @@ class PromoService {
   }) async {
     final c = forced ?? creative;
     if (track) {
-      Analytics.paywallViewed(trigger: c.trigger);
+      Analytics.promoShown(trigger: c.trigger);
       await markShown();
     }
     final started = DateTime.now();
@@ -342,6 +342,9 @@ class PromoService {
     if (!context.mounted) return;
 
     if (accepted == true) {
+      if (track) Analytics.promoAccepted(trigger: c.trigger);
+      // PaywallScreen fires paywall_viewed itself, so the next stage of
+      // the funnel is recorded there rather than here.
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => PaywallScreen(
@@ -355,7 +358,7 @@ class PromoService {
 
     if (track) {
       await markDismissed();
-      Analytics.paywallDismissed(
+      Analytics.promoDismissed(
         trigger: c.trigger,
         secondsViewed: DateTime.now().difference(started).inSeconds,
       );

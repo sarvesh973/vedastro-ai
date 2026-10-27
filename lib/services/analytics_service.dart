@@ -319,6 +319,36 @@ class Analytics {
     return _log('subscription_purchased', {'plan': plan, 'trigger': trigger});
   }
 
+  /// The launch promo banner was shown.
+  ///
+  /// A SEPARATE event from paywall_viewed on purpose. Reusing that one
+  /// double-counted: the banner fired it, and tapping through to the
+  /// paywall fired it again with the same trigger, so views were
+  /// inflated by exactly the number of people who engaged and the two
+  /// stages could not be told apart.
+  ///
+  /// The funnel these three give you, all carrying the same trigger:
+  ///   promo_shown -> promo_accepted -> paywall_viewed -> subscription_purchased
+  ///
+  /// No new custom dimension needed — `trigger` is already registered and
+  /// GA4 collects new EVENT names automatically.
+  static Future<void> promoShown({required String trigger}) =>
+      _log('promo_shown', {'trigger': trigger});
+
+  /// The user tapped through from the banner to the paywall.
+  static Future<void> promoAccepted({required String trigger}) =>
+      _log('promo_accepted', {'trigger': trigger});
+
+  /// The banner was dismissed without tapping through.
+  static Future<void> promoDismissed({
+    required String trigger,
+    required int secondsViewed,
+  }) =>
+      _log('promo_dismissed', {
+        'trigger': trigger,
+        'dwell': dwellBucket(secondsViewed),
+      });
+
   /// Fired when the paywall is closed without a purchase.
   ///
   /// The other half of the conversion rate: paywall_viewed alone cannot
