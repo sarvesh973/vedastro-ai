@@ -357,13 +357,35 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                     ],
                   ),
                 ),
-                Text(
-                  plan.priceLabel,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    // The standing rate, struck through, when there is a
+                    // real introductory price to contrast it with. Null
+                    // unless recurringPaise actually differs, so this can
+                    // never show a figure nobody is charged.
+                    if (plan.anchorPriceLabel != null) ...[
+                      Text(
+                        plan.anchorPriceLabel!,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      plan.priceLabel,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

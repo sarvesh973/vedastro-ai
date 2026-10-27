@@ -100,6 +100,22 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
     }
   }
 
+  /// The price this plan is struck through FROM, or null.
+  ///
+  /// Only ever the plan's real standing rate with [priceLabel] as a
+  /// genuine introductory price. A struck-through figure nobody is
+  /// charged is a fictitious reference price: Play treats it as
+  /// misrepresentation and India's CCPA guidelines on misleading
+  /// advertisements treat a fabricated "was" price as misleading by
+  /// definition.
+  ///
+  /// So it is derived from recurringPaise rather than written by hand —
+  /// it cannot say ₹99 unless ₹99 is what the next cycle actually bills.
+  String? get anchorPriceLabel {
+    if (recurringPaise == firstChargePaise) return null;
+    return '₹${recurringPaise ~/ 100}';
+  }
+
   /// Headline price label.
   String get priceLabel {
     switch (this) {

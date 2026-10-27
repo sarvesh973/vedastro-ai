@@ -189,6 +189,13 @@ class PaymentService {
       'prefill': {
         'email': userEmail.isNotEmpty ? userEmail : 'user@vedastro.ai',
         // contact intentionally omitted; Razorpay collects it in-checkout.
+        //
+        // Opens checkout with UPI already selected, so the common case is
+        // one tap to a UPI app rather than scrolling a list of methods.
+        // PRESELECTS rather than restricts: passing a `method` key would
+        // hide cards and netbanking entirely, and losing the minority who
+        // pay that way costs more than the taps it saves.
+        'method': 'upi',
       },
       'notes': {
         'plan': plan.id,
@@ -294,9 +301,13 @@ class PaymentService {
       'amount': serverResp['amount'] ?? SubscriptionPlan.trial.firstChargePaise,
       'currency': serverResp['currency'] ?? 'INR',
       'name': ApiConfig.razorpayCompanyName,
-      'description': 'Starter Pass — ₹49 for 7 days',
+      // Was "₹49 for 7 days", describing a one-time pass that no longer
+      // exists. This line is what the user reads at the moment of paying,
+      // so it has to match what they are actually buying.
+      'description': 'Starter Pass — ${SubscriptionPlan.pass.priceLabel}',
       'prefill': {
         'email': userEmail.isNotEmpty ? userEmail : 'user@vedastro.ai',
+        'method': 'upi',
       },
       'notes': {'plan': SubscriptionPlan.trial.id, 'user': userName, 'uid': uid},
       'theme': {'color': '#7C3AED'},
