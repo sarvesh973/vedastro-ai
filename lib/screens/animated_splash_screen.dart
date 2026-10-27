@@ -5,6 +5,8 @@ import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import '../services/promo_config.dart';
+import '../services/promo_service.dart';
 import '../widgets/moksha_wordmark_image.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -56,6 +58,42 @@ class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen> {
       // Pushed on top of Home, not instead of it, so Back behaves the way
       // the user expects after following a notification.
       Navigator.of(context).pushNamed(pending);
+      // A notification tap is an explicit request for something specific.
+      // Covering it with a sales screen would answer a question the user
+      // asked with one they did not.
+      return;
+    }
+
+    // The launch promo goes here, after Home has replaced the splash, for
+    // the same reason the notification route does: Home exists by now, so
+    // the sheet sits over a real screen and dismissing it leaves the user
+    // somewhere sensible rather than on a dead splash.
+    //
+    // Only over Home — never over onboarding, login or the birth-details
+    // form. Someone mid-signup has no chart yet, so there is nothing the
+    // Pass would unlock for them.
+    //
+    // On a FIRST launch there is no cached campaign config yet, and the
+    // background refresh started in main() may not have landed — a cold
+    // Render instance can take tens of seconds. Without this the first
+    // launch always reads the defaults and shows nothing, so the promo
+    // would silently need a second launch to appear.
+    //
+    // Waited only when nothing is cached, and capped, because the splash
+    // has already spent 2.5s on its animation — this is dead time we can
+    // spend rather than new delay. Every later launch reads the cache
+    // and does not wait at all.
+    if (!PromoConfig.hasCached) {
+      await PromoConfig.refresh()
+          .timeout(const Duration(seconds: 3), onTimeout: () {});
+      if (!mounted) return;
+    }
+
+    // PromoService decides whether it shows at all: both feature flags,
+    // the day-part slot, the dismissal pause, and the paying-user and
+    // admin exclusions all live there. This is only the call site.
+    if (next is HomeScreen && mounted && PromoService.shouldShowOnAppOpen()) {
+      await PromoService.present(context);
     }
   }
 

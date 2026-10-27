@@ -14,6 +14,7 @@ import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/analytics_service.dart';
 import 'services/notification_service.dart';
+import 'services/promo_config.dart';
 import 'utils/crash_breadcrumbs.dart';
 import 'services/attribution_service.dart';
 import 'services/ui_error_log.dart';
@@ -91,6 +92,12 @@ void main() async {
     // One process-wide lifecycle observer: the re-engagement nudge is
     // about the whole visit, so it cannot live on a single screen.
     WidgetsBinding.instance.addObserver(NotificationLifecycleObserver());
+
+    // Campaign policy for the launch banner. Fire-and-forget: the launch
+    // path reads the last cached copy synchronously, so this only has to
+    // land before the NEXT launch. Blocking on it would put a network
+    // round trip in front of the splash for a promo.
+    PromoConfig.refresh();
 
     // Sync cloud data if user is logged in
     _syncCloudData();

@@ -34,7 +34,7 @@
 /// ₹49/week it costs ~₹212/month for ~91 chats against Standard's ₹199
 /// for 50, so nobody who only chats should ever have upgraded. At ₹99 the
 /// Pass lands at ~₹429/month and sits correctly above Standard.
-const bool kPassIntroPricingLive = false;
+const bool kPassIntroPricingLive = true;
 
 enum SubscriptionPlan {
   /// Free tier — 1 chat total (lifetime), 0 palm readings.
@@ -98,6 +98,22 @@ extension SubscriptionPlanInfo on SubscriptionPlan {
       case SubscriptionPlan.premium:
         return 'Unlimited';
     }
+  }
+
+  /// The price this plan is struck through FROM, or null.
+  ///
+  /// Only ever the plan's real standing rate with [priceLabel] as a
+  /// genuine introductory price. A struck-through figure nobody is
+  /// charged is a fictitious reference price: Play treats it as
+  /// misrepresentation and India's CCPA guidelines on misleading
+  /// advertisements treat a fabricated "was" price as misleading by
+  /// definition.
+  ///
+  /// So it is derived from recurringPaise rather than written by hand —
+  /// it cannot say ₹99 unless ₹99 is what the next cycle actually bills.
+  String? get anchorPriceLabel {
+    if (recurringPaise == firstChargePaise) return null;
+    return '₹${recurringPaise ~/ 100}';
   }
 
   /// Headline price label.

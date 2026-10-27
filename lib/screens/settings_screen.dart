@@ -8,7 +8,8 @@ import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/ai_service.dart';
 import '../services/notification_service.dart';
-import '../models/subscription_plan.dart';
+import '../services/promo_config.dart';
+import '../services/promo_service.dart';
 import '../providers/providers.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -18,7 +19,7 @@ import 'ui_error_log_screen.dart';
 import '../services/ui_error_log.dart';
 import '../theme/m_page_route.dart';
 import '../widgets/cosmic_background.dart';
-import '../widgets/promo_offer_sheet.dart';
+
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -89,24 +90,58 @@ class SettingsScreen extends ConsumerWidget {
             if (AuthService.isAdmin) ...[
               _buildInfoTile(
                 icon: Icons.local_offer_outlined,
-                title: 'Preview offer sheet (admin)',
-                subtitle: kPassIntroPricingLive
-                    ? 'Live variant — ₹49 first week, then ₹99'
-                    : 'Live variant — ₹49/week, no anchor price',
-                onTap: () => PromoOfferSheet.show(
-                    context, PromoOffer.liveOffer),
+                title: 'Promo — variant A (admin)',
+                subtitle: 'Chat-mockup creative · not tracked',
+                onTap: () => PromoService.present(context,
+                    forced: PromoConfig.current.variants.first, track: false),
               ),
               _buildInfoTile(
                 icon: Icons.local_offer_outlined,
-                title: 'Preview offer sheet — other variant (admin)',
-                subtitle: kPassIntroPricingLive
-                    ? 'Flat ₹49/week framing'
-                    : 'Intro framing — needs the ₹99 plan live in Razorpay',
-                onTap: () => PromoOfferSheet.show(
-                    context,
-                    kPassIntroPricingLive
-                        ? PromoOffer.starterPass
-                        : PromoOffer.starterPassIntro),
+                title: 'Promo — variant B (admin)',
+                subtitle: 'Diya photograph creative · not tracked',
+                onTap: () => PromoService.present(context,
+                    forced: PromoConfig.current.variants.last, track: false),
+              ),
+              _buildInfoTile(
+                icon: Icons.grid_on_outlined,
+                title: 'Promo — tap regions (admin)',
+                subtitle: 'Green opens the paywall, red dismisses',
+                onTap: () => PromoService.present(context,
+                    forced: PromoConfig.current.variants.first,
+                    track: false,
+                    debugOverlay: true),
+              ),
+              _buildInfoTile(
+                icon: Icons.play_circle_outline,
+                title: 'Promo — would it show now? (admin)',
+                subtitle: PromoService.appOpenDiagnosis(),
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(PromoService.appOpenDiagnosis()),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 6),
+                  ),
+                ),
+              ),
+              _buildInfoTile(
+                icon: Icons.restart_alt,
+                title: 'Promo — reset frequency caps (admin)',
+                subtitle: '${PromoService.dismissCount}/'
+                    '${PromoService.maxDismissals} dismissed · '
+                    '${PromoService.slotsUsedOn(DateTime.now())}/3 slots today · '
+                    'now: ${PromoService.slotFor(DateTime.now()).name}'
+                    '${PromoService.pausedUntilMs > DateTime.now().millisecondsSinceEpoch ? " · paused" : ""}',
+                onTap: () async {
+                  await PromoService.resetForTesting();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Promo frequency state cleared'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
               ),
               const SizedBox(height: 24),
             ],
