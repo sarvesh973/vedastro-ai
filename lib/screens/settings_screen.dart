@@ -111,6 +111,18 @@ class SettingsScreen extends ConsumerWidget {
                     debugOverlay: true),
               ),
               _buildInfoTile(
+                icon: Icons.play_circle_outline,
+                title: 'Promo — would it show now? (admin)',
+                subtitle: PromoService.appOpenDiagnosis(),
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(PromoService.appOpenDiagnosis()),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 6),
+                  ),
+                ),
+              ),
+              _buildInfoTile(
                 icon: Icons.restart_alt,
                 title: 'Promo — reset frequency caps (admin)',
                 subtitle: '${PromoService.dismissCount}/'

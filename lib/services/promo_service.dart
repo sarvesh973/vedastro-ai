@@ -71,13 +71,19 @@ class PromoCreative {
 
 /// Decides whether the launch promo shows, and which creative.
 class PromoService {
-  /// Master switch for showing the promo on app open. Default OFF.
+  /// Master switch for showing the promo on app open.
   ///
-  /// Also gated on [kPassIntroPricingLive] at the point of use: both
-  /// creatives show "₹99" struck through, so until the ₹99 standing rate
-  /// is live in Razorpay that image advertises a saving that does not
-  /// exist. One flag cannot be flipped without the other being true.
-  static const bool enabledOnAppOpen = false;
+  /// ON, but inert: the check below ALSO requires [kPassIntroPricingLive],
+  /// which is still false. Both creatives show "₹99" struck through, so
+  /// until the ₹99 standing rate is live in Razorpay that image
+  /// advertises a saving that does not exist — and no amount of enabling
+  /// here may put a false price in front of a user.
+  ///
+  /// So the remaining switch is tied to a real external dependency rather
+  /// than to anyone's memory: configure the Razorpay plan and offer, flip
+  /// kPassIntroPricingLive, and the promo starts. Set this to false to
+  /// stop the campaign without touching pricing.
+  static const bool enabledOnAppOpen = true;
 
   static const _keyLastShown = 'promo_last_shown_ms';
   static const _keyDismissCount = 'promo_dismiss_count';
@@ -282,6 +288,39 @@ class PromoService {
     await p?.remove(_keyShownDay);
     await p?.remove(_keyShownToday);
     await p?.remove(_keyPausedUntil);
+  }
+
+  /// Why the promo would or would not show right now, in plain words.
+  ///
+  /// Admins are excluded from the real app-open path so their launches
+  /// cannot skew a variant that has only just started collecting, which
+  /// leaves nobody able to confirm the trigger actually works. This runs
+  /// the real predicate and reports the FIRST reason it said no, so the
+  /// launch path can be verified without a second account and without
+  /// touching the funnel.
+  static String appOpenDiagnosis({DateTime? now}) {
+    final t = now ?? DateTime.now();
+    if (!enabledOnAppOpen) return 'off: enabledOnAppOpen is false';
+    if (!kPassIntroPricingLive) {
+      return 'off: kPassIntroPricingLive is false — the ₹99 plan is not '
+          'live in Razorpay, so the struck-through price would be untrue';
+    }
+    if (StorageService.isPremium) return 'skipped: already subscribed';
+    if (AuthService.isAdmin) {
+      return 'skipped: admins are excluded from the real path';
+    }
+    if (!StorageService.hasProfile) return 'skipped: no birth profile yet';
+    if (pausedUntilMs > t.millisecondsSinceEpoch) {
+      final until = DateTime.fromMillisecondsSinceEpoch(pausedUntilMs);
+      return 'paused after $maxDismissals dismissals until '
+          '${until.day}/${until.month}';
+    }
+    if (dismissCount >= maxDismissals) return 'paused: dismissal cap reached';
+    if (slotUsed(t)) {
+      return 'already shown in the ${slotFor(t).name} slot today';
+    }
+    return 'WOULD SHOW now (${slotFor(t).name} slot, '
+        'variant ${creative.id.toUpperCase()})';
   }
 
   /// Shows the sheet, records the outcome, and opens the paywall if taken.

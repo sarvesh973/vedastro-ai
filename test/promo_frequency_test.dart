@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vedastro_ai/models/subscription_plan.dart';
 import 'package:vedastro_ai/services/promo_service.dart';
 import 'package:vedastro_ai/services/storage_service.dart';
 
@@ -146,12 +147,22 @@ void main() {
   group('shouldShowOnAppOpen', () {
     final t = DateTime(2026, 11, 8, 7, 0);
 
-    test('is off while the master switches are off', () {
-      // Both default false: the creatives show ₹99 struck through, so
-      // neither flag alone may put a saving in front of a user that the
-      // billing system is not applying.
-      expect(PromoService.enabledOnAppOpen, isFalse);
+    test('stays off while the pricing flag is false, even when enabled', () {
+      // The campaign switch is ON; the pricing switch is not. Both
+      // creatives show ₹99 struck through, so enabling the promo must not
+      // be enough on its own to put a saving in front of a user that the
+      // billing system is not applying. This asserts the AND, not either
+      // flag's value — flipping one is meant to be survivable.
+      expect(PromoService.enabledOnAppOpen, isTrue);
+      expect(kPassIntroPricingLive, isFalse);
       expect(PromoService.shouldShowOnAppOpen(now: t), isFalse);
+    });
+
+    test('the diagnosis names the pricing flag as the blocker', () {
+      // The admin-facing explanation has to stay truthful about WHY, or
+      // it is worse than no diagnostic at all.
+      expect(PromoService.appOpenDiagnosis(now: t),
+          contains('kPassIntroPricingLive'));
     });
 
     test('a paying user is excluded before any state is touched', () async {
